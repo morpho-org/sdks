@@ -1,25 +1,25 @@
-import {
-  type MarketInput,
-  MarketUtils,
-  midnightAbi,
-} from "@morpho-org/midnight-sdk";
-import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
+import type { MarketInput } from "@morpho-org/midnight-sdk";
+import { deepFreeze } from "@morpho-org/morpho-ts";
 import { type Address, isAddressEqual, zeroAddress } from "viem";
+import { parseNonnegative } from "../../helpers/parse.js";
 import {
-  encodeMidnightCalldata,
-  encodeMidnightMarketId,
-} from "../../helpers/encodeMidnightCalldata.js";
-import { addTransactionMetadata } from "../../helpers/index.js";
-import { validateMidnightAddress } from "../../helpers/validateMidnightAccount.js";
-import { validateMidnightUint128Field } from "../../helpers/validateMidnightBounds.js";
-import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
-import {
-  type Metadata,
-  type MidnightSupplyCollateralAction,
-  MidnightZeroOnBehalfError,
-  NonPositiveInputError,
-  type Transaction,
+  type MidnightMarket,
+  parseMidnightAddress,
+  parseMidnightCollateral,
+  parseMidnightMarket,
+  parseMidnightMarketDeployment,
+  parseMidnightMarketInput,
+  parseMidnightOwner,
+  parseMidnightPositiveAmount,
+} from "../../helpers/parseMidnight.js";
+import type {
+  Metadata,
+  MidnightSupplyCollateralAction,
+  Transaction,
 } from "../../types/index.js";
+import { MidnightZeroOnBehalfError } from "../../types/index.js";
+import { encodeMidnightSupplyCollateral } from "./encode.js";
+import { snapshotMidnightMetadata } from "./parse.js";
 
 /** Parameters for encoding a direct Midnight collateral supply. */
 export interface MidnightSupplyCollateralParams {
@@ -46,15 +46,19 @@ export interface MidnightSupplyCollateralParams {
  * @param params.onBehalf - Account whose collateral balance increases. `onBehalf`, or an
  *   operator it authorized, must send the transaction; otherwise Midnight reverts
  *   `Unauthorized()`. The collateral is pulled from the sender.
- * @param params.metadata - Optional analytics metadata appended to calldata.
+ * @param params.metadata.origin - Hex origin tag of up to four bytes, when metadata is supplied.
+ * @param params.metadata.timestamp - Optional Unix timestamp in uint32 seconds; `false` or unset omits it.
  * @returns A deep-frozen `Transaction<MidnightSupplyCollateralAction>` targeting `Midnight`.
+ * @throws {MidnightCalldataEncodingError} when `onBehalf` or a market address is malformed, or an argument cannot be ABI-encoded.
  * @throws {NonPositiveInputError} when `assets <= 0n`.
- * @throws {InputExceedsMaxError} when `assets` exceeds `uint128`.
+ * @throws {InputExceedsMaxError} when `assets` exceeds `uint128`, or a later metadata check finds a timestamp above `uint32`.
  * @throws {MidnightZeroOnBehalfError} when `onBehalf` is the zero address.
  * @throws {ChainIdMismatchError} when the market targets another chain.
+ * @throws {UnsupportedChainIdError} when the chain has no address registry.
+ * @throws {UnknownAddressError} when Midnight is not registered on the chain.
  * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
  * @throws {UnknownCollateralIndexError} when `collateralIndex` is not configured on the market.
- * @throws {MidnightCalldataEncodingError} when an input cannot be ABI-encoded, such as a malformed `bytes32`, an out-of-range integer or a malformed address.
+ * @throws {NegativeInputError} when the metadata timestamp is negative.
  * @example
  * ```ts
  * import { midnightSupplyCollateral } from "@morpho-org/morpho-sdk";
@@ -70,54 +74,103 @@ export interface MidnightSupplyCollateralParams {
  */
 export const midnightSupplyCollateral = (
   params: MidnightSupplyCollateralParams,
-): Readonly<Transaction<MidnightSupplyCollateralAction>> => {
-  // Reject a malformed account before comparing it with the zero address.
-  validateMidnightAddress("onBehalf", params.onBehalf);
-  if (params.assets <= 0n) {
-    throw new NonPositiveInputError("assets", params.assets);
+): Readonly<Transaction<MidnightSupplyCollateralAction>> =>
+  encodeMidnightSupplyCollateral(parseMidnightSupplyCollateral(params));
+
+const parsedSupplyCollateral = Symbol();
+
+/** Complete raw collateral-supply preparation input with entity field labels. @internal */
+export interface MidnightSupplyCollateralPreparationParams
+  extends Omit<MidnightSupplyCollateralParams, "assets" | "onBehalf"> {
+  readonly accountAddress: Address;
+  readonly collateralAssets: bigint;
+  readonly reservedCollateralAssets?: bigint;
+}
+
+/**
+ * Owns the entity supply contract in deployment/amount/reserve/index/owner/hash order.
+ * Returns the zero-owner error for the entity to expose lazily; no incomplete action escapes.
+ * @internal
+ */
+export const parseMidnightSupplyCollateralPreparation = (
+  params: MidnightSupplyCollateralPreparationParams,
+):
+  | { readonly error: MidnightZeroOnBehalfError }
+  | (ParsedMidnightSupplyCollateral & {
+      readonly token: Address;
+      readonly reservedCollateralAssets: bigint;
+    }) => {
+  const onBehalf = parseMidnightAddress(
+    "accountAddress",
+    params.accountAddress,
+  );
+  const deployment = parseMidnightMarketDeployment(
+    params.market,
+    params.chainId,
+  );
+  const assets = parseMidnightPositiveAmount(
+    "collateralAssets",
+    params.collateralAssets,
+  );
+  const reservedCollateralAssets = parseNonnegative(
+    "reservedCollateralAssets",
+    params.reservedCollateralAssets ?? 0n,
+  );
+  const collateral = parseMidnightCollateral(
+    deployment,
+    params.collateralIndex ?? 0n,
+  );
+  if (isAddressEqual(onBehalf, zeroAddress)) {
+    return { error: new MidnightZeroOnBehalfError("onBehalf") };
   }
-  validateMidnightUint128Field("assets", params.assets);
-  if (isAddressEqual(params.onBehalf, zeroAddress)) {
-    throw new MidnightZeroOnBehalfError("onBehalf");
-  }
+  // ABI hashing must follow the amount/index checks and lazy zero-owner branch.
+  const market = parseMidnightMarketInput(deployment);
+  return deepFreeze({
+    chainId: params.chainId,
+    market,
+    assets,
+    onBehalf,
+    collateralIndex: collateral.index,
+    token: collateral.token,
+    reservedCollateralAssets,
+    metadata: snapshotMidnightMetadata(params.metadata),
+    [parsedSupplyCollateral]: true as const,
+  });
+};
+
+/** Owned inputs for the supplyCollateral encoder. @internal */
+export interface ParsedMidnightSupplyCollateral
+  extends Omit<MidnightSupplyCollateralParams, "market"> {
+  readonly market: MidnightMarket;
+  readonly assets: bigint;
+  readonly onBehalf: Address;
+  readonly collateralIndex: bigint;
+  readonly [parsedSupplyCollateral]: true;
+}
+
+/** Parses static supplyCollateral constraints using the existing error order. @internal */
+export const parseMidnightSupplyCollateral = (
+  params: MidnightSupplyCollateralParams,
+): ParsedMidnightSupplyCollateral => {
+  const address = parseMidnightAddress("onBehalf", params.onBehalf);
+  const assets = parseMidnightPositiveAmount("assets", params.assets);
+  const onBehalf = parseMidnightOwner(address);
 
   // Reject markets from another chain deployment before encoding the call.
-  validateMidnightMarket({ market: params.market, chainId: params.chainId });
-  const marketId = encodeMidnightMarketId(params.market);
-  const midnight = getChainAddress(params.chainId, "midnight");
-  const collateralIndex = params.collateralIndex ?? 0n;
-  // Validate that the supplied collateral index is configured before encoding.
-  MarketUtils.getCollateralByIndex(params.market, collateralIndex);
-
-  let tx = {
-    to: midnight,
-    value: 0n,
-    data: encodeMidnightCalldata({
-      abi: midnightAbi,
-      functionName: "supplyCollateral",
-      args: [
-        MarketUtils.toStruct(params.market),
-        collateralIndex,
-        params.assets,
-        params.onBehalf,
-      ],
-    }),
-  };
-
-  if (params.metadata) {
-    tx = addTransactionMetadata(tx, params.metadata);
-  }
+  const market = parseMidnightMarket(params.market, params.chainId);
+  const collateral = parseMidnightCollateral(
+    market,
+    params.collateralIndex ?? 0n,
+  );
+  const collateralIndex = collateral.index;
 
   return deepFreeze({
-    ...tx,
-    action: {
-      type: "midnightSupplyCollateral",
-      args: {
-        market: marketId,
-        collateralIndex,
-        assets: params.assets,
-        onBehalf: params.onBehalf,
-      },
-    },
+    chainId: params.chainId,
+    market,
+    onBehalf,
+    assets,
+    collateralIndex,
+    metadata: snapshotMidnightMetadata(params.metadata),
+    [parsedSupplyCollateral]: true as const,
   });
 };

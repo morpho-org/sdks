@@ -8,7 +8,7 @@ import {
   encodeErc20Approval,
   encodeVaultSharesPermit,
 } from "../../actions/index.js";
-import { validateClientChainId } from "../../actions/requirements/validateClientChainId.js";
+import { createChainCheck } from "../../actions/requirements/chainCheck.js";
 import {
   type ActionRequirement,
   ExpiredDeadlineError,
@@ -57,14 +57,20 @@ export async function getVaultV1InKindRedeemRequirements(
   if (deadline <= requirementsTimestamp) {
     throw new ExpiredDeadlineError(deadline, requirementsTimestamp);
   }
-  await validateClientChainId(client, chainId);
-  await assertRegistryTargetsHaveCode(client, chainId, [
-    {
-      role: "bundles.vaultExitBundlesV1",
-      address: getChainAddress(chainId, "bundles.vaultExitBundlesV1"),
-    },
-    { role: "blue", address: getChainAddress(chainId, "blue") },
-  ]);
+  const chainCheck = createChainCheck(client, chainId);
+  await chainCheck();
+  await assertRegistryTargetsHaveCode(
+    client,
+    chainId,
+    [
+      {
+        role: "bundles.vaultExitBundlesV1",
+        address: getChainAddress(chainId, "bundles.vaultExitBundlesV1"),
+      },
+      { role: "blue", address: getChainAddress(chainId, "blue") },
+    ],
+    chainCheck,
+  );
   const [allowance, nonce, blueBalance, morpho, blueFeeRecipient] =
     await Promise.all([
       readContract(client, {

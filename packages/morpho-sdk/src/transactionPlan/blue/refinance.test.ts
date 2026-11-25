@@ -8,7 +8,13 @@ import {
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
-import { BaseError, decodeFunctionData, toHex, zeroAddress } from "viem";
+import {
+  BaseError,
+  decodeFunctionData,
+  maxUint256,
+  toHex,
+  zeroAddress,
+} from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { base, mainnet } from "viem/chains";
 import { assert, expect, test } from "vitest";
@@ -18,6 +24,9 @@ import { DEFAULT_LLTV_BUFFER } from "../../constants.js";
 import {
   AccrualPositionUserMismatchError,
   BorrowExceedsSafeLtvError,
+  InvalidReallocationAddressError,
+  InvalidReallocationSourceTypeError,
+  InvalidVaultV2BlueReallocationShapeError,
   MarketIdMismatchError,
   MissingContractCodeError,
 } from "../../types/index.js";
@@ -147,6 +156,51 @@ test.each(["source", "destination"] as const)(
   },
 );
 
+test.each(
+  (
+    [
+      ["vault address", { vault: "invalid" }, InvalidReallocationAddressError],
+      [
+        "adapter address",
+        { to: { adapter: "invalid" } },
+        InvalidReallocationAddressError,
+      ],
+      [
+        "source type",
+        { from: { type: "unknown" } },
+        InvalidReallocationSourceTypeError,
+      ],
+      [
+        "Vault V1 shape",
+        { withdrawals: [] },
+        InvalidVaultV2BlueReallocationShapeError,
+      ],
+    ] as const
+  ).map(([name, invalid, error]) => ({ name, invalid, error })),
+)(
+  "preserves the shared reallocation error for $name",
+  async ({ invalid, error }) => {
+    const { client, params, request } = fixture();
+    const reallocation = {
+      vault: owner.address,
+      from: { type: "idle" as const },
+      to: { adapter: owner.address },
+      assets: 1n,
+      penalty: 0n,
+      ...invalid,
+    };
+    await expect(
+      prepareBlueRefinance(client, {
+        ...params,
+        reallocations: [
+          reallocation,
+        ] as BlueRefinancePlanParams["reallocations"],
+      }),
+    ).rejects.toBeInstanceOf(error);
+    expect(request).not.toHaveBeenCalled();
+  },
+);
+
 test("rejects a malformed zero-fee recipient before any RPC read", async () => {
   const { client, params, request } = fixture();
   await expect(
@@ -194,12 +248,38 @@ test("rejects reallocation market parameters that cannot be restored before RPC 
         },
       ],
     }),
-  ).rejects.toMatchObject({
-    name: "InvalidTransactionPlanError",
-    path: "$.reallocations[0].from.marketParams.id",
-  });
+  ).rejects.toBeInstanceOf(MarketIdMismatchError);
   expect(request).not.toHaveBeenCalled();
 });
+
+test.each([
+  { field: "penalty", value: -1n, name: "NegativeInputError" },
+  { field: "penalty", value: maxUint256 + 1n, name: "InputExceedsMaxError" },
+  { field: "assets", value: -1n, name: "NonPositiveInputError" },
+  { field: "assets", value: 0n, name: "NonPositiveInputError" },
+  { field: "assets", value: maxUint256 + 1n, name: "InputExceedsMaxError" },
+] as const)(
+  "preserves the typed error for reallocation $field = $value before RPC",
+  async ({ field, value, name }) => {
+    const { client, params, request } = fixture();
+    await expect(
+      prepareBlueRefinance(client, {
+        ...params,
+        reallocations: [
+          {
+            vault: owner.address,
+            from: { type: "idle" },
+            to: { adapter: owner.address },
+            assets: 1n,
+            penalty: 0n,
+            [field]: value,
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({ name, field: `reallocation.${field}` });
+    expect(request).not.toHaveBeenCalled();
+  },
+);
 
 test("a restored plan encodes the nonzero referral fee and recipient", async () => {
   const { client, params } = fixture();

@@ -1,5 +1,66 @@
 # @morpho-org/morpho-sdk
 
+## 10.1.0
+
+### Minor Changes
+
+- Add experimental Blue borrow transaction plans from market and position snapshots, with Morpho authorization and optional Vault V2 public allocations.
+- Add experimental Blue collateral withdrawal transaction plans with snapshot-based health checks and Morpho authorization prerequisites.
+- Add experimental `prepareBlueRefinance` to prepare and resume a full Blue borrow-position migration from caller-fetched snapshots, with optional Vault V2 reallocations and Morpho authorization.
+- Add experimental Blue repayment TransactionPlans for asset, share and full repayments with direct approvals, ERC-2612 permits and native funding.
+- Add experimental `prepareBlueSupplyCollateral` to prepare a serializable Morpho Blue collateral supply plan from a caller-fetched market snapshot.
+- Add experimental Blue loan-asset supply transaction plans with direct approvals, ERC-2612 permits, native funding, and serializable build inputs.
+- Add experimental Blue snapshot inputs, `validateBlueMarketSnapshot`, and a direct `morphoAuthorization` step that calls `setAuthorization` in TransactionPlan. This also adds the `morphoAuthorization` signature request and its validation. Signed authorization becomes usable once a Blue operation references the request; this release does not add a Blue lending operation.
+
+  `SignatureRequest` is now a discriminated union on `kind`; consumers must narrow to `kind === "permit"` before reading permit-specific `args`.
+
+  Collateral withdrawal health validation now accepts market IDs that differ only in hex casing.
+
+- Add experimental Blue withdrawal transaction plans with assets or shares inputs, Morpho authorization prerequisites, and optional Vault V2 public reallocations.
+- Fix Blue withdrawal plans to quote share proceeds from the position snapshot and ignore unknown stored fields when encoding collateral-only withdrawals. Combined repay-withdraw plans can withdraw collateral from debt-free positions without projecting an unsupported interest-rate model and report `NonPositiveInputError` when a full repayment has no debt to repay.
+- Add experimental TransactionPlan preparation for atomic Blue collateral supply and borrow, with ERC-2612 permits, Morpho authorization, native funding and Vault V2 public allocations.
+- Standard Ecrecover and Setter trees reject standalone offers from the same maker that repeat an explicit group ID instead of silently giving each its own cap. Pass a `Group.create` result as one tree entry to share a cap.
+- Midnight offer, group, and tree builders now reject sell offers that direct proceeds to the zero address. Set a non-zero sell receiver or omit it when creating an offer to use the maker's address. Buy offers still require the zero address in the unused maker receiver field.
+
+  Ratifier helpers that rebuild a tree from raw leaves or offers also reject zero sell receivers. Previously saved tree snapshots can still be resumed, and existing proofs can still be verified.
+
+  In `@morpho-org/morpho-sdk`, maker flows reject a sell offer with a zero receiver in a tree creation request with `MidnightOfferSellerReceiverMismatchError` if the maker matches the account. This check now runs before offer-side validation, so it can take precedence over `MidnightOfferSideMismatchError` for an invalid sell offer passed to a buy-side flow such as `makeRepay`.
+
+- Use `supplyCollateralWithNative` to wrap part or all of a Midnight collateral deposit in one transaction without borrowing. This method requires a positive `nativeAmount` and a `deadline`, and credits the sender's position. `supplyCollateral` still deposits ERC-20 collateral directly through Midnight. Simulation verifies indexed collateral credit and total payment for both routes.
+
+  Existing Midnight builders `midnightCancelAndMake`, `midnightTakeLend`, `midnightSupplyCollateralTakeBorrow`, `midnightRepayWithdrawCollateral`, and `midnightTakeRepayWithdrawCollateral` now reject non-bigint `nativeAmount` with `InvalidMidnightNativeAmountTypeError`. To disable native funding in those builders, pass `0n` or omit the field.
+
+  The standalone native builder and entity also reject non-bigint collateral amounts with `InvalidBigIntInputError`, identifying the field as `assets` or `collateralAssets`, respectively. The entity also rejects non-bigint `reservedCollateralAssets` with the same error before computing the allowance threshold.
+
+- Add experimental Blue repayWithdrawCollateral TransactionPlan preparation with embedded token permits and Morpho authorization signatures. Native funding uses `funding: { type: "native" }` and automatically covers the computed repayment cap.
+- Quote experimental Blue repayWithdrawCollateral TransactionPlans from the position snapshot's embedded market, matching `MorphoBlue.repayWithdrawCollateral`, and reject a market snapshot whose state differs from it with the new `BlueSnapshotStateMismatchError`.
+- Reverify stored TransactionPlan signatures offline and share header, deadline and single-use request validation across parsing, inspection and transaction building. Clarify the integrator's responsibility to protect unsigned plan fields.
+
+### Patch Changes
+
+- Parse each Blue operation's complete raw parameter object once and share internal encoders between entity handles and standalone actions. Public types and valid transaction outputs are unchanged. Operation-specific constructors own normalization, defaults, field context, and cross-field constraints while preserving each public call's established input and signature error precedence. Entity ABI-bound errors and derived zero-debt repay funding failures are reported eagerly; these may precede errors available only from later clock, RPC, requirement checks, or signatures first supplied to `buildTx()`.
+
+  Named validated inputs retain immutable market snapshots, so later mutations of caller-owned markets do not change an existing handle's reads, reallocation planning, requirements or calldata. Reallocation-bearing Blue actions throw `MarketIdMismatchError` when a source market's supplied ID is stale or inconsistent with its tuple fields, as well as when the target market's ID is inconsistent. Internal collateral-supply, borrow, repay and collateral-withdrawal inputs also encode their inactive legs as literal zero types, preventing prepared consumers from accepting combined or sibling operation inputs.
+
+  Declared referral fields are read directly, including inherited or non-enumerable values. Zero-leg collateral-and-borrow calls fail before touching reallocations, and shared reallocation errors precede refinance-plan format validation.
+
+- Check distinct deployment targets concurrently and report failures in target order without waiting for stalled later reads. Observe every read's rejection immediately, including reads that fail after an earlier error is returned. Missing code still triggers one diagnostic chain-id probe: a wrong-chain error takes precedence, while an unavailable probe preserves the missing-code error.
+- Share one lazy `validateClientChainId` preflight within each public entity read or requirements invocation, without reusing the check across invocations. Downstream fetchers retain their own chain-ID lookups.
+- Parse Midnight maker publication and cancellation inputs once and share internal encoders between entity handles and standalone builders. Preserve publication state checks, root payloads and delegated activation signatures.
+- Construct complete validated Midnight operation params from raw public inputs, including defaults, field context and cross-field constraints. Direct, taker, maker and cancellation entity bodies consume the complete result rather than assembling individually branded fields or stages. Preserve owned market and offer snapshots, standalone validation, typed-error ordering, dynamic state checks and shared synchronous encoders.
+- Compare slippage quote guards on the API's fee-excluded tick-price surface so valid positive-settlement-fee quotes are not rejected. Preserve fee-adjusted absolute guards and bid settlement-fee validation. Document how to include settlement fees when deriving bundle spend and proceeds limits from slippage quotes.
+- Validate the RPC chain when resolving native-funded Blue and vault deposit requirements, even when no token approval or authorization is needed.
+- Parse Vault V1 and Vault V2 builder inputs once when creating entity handles and share internal encoders with standalone builders. Keep signature validation at build time.
+
+  Invalid static inputs previously checked by `buildTx()` may now fail when the entity handle is created. Force-redeem reads each deallocation once and uses that snapshot for both calldata and action metadata.
+
+- Centralize requirement-resolver validation and defaults in complete-operation constructors, with checked internal approval and permit encoders. Preserve public validation, error precedence, explicit reference timestamps, legacy Permit2 compatibility, and existing RPC scheduling without requesting new Permit2 funding. Entity handles still enter the public requirement resolvers; this does not remove every repeated SDK check.
+
+  Capture declared params fields, including inherited properties and prototype getters, before validation so internal encoders retain the checked values.
+
+- Updated dependencies
+  - @morpho-org/midnight-sdk@2.8.0
+
 ## 10.0.2
 
 ### Patch Changes

@@ -13,8 +13,8 @@ import { validateMidnightCollateralSupplies } from "./validateMidnightCollateral
 import { validateMidnightMarket } from "./validateMidnightMarket.js";
 import { validatePositiveInput } from "./validatePositiveInput.js";
 
-/** Blue market argument for `MidnightBundlesV2` calls that park no loan assets. */
-const emptyBlueMarket = {
+/** Blue market argument for `MidnightBundlesV2` calls that park no loan assets. @internal */
+export const emptyBlueMarket = {
   loanToken: zeroAddress,
   collateralToken: zeroAddress,
   oracle: zeroAddress,

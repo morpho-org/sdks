@@ -79,7 +79,15 @@ baselines remain in `.github/workflows/AGENTS.md`.
 ## evm-simulation non-blocking sender-outflow findings
 
 - **Waives:** The [evm-simulation sender-outflow rule](../packages/evm-simulation/AGENTS.md) that undeclared sender outflows are fatal.
-- **Scope:** Only sender-outflow findings in `simulate`, reported as non-blocking typed `UNEXPECTED_TOKEN_TRANSFER` warnings in `report.warnings`. Chain-scoped paired emitters in the registry are handled separately. All other safety checks remain fatal; this does not downgrade their failures. Signing services, including the Actions API attestor, must reject non-empty `report.warnings` before release.
+- **Scope:** Only sender-outflow findings in `simulate`, reported as non-blocking typed `UNEXPECTED_TOKEN_TRANSFER` warnings in `report.warnings`. Chain-scoped paired emitters in the registry are handled separately. This exception does not change how any other check reports its findings. Signing services, including the Actions API attestor, must reject non-empty `report.warnings` before release.
 - **Why:** False positives from shared-ledger and co-emitting tokens block legitimate flows. Keeping findings in the report lets consumers enforce their signing policy while the registry covers remaining false positives.
 - **Approved in:** PR #1115, by maintainer @Foulks-Plb.
 - **Remove when:** Consumers (Actions API attestor, Vault and Markets) gate or alert on non-empty warnings and the remaining false positives are covered by the registry; then restore fatal sender-outflow findings and remove this exception. The Actions API attestor's release gate must reject non-empty `report.warnings`, not merely alert.
+
+## evm-simulation non-blocking owner-position-change findings
+
+- **Waives:** The [evm-simulation rule](../packages/evm-simulation/AGENTS.md) that safety checks stay fatal by default.
+- **Scope:** Only `UNEXPECTED_POSITION_CHANGE` findings from the owner-position check in `simulate`, including undecodable matching protocol logs, unusable refinance market-parameter reads (failed, undecodable, or a non-zero tuple for another market) and refinance matching budget exhaustion. These findings are typed warnings in `report.warnings`, never entries in `failures`. Signing integrators must inspect warnings even when `ok` is true. Signing services, including the Actions API attestor, must reject non-empty `report.warnings` before release. Other blocking checks are unchanged.
+- **Why:** The maintainer chose one consistent structured-warning policy, as for sender outflows (PR #1115): undeclared position changes and inconclusive checks caused by undecodable matching protocol logs, failed or unusable refinance market-parameter reads or refinance matching budget exhaustion are deliberately non-blocking, so the SDK reports evidence and the signing service enforces policy. An inconclusive check still surfaces a typed warning, never silence.
+- **Approved in:** PR #1138, by maintainer @Foulks-Plb.
+- **Remove when:** The Actions API attestor, Vault and Markets reject non-empty `report.warnings` before signing (the attestor does not read warnings today); then restore fatal position findings and remove this exception in the same PR.

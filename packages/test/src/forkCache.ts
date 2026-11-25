@@ -22,8 +22,9 @@ const supportsZstd = () => {
     if (
       typeof zlib.zstdCompressSync !== "function" ||
       typeof zlib.zstdDecompressSync !== "function"
-    )
+    ) {
       return false;
+    }
     zlib.zstdDecompressSync(zlib.zstdCompressSync("{}"));
     return true;
   } catch {
@@ -46,8 +47,9 @@ const readCache = async (path: string): Promise<Cache> => {
   const value: unknown = JSON.parse(
     zlib.zstdDecompressSync(await readFile(path)).toString(),
     (_key, entry: unknown) => {
-      if (typeof entry === "number" && !Number.isSafeInteger(entry))
+      if (typeof entry === "number" && !Number.isSafeInteger(entry)) {
         throw new RangeError("Unsupported cache number");
+      }
       return entry;
     },
   );
@@ -63,8 +65,9 @@ const readCache = async (path: string): Promise<Cache> => {
     typeof value.meta.fork_hash !== "string" ||
     typeof value.meta.source_id !== "string" ||
     typeof value.meta.account_fetch_policy !== "string"
-  )
+  ) {
     throw new TypeError("Unsupported fork cache");
+  }
   return value as Cache;
 };
 
@@ -73,21 +76,34 @@ const compatibleMeta = (left: Cache, right: Cache) =>
     isDeepStrictEqual(left.meta[key], right.meta[key]),
   );
 
+// Snapshots of one pinned block can disagree on a key Anvil wrote locally (such as an EIP-4788
+// beacon root). Keep the shared value for that key and still merge the snapshot's other keys.
 const union = (
   left: Record<string, unknown>,
   right: Record<string, unknown>,
-) => {
-  for (const [key, value] of Object.entries(right)) {
-    if (Object.hasOwn(left, key) && !isDeepStrictEqual(left[key], value))
-      return undefined;
+) => ({
+  ...right,
+  ...left,
+});
+
+function mergeCache(existing: Cache, incoming: Cache): Cache {
+  const storage = { ...existing.storage };
+  for (const [address, slots] of Object.entries(incoming.storage)) {
+    storage[address] = union(storage[address] ?? {}, slots);
   }
-  return { ...left, ...right };
-};
+  return {
+    ...existing,
+    accounts: union(existing.accounts, incoming.accounts),
+    storage,
+    block_hashes: union(existing.block_hashes, incoming.block_hashes),
+  };
+}
 
 const directoryEntries = (root: string) =>
   readdir(root, { withFileTypes: true }).catch((error) => {
-    if (["ENOENT", "ENOTDIR", "EACCES", "EPERM"].includes(error.code))
+    if (["ENOENT", "ENOTDIR", "EACCES", "EPERM"].includes(error.code)) {
       return [];
+    }
     throw error;
   });
 
@@ -96,11 +112,14 @@ const files = async (root: string): Promise<string[]> => {
   return (
     await Promise.all(
       entries.map(async (entry) => {
-        if (/\.lock(?:\.|$)|\.tmp$/.test(entry.name)) return [];
-        if (entry.isDirectory())
+        if (/\.lock(?:\.|$)|\.tmp$/.test(entry.name)) {
+          return [];
+        }
+        if (entry.isDirectory()) {
           return (await files(join(root, entry.name))).map((path) =>
             join(entry.name, path),
           );
+        }
         return entry.isFile() ? [entry.name] : [];
       }),
     )
@@ -133,8 +152,9 @@ const acquireLock = async (lock: string) => {
         if (locked && Date.now() - locked.mtimeMs > 30_000) {
           // Remove only observed owners; a successor's nonempty lock cannot be removed.
           for (const name of owners) {
-            if (/^owner-[a-f0-9-]{36}$/.test(name))
+            if (/^owner-[a-f0-9-]{36}$/.test(name)) {
               await rm(join(lock, name), { force: true }).catch(() => {});
+            }
           }
           await rmdir(lock).catch(() => {});
         }
@@ -165,7 +185,9 @@ export const isolateForkCache = async (
   shared = join(homedir(), ".foundry/cache/rpc"),
   block?: number | bigint,
 ) => {
-  if (!supportsZstd()) return undefined;
+  if (!supportsZstd()) {
+    return undefined;
+  }
   let home: string | undefined;
   try {
     home = await mkdtemp(join(tmpdir(), "anvil-cache-"));
@@ -196,8 +218,9 @@ export const isolateForkCache = async (
               "code" in error &&
               ["ENOENT", "EACCES", "EPERM"].includes(String(error.code))
             )
-          )
+          ) {
             throw error;
+          }
         }
       }
     }
@@ -209,8 +232,9 @@ export const isolateForkCache = async (
           try {
             await mkdir(shared, { recursive: true });
             for (const path of await files(isolated)) {
-              if (seeded.get(path) === (await digest(join(isolated, path))))
+              if (seeded.get(path) === (await digest(join(isolated, path)))) {
                 continue;
+              }
               const target = join(shared, path);
               const lock = `${target}.lock`;
               let release: (() => Promise<void>) | undefined;
@@ -218,11 +242,14 @@ export const isolateForkCache = async (
               try {
                 await mkdir(join(target, ".."), { recursive: true });
                 release = await acquireLock(lock);
-                if (!release) continue;
+                if (!release) {
+                  continue;
+                }
                 let incoming: Cache;
                 try {
-                  if (!/storage-[a-f0-9]{64}\.json$/.test(path))
+                  if (!/storage-[a-f0-9]{64}\.json$/.test(path)) {
                     throw new TypeError("Unsupported cache filename");
+                  }
                   incoming = await readCache(join(isolated, path));
                 } catch {
                   temporary = `${target}.${randomUUID()}.tmp`;
@@ -240,34 +267,7 @@ export const isolateForkCache = async (
                   await rename(temporary, target);
                   continue;
                 }
-                let merged = incoming;
-                if (existing) {
-                  const accounts = union(existing.accounts, incoming.accounts);
-                  const blockHashes = union(
-                    existing.block_hashes,
-                    incoming.block_hashes,
-                  );
-                  if (!accounts || !blockHashes) continue;
-                  const storage = { ...existing.storage };
-                  let conflict = false;
-                  for (const [address, slots] of Object.entries(
-                    incoming.storage,
-                  )) {
-                    const combined = union(storage[address] ?? {}, slots);
-                    if (!combined) {
-                      conflict = true;
-                      break;
-                    }
-                    storage[address] = combined;
-                  }
-                  if (conflict) continue;
-                  merged = {
-                    ...existing,
-                    accounts,
-                    storage,
-                    block_hashes: blockHashes,
-                  };
-                }
+                const merged = mergeCache(existing, incoming);
                 temporary = `${target}.${randomUUID()}.tmp`;
                 await writeFile(
                   temporary,
@@ -276,8 +276,9 @@ export const isolateForkCache = async (
                 await rename(temporary, target);
               } catch {
               } finally {
-                if (temporary)
+                if (temporary) {
                   await rm(temporary, { force: true }).catch(() => {});
+                }
                 await release?.();
               }
             }
@@ -290,7 +291,9 @@ export const isolateForkCache = async (
         })()),
     };
   } catch {
-    if (home) await rm(home, { recursive: true, force: true }).catch(() => {});
+    if (home) {
+      await rm(home, { recursive: true, force: true }).catch(() => {});
+    }
     return undefined;
   }
 };

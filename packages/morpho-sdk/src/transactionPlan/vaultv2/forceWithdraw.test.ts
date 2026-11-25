@@ -1,4 +1,5 @@
 import { erc2612Abi } from "@morpho-org/blue-sdk-viem";
+import { Time } from "@morpho-org/morpho-ts";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import { erc20Abi, maxUint256, serializeSignature, toHex } from "viem";
 import { mainnet } from "viem/chains";
@@ -9,6 +10,7 @@ import {
   inKindVaultV2Data,
 } from "../../../test/fixtures/inKindRedeem.js";
 import { withChainTimestamp } from "../../../test/helpers/time.js";
+import { computeVaultV2ForceWithdrawQuote } from "../../entities/vaultV2/forceWithdrawQuote.js";
 import { MAX_SLIPPAGE_TOLERANCE } from "../../helpers/constant.js";
 import * as sdk from "../../index.js";
 
@@ -142,17 +144,25 @@ test.each(
     expect(sdk.buildTransactions(restored)).toEqual(
       sdk.buildTransactions(plan),
     );
-    const expected = sdk
-      .morphoViemExtension()(mock.client)
-      .morpho.vaultV2(IN_KIND_VAULT, 1)
-      .forceWithdraw({
+    const quote = computeVaultV2ForceWithdrawQuote({
+      exitAssets: 51n,
+      userAddress: IN_KIND_USER,
+      vaultData,
+      deadline: BigInt(expiresAt),
+      slippageTolerance,
+      now: Time.timestamp(),
+      vault: IN_KIND_VAULT,
+    });
+    const expected = sdk.vaultV2ForceWithdraw({
+      vault: { address: IN_KIND_VAULT, chainId: 1 },
+      args: {
         exitAssets: 51n,
         userAddress: IN_KIND_USER,
-        vaultData,
+        adapter: quote.adapter,
+        minSharePriceE27: quote.minSharePriceE27,
         deadline: BigInt(expiresAt),
-        slippageTolerance,
-      })
-      .buildTx();
+      },
+    });
     expect(sdk.buildTransactions(restored).at(-1)).toMatchObject(expected);
     const step = restored.steps.at(-1)!;
     expect(() =>

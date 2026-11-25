@@ -7,15 +7,28 @@ import type {
 } from "../result.js";
 import type { SimulationExecution } from "../simulate/backends/parse-response.js";
 import type { SimulationClient, SimulationOptions } from "../types.js";
+import type { SimulationWarning } from "../warnings.js";
 
 /** Test adapter: forked RPCs are slower than the SDK's 5000 ms default deadline. */
 const TEST_TIMEOUT_MS = 30_000;
 
-/** Test adapter: a report's result, its only failure thrown, or every failure as an `AggregateError`. */
+/** Test adapter: throw blocking failures, otherwise reject position warnings or unwrap the result. */
 export function unwrapReport<T>(
-  report: { readonly ok: true; readonly result: T } | SimulationFailure,
+  report:
+    | {
+        readonly ok: true;
+        readonly result: T;
+        readonly warnings: readonly SimulationWarning[];
+      }
+    | SimulationFailure,
 ): T {
   if (report.ok) {
+    const positionWarning = report.warnings.find(
+      ({ code }) => code === "UNEXPECTED_POSITION_CHANGE",
+    );
+    if (positionWarning) {
+      throw new Error(positionWarning.message);
+    }
     return report.result;
   }
   if (report.failures.length === 1) {
@@ -74,10 +87,10 @@ export async function simulateOrThrowFirst(
     timeoutMs: TEST_TIMEOUT_MS,
     ...options,
   });
-  if (report.ok) {
-    return report.result;
+  if (!report.ok) {
+    throw report.failures[0];
   }
-  throw report.failures[0];
+  return unwrapReport(report);
 }
 
 /** Test adapter: throw a reverted execution's terminal revert, else return the execution. */

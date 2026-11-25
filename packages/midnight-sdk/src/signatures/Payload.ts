@@ -405,7 +405,7 @@ export namespace Payload {
     if (bytes.length < HEADER_BYTES) {
       throw new PayloadDecodeError("payload too short for header");
     }
-    const version = bytes[0]!;
+    const version = bytes[0];
     if (version !== (CURRENT_VERSION & 0xff)) {
       throw new PayloadDecodeError(
         `invalid version: expected ${CURRENT_VERSION}, got ${version}`,
@@ -460,7 +460,9 @@ export namespace Payload {
         };
       });
     } catch (error) {
-      if (error instanceof PayloadDecodeError) throw error;
+      if (error instanceof PayloadDecodeError) {
+        throw error;
+      }
       if (error instanceof Error) {
         throw new PayloadDecodeError(
           `invalid offer bytes: ${error.message}`,
@@ -487,7 +489,9 @@ export namespace Payload {
   }
 
   function assertApiValidOfferStruct(offer: OfferStruct): void {
-    if (isEmptyOfferStruct(offer)) return;
+    if (isEmptyOfferStruct(offer)) {
+      return;
+    }
 
     assertCollateralParams(offer);
     assertSafeTimestamp("market.maturity", offer.market.maturity);
@@ -637,7 +641,9 @@ export namespace Payload {
   }
 
   function resolveMaxItems(maxItems: number | undefined): number | undefined {
-    if (maxItems === undefined) return undefined;
+    if (maxItems === undefined) {
+      return undefined;
+    }
     if (!Number.isInteger(maxItems) || maxItems < 1) {
       throw new PayloadDecodeError(
         `maxItems must be a positive integer: got ${maxItems}`,
@@ -648,14 +654,18 @@ export namespace Payload {
   }
 
   function assertNonEmptyItemCount(count: number): void {
-    if (count === 0) throw new PayloadDecodeError("items payload is empty");
+    if (count === 0) {
+      throw new PayloadDecodeError("items payload is empty");
+    }
   }
 
   function assertCallerItemCountLimit(
     count: number,
     maxItems: number | undefined,
   ): void {
-    if (maxItems === undefined) return;
+    if (maxItems === undefined) {
+      return;
+    }
     if (count > maxItems) {
       throw new PayloadDecodeError(`items payload exceeds ${maxItems} items`);
     }
@@ -692,8 +702,9 @@ export namespace Payload {
   async function decompressItemsPayload(
     compressed: Uint8Array,
   ): Promise<Uint8Array> {
-    if (compressed.length === 0)
+    if (compressed.length === 0) {
       throw new PayloadDecodeError("decompression failed");
+    }
     if (compressed.length > MAX_COMPRESSED_ITEMS_BYTES) {
       throw new PayloadDecodeError(
         `compressed items exceed ${MAX_COMPRESSED_ITEMS_BYTES} bytes`,
@@ -708,7 +719,9 @@ export namespace Payload {
     try {
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          break;
+        }
         totalLength += value.length;
         if (totalLength > MAX_DECOMPRESSED_ITEMS_BYTES) {
           await reader.cancel();
@@ -719,7 +732,9 @@ export namespace Payload {
         chunks.push(value);
       }
     } catch (error) {
-      if (error instanceof PayloadDecodeError) throw error;
+      if (error instanceof PayloadDecodeError) {
+        throw error;
+      }
       throw new PayloadDecodeError(
         "decompression failed",
         error instanceof Error ? error : undefined,
@@ -753,7 +768,9 @@ export namespace Payload {
         "items payload truncated before ABI array head",
       );
     }
-    if (maxItems === undefined) return;
+    if (maxItems === undefined) {
+      return;
+    }
 
     for (let i = 32; i < ABI_LENGTH_LOW_OFFSET; i++) {
       if (decoded[i] !== 0) {

@@ -1,5 +1,53 @@
 # @morpho-org/evm-simulation
 
+## 9.2.0
+
+### Minor Changes
+
+- Check bundles retention against token state, not only simulated logs. For every ERC-20 token the operations measure, `simulate` now reads each restricted intermediary's (`bundles` contracts and `MidnightBundlesV2`) `balanceOf` before and after the bundle in the same `eth_simulateV1` block, and reports `BlacklistViolationError` when that balance grows above dust even if the reported `Transfer` logs net to zero. Simulations with operations now send these extra in-block reads. A malformed `Transfer` log stays a non-blocking `MALFORMED_TRANSFER_LOG` warning, but no longer hides retention: the balance check runs on state regardless of discarded logs.
+
+  Without `callGasLimit` or `blockOverrides.gasLimit`, the read-only balance and position reads the SDK inserts now carry at most 1,000,000 `gas` each and, together, 15,000,000 or half the pinned block's gas limit, whichever is less (15,000,000 when the node's block response omits `gasLimit`; none, the node default, when the reads would get under 100,000 each: more than 150 reads in a 30M block, more than 15 in HyperEVM's 3M small blocks), so nodes that reserve a large default per call (Monad: 150M) or reject explicit call gas above the block gas limit (reth) keep room for user transactions. Callers that set `callGasLimit` or `blockOverrides.gasLimit` send more calls than before: `callGasLimit` (or Monad's 150M default under a block override) now applies to each retention read too, so on Monad keep calls × per-call gas under the 1.6B simulation cap, or leave both unset. Three cases can still fail the request or a call, never pass a bad bundle: on reth-style nodes, which split the leftover block gas among calls without `gas`, the reads' explicit gas (up to half the block) leaves less for user transactions than before, and the added retention reads shrink each call's share in plans whose reads carry no SDK gas; on geth-style nodes, explicit read gas above the gas left after near-block-filling transactions gets the request rejected. Split such bundles or set `callGasLimit` or `blockOverrides.gasLimit`. A report omits `verification` and fails when a planned retention balance read cannot be used: `SlippageCheckUnavailableError` when it reverts or returns empty data, `InvalidSimulationResponseError` when its data does not decode or its call result is missing.
+
+- Add transaction-bound `SimulationEffect` expectations for exact ERC-20 approvals, Blue and Midnight authorizations, and direct Midnight offer cancellations. Effects require the last event per permission pair or cancellation group to match and block positive sender outflow in their transaction. Empty operations are accepted only with non-empty validated effects. Omitted `txIdx` binds to the last caller transaction; the converter accepts `txIdx` and requires the transaction's `to` as `token` for ERC-20 approvals.
+
+  Successful reports include the frozen checked effects with resolved transaction indices in `verification.limits.effects`.
+
+  Validation diagnostics distinguish missing or non-array operations from empty operations without effects and explain the effects-only form.
+
+  Blue authorization and ERC-20 approval effects require a registered Blue deployment and fail with `UnsupportedChainError` before any RPC on unsupported chains.
+
+  Effects also reject positive bound-transaction native value to another address and fail closed when sender ETH debit traces do not cover the declared value, including alongside operation limits.
+
+  Effects-only requests require an effect for every caller transaction (excluding simulation preparations) and restrict them to the declared control contracts and calls, including Midnight cancellation multicalls with no economic subcalls. Caller requirement transactions need their own indexed effects or must be simulated separately. Calldata inspection restricts execution without inferring permissions. Revocations do not implicitly allow grants, and control-effect conversion retains owner-only account-intent validation.
+
+- Use `supplyCollateralWithNative` to wrap part or all of a Midnight collateral deposit in one transaction without borrowing. This method requires a positive `nativeAmount` and a `deadline`, and credits the sender's position. `supplyCollateral` still deposits ERC-20 collateral directly through Midnight. Simulation verifies indexed collateral credit and total payment for both routes.
+
+  Existing Midnight builders `midnightCancelAndMake`, `midnightTakeLend`, `midnightSupplyCollateralTakeBorrow`, `midnightRepayWithdrawCollateral`, and `midnightTakeRepayWithdrawCollateral` now reject non-bigint `nativeAmount` with `InvalidMidnightNativeAmountTypeError`. To disable native funding in those builders, pass `0n` or omit the field.
+
+  The standalone native builder and entity also reject non-bigint collateral amounts with `InvalidBigIntInputError`, identifying the field as `assets` or `collateralAssets`, respectively. The entity also rejects non-bigint `reservedCollateralAssets` with the same error before computing the allowance threshold.
+
+- Pin code and metadata reads to the same canonical block hash as the simulation, including with older viem versions, without falling back to the block number on RPC rejection.
+
+  Metadata and approval-token reads that fail with a data-less JSON-RPC `-32603` error now report `RPC_TRANSPORT_ERROR` instead of `SLIPPAGE_CHECK_UNAVAILABLE` or `APPROVAL_CHECK_UNAVAILABLE` when there is no explicit execution-revert signal.
+
+- Report undeclared Morpho position decreases as non-blocking `UNEXPECTED_POSITION_CHANGE` warnings in `report.warnings`. Other simulation failures remain blocking.
+- Support `midnightWithdrawCollateral` in `toSimulationLimits` by deriving a one-entry `midnightWithdrawCollateralBatch` limit with the same receiver and tolerance checks. Reject delegated withdrawals with `LimitAccountMismatchError` because batch verification measures the transaction sender.
+
+### Patch Changes
+
+- Include only the sender's net wrapped-native debit in native-ETH Blue collateral quotes when the market collateral is the chain's registered wrapped-native token: `assetsPaid = max(0, net ETH sent + max(0, wrappedBefore - wrappedAfter))`, where net ETH sent subtracts ETH the sender receives back. Wrapped credits never reduce the ETH payment. Separate wrapped-token debits now count against `assetsPaid`, while wrapping and supplying the quoted ETH is not double-counted. Other collateral tokens and non-native-sentinel quotes are unchanged.
+
+  When another operation already checks the same sender wrapped-native balance, keep that operation's funding bound instead of adding an overlapping balance measurement to the native quote. Existing native-wallet overlap restrictions remain unchanged.
+
+  If any operation's proceeds measure that same wrapped-native wallet balance, including another native collateral quote, keep payment ETH-only so borrow proceeds cannot offset ETH funding. Extra wrapped-native debits reduce the measured proceeds and are checked against their minimum. Native collateral quotes' combined payment reads do not remove one another's coverage. This exception does not apply to a different token or receiver, and typed same-token net measurements remain unchanged.
+
+- Start the calldata-target contract-code check and quoted-asset resolution together at the pinned block, removing one serial RPC round trip before `eth_simulateV1`. Both checks must still succeed before planning or simulation; when both fail, the contract-code error is reported. Simulation sends no `eth_chainId` probe.
+- Select `eth_simulateV1` state using the pinned block hash with `requireCanonical: true` (EIP-1898), including same-height Anvil responses and Stable simulations without parent-hash checks. This requests rejection of retained non-canonical blocks. Selector rejection fails closed as a typed RPC error without a number-selector fallback. Caller-supplied block fields are bound by one hash lookup before code or asset reads; mismatches and missing blocks fail closed. SDK-resolved pins keep their request count. Probes on 2026-11-19 accepted the flag on all 22 live dev-eRPC chains serving the method and local Anvil, but enforcement against a retained non-canonical block was not demonstrated; seven chains without `eth_simulateV1` remain unverified.
+- Strengthen internal simulation request types to preserve validated sender and quote invariants without repeating input checks. Public simulation inputs and validation behavior are unchanged.
+- Stop reporting `WRAPPED_NATIVE_DEDUP_MISS` for native wraps and unwraps on Arbitrum, Plume and Robinhood, whose wrapped-native tokens emit only a zero-address `Transfer` and no `Deposit`/`Withdrawal`. These transfers are kept as the wrapped-native mint/burn, as before.
+- Updated dependencies
+  - @morpho-org/morpho-sdk@10.1.0
+
 ## 9.1.0
 
 ### Minor Changes

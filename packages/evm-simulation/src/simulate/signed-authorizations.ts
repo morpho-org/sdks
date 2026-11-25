@@ -9,15 +9,15 @@ import {
   type Hex,
   isAddressEqual,
 } from "viem";
-import type { SimulationAuthorization } from "../authorizations.js";
 import {
   ApprovalCheckUnavailableError,
   UnusedAuthorizationError,
 } from "../errors.js";
 import type { RawLog } from "../types.js";
+import type { ParsedRequest } from "./request/parse-request.js";
 
 interface SignedAuthorizationUseParams {
-  readonly authorizations: readonly SimulationAuthorization[];
+  readonly authorizations: ParsedRequest["authorizations"];
   readonly logs: readonly RawLog[] | undefined;
   readonly morpho: Address;
   readonly ecrecoverAuthorizer: Address;

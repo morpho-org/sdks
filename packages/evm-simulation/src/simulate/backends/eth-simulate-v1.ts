@@ -2,10 +2,12 @@ import {
   BaseError,
   type Client,
   ExecutionRevertedError,
+  type Hex,
   HttpRequestError,
   InsufficientFundsError,
   isHex,
   numberToHex,
+  type PublicRpcSchema,
   UnknownRpcError,
 } from "viem";
 import {
@@ -15,7 +17,7 @@ import {
   SimulationRevertedError,
 } from "../../errors.js";
 import type { StateBlock } from "../../params.js";
-import type { ExecutionPlan } from "../plan/plan-execution.js";
+import type { ExecutionPlan, PlannedCall } from "../plan/plan-execution.js";
 import { formatRevert } from "./decode-revert.js";
 import { evaluateCalls } from "./evaluate-calls.js";
 import type { SimulationExecution } from "./parse-response.js";
@@ -50,6 +52,18 @@ const SIMULATE_INSUFFICIENT_FUNDS_CODE = -38014;
 
 /** The JSON-RPC methods this boundary calls. */
 type RpcLabel = "eth_getBlock" | "eth_getCode" | "eth_simulateV1";
+
+/** Extend viem's number-only simulate selector with EIP-1898 at the RPC boundary. */
+type HashSimulationRpc = {
+  Parameters: [
+    Extract<
+      PublicRpcSchema[number],
+      { Method: "eth_simulateV1" }
+    >["Parameters"][0],
+    { blockHash: Hex; requireCanonical: true },
+  ];
+  ReturnType: unknown;
+};
 
 /** Map a caught error to the boundary's typed failure for `label`. */
 const toBoundaryError = (
@@ -118,6 +132,84 @@ const toBoundaryError = (
   );
 };
 
+/**
+ * Most gas sent as `gas` on one read-only evidence read the SDK inserts
+ * (balance and position reads, not derivation reads), when the caller sets
+ * neither `callGasLimit` nor `blockOverrides.gasLimit`. Far above a
+ * `balanceOf` or position view; it keeps nodes such as Monad, which reserve
+ * 150M gas per call without `gas`, from spending their simulation cap on SDK
+ * reads.
+ * @internal
+ */
+export const EVIDENCE_READ_GAS_LIMIT = 1_000_000n;
+
+/**
+ * Most gas the SDK's evidence reads carry in total, and never more than half
+ * the pinned block's gas limit. Reth-style nodes reject a simulated block
+ * whose explicit call gas exceeds the block gas limit (3M in HyperEVM small
+ * blocks, 30M on Arc) and share what is left between calls without `gas`, so
+ * many reads split this budget instead of each taking
+ * {@link EVIDENCE_READ_GAS_LIMIT}, leaving at least half the block to user
+ * transactions. A node whose block response omits `gasLimit` gets this full
+ * budget.
+ * @internal
+ */
+export const EVIDENCE_READ_GAS_BUDGET = 15_000_000n;
+
+/**
+ * Least gas one evidence read carries. When the budget cannot give each read
+ * this much (more than 150 reads in a 30M block, more than 15 in a 3M block),
+ * enough for the 21,000 intrinsic gas plus a `balanceOf` or position view, the
+ * SDK sends no `gas` on its reads and the node default applies, as for every
+ * read before the budget existed.
+ * @internal
+ */
+export const EVIDENCE_READ_GAS_FLOOR = 100_000n;
+
+const isEvidenceRead = (call: PlannedCall) =>
+  call.type === "stateRead" && call.read.kind !== "derivation";
+
+/** Gas for each evidence read of `plan`: an equal share of the budget (capped at half of `blockGasLimit`) up to the per-read limit, or none below the floor. */
+function evidenceReadGas(
+  plan: ExecutionPlan,
+  blockGasLimit: bigint | undefined,
+): bigint | undefined {
+  const halfBlock =
+    blockGasLimit === undefined ? undefined : blockGasLimit / 2n;
+  const budget =
+    halfBlock !== undefined && halfBlock < EVIDENCE_READ_GAS_BUDGET
+      ? halfBlock
+      : EVIDENCE_READ_GAS_BUDGET;
+  const count = BigInt(plan.calls.filter(isEvidenceRead).length);
+  const share = count === 0n ? EVIDENCE_READ_GAS_LIMIT : budget / count;
+  if (share < EVIDENCE_READ_GAS_FLOOR) {
+    return undefined;
+  }
+  return share < EVIDENCE_READ_GAS_LIMIT ? share : EVIDENCE_READ_GAS_LIMIT;
+}
+
+/** Per-call `gas`: the caller's limit, else the evidence-read gas for SDK reads without a block override. */
+function callGas(
+  call: PlannedCall,
+  {
+    blockGasLimit,
+    callGasLimit,
+    evidenceGas,
+  }: {
+    blockGasLimit?: bigint | undefined;
+    callGasLimit?: bigint | undefined;
+    evidenceGas: bigint | undefined;
+  },
+): bigint | undefined {
+  if (callGasLimit !== undefined) {
+    return callGasLimit;
+  }
+  if (blockGasLimit !== undefined) {
+    return undefined;
+  }
+  return isEvidenceRead(call) ? evidenceGas : undefined;
+}
+
 /** Run one RPC call; translate domain failures and wrap other RPC failures. @internal */
 export const rpc = async <T>(
   label: RpcLabel,
@@ -144,7 +236,10 @@ export const rpc = async <T>(
  *    gas is separated from economic effects. When `blockGasLimit` is set,
  *    it is sent as the block's `blockOverrides.gasLimit`; otherwise no block
  *    override is sent. When `callGasLimit` is set, it is sent as `gas` on every
- *    call; otherwise no per-call `gas` is sent.
+ *    call; otherwise only SDK evidence reads carry `gas`
+ *    ({@link EVIDENCE_READ_GAS_LIMIT}, together at most
+ *    {@link EVIDENCE_READ_GAS_BUDGET} and half the state block's gas limit),
+ *    and none do when `blockGasLimit` is set.
  *    Caller-provided `stateOverrides` apply once before all planned calls; no
  *    overrides are injected automatically. Without a caller balance override,
  *    `value` transfers are funded by the sender's real native balance.
@@ -158,7 +253,9 @@ export const rpc = async <T>(
  *    then every planned state read.
  *
  * The endpoint must support `eth_simulateV1` with per-call `from`; there is
- * no fallback backend.
+ * no fallback backend. Pinned state is selected by EIP-1898 block hash.
+ * A rejected hash selector
+ * is reported as a typed RPC failure, never retried with a number selector.
  *
  * @param params - Caller-owned viem client, execution plan (its request
  *   `chainId` is sent on every call), state block, the `validation` flag to
@@ -168,7 +265,7 @@ export const rpc = async <T>(
  *   results, collected assertion and state-read failures, and the resolved {@link ExecutionBlock}.
  * @throws {RpcTransportError} For transport failures, timeouts, HTTP error
  *   statuses and JSON-RPC errors that are not a node-level revert, including
- *   a node's rejection of the request's chain ID.
+ *   a node's rejection of the request's chain ID or block hash selector.
  * @throws {InvalidSimulationResponseError} For a response that cannot be
  *   trusted (a 2xx body that is not JSON or not a JSON-RPC object (e.g. a bare `null`), bad shape, call-count mismatch, block other than the state block
  *   or its successor, a block timestamp earlier than the state block's, or a
@@ -182,7 +279,7 @@ export const rpc = async <T>(
 export async function executePlan(params: {
   client: Client;
   plan: ExecutionPlan;
-  stateBlock: StateBlock;
+  stateBlock: StateBlock & { readonly gasLimit?: bigint };
   validation: boolean;
   blockGasLimit?: bigint | undefined;
   callGasLimit?: bigint | undefined;
@@ -198,8 +295,9 @@ export async function executePlan(params: {
     parentHashCheck,
   } = params;
 
+  const evidenceGas = evidenceReadGas(plan, stateBlock.gasLimit);
   const response = await rpc("eth_simulateV1", () =>
-    client.request({
+    client.request<HashSimulationRpc>({
       method: "eth_simulateV1",
       params: [
         {
@@ -211,22 +309,27 @@ export async function executePlan(params: {
               ...(blockGasLimit !== undefined && {
                 blockOverrides: { gasLimit: numberToHex(blockGasLimit) },
               }),
-              calls: plan.calls.map((call) => ({
-                chainId: numberToHex(plan.request.chainId),
-                from: call.transaction.from,
-                to: call.transaction.to,
-                data: call.transaction.data,
-                value: numberToHex(call.transaction.value),
-                ...(callGasLimit !== undefined && {
-                  gas: numberToHex(callGasLimit),
-                }),
-              })),
+              calls: plan.calls.map((call) => {
+                const gas = callGas(call, {
+                  blockGasLimit,
+                  callGasLimit,
+                  evidenceGas,
+                });
+                return {
+                  chainId: numberToHex(plan.request.chainId),
+                  from: call.transaction.from,
+                  to: call.transaction.to,
+                  data: call.transaction.data,
+                  value: numberToHex(call.transaction.value),
+                  ...(gas !== undefined && { gas: numberToHex(gas) }),
+                };
+              }),
             },
           ],
           traceTransfers: true,
           validation,
         },
-        numberToHex(stateBlock.number),
+        { blockHash: stateBlock.hash, requireCanonical: true },
       ],
     }),
   );

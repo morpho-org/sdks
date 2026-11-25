@@ -1,25 +1,12 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
-import { type Address, encodeFunctionData } from "viem";
-import { blueBundlesV1Abi } from "../../abis.js";
-import {
-  validateMarketParamsId,
-  validateUint256Field,
-} from "../../helpers/validate.js";
+import type { Address } from "viem";
 import type {
   BlueSupplyAction,
   BundlesTokenRequirementSignature,
   Metadata,
   Transaction,
 } from "../../types/index.js";
-import { NonPositiveInputError } from "../../types/index.js";
-import { getBundlesReferralFeeAssets } from "../bundles/common.js";
-import {
-  type BlueBundlesV1CommonParams,
-  finalizeBlueBundlesV1Transaction,
-  getBlueBundlesV1TokenPermit,
-  normalizeBlueBundlesV1CommonParams,
-  validateBlueBundlesV1NativeFunding,
-} from "./common.js";
+import { encodeBlueSupply, parseBlueSupply } from "./supply.internal.js";
 
 /** Parameters for {@link blueSupply}. */
 export interface BlueSupplyParams {
@@ -105,67 +92,5 @@ export interface BlueSupplyParams {
  */
 export const blueSupply = (
   params: BlueSupplyParams,
-): Readonly<Transaction<BlueSupplyAction>> => {
-  const { chainId, marketParams } = params.market;
-  validateMarketParamsId(marketParams);
-  const { assets, userAddress, requirementSignature } = params.args;
-  if (assets <= 0n) {
-    throw new NonPositiveInputError("assets", assets);
-  }
-  validateUint256Field("assets", assets);
-
-  const common: BlueBundlesV1CommonParams = {
-    chainId,
-    userAddress,
-    deadline: params.args.deadline,
-    referralFeePct: params.args.referralFeePct,
-    referralFeeRecipient: params.args.referralFeeRecipient,
-    metadata: params.metadata,
-  };
-  const { referralFeePct, referralFeeRecipient } =
-    normalizeBlueBundlesV1CommonParams(common);
-  const value = validateBlueBundlesV1NativeFunding({
-    chainId,
-    token: marketParams.loanToken,
-    fundedAmount: assets,
-    nativeAmount: params.args.nativeAmount,
-    requirementSignature,
-  });
-  const tokenPermit = getBlueBundlesV1TokenPermit({
-    chainId,
-    userAddress,
-    token: marketParams.loanToken,
-    amount: assets,
-    requirementSignature,
-  });
-
-  return finalizeBlueBundlesV1Transaction({
-    common,
-    value,
-    data: encodeFunctionData({
-      abi: blueBundlesV1Abi,
-      functionName: "blueBundlesV1Supply",
-      args: [
-        marketParams,
-        assets,
-        tokenPermit,
-        referralFeePct,
-        referralFeeRecipient,
-        params.args.deadline,
-      ],
-    }),
-    action: {
-      type: "blueSupply",
-      args: {
-        market: marketParams.id,
-        assets,
-        onBehalf: userAddress,
-        nativeAmount: value > 0n ? value : undefined,
-        referralFeePct,
-        referralFeeRecipient,
-        referralFeeAssets: getBundlesReferralFeeAssets(assets, referralFeePct),
-        deadline: params.args.deadline,
-      },
-    },
-  });
-};
+): Readonly<Transaction<BlueSupplyAction>> =>
+  encodeBlueSupply(parseBlueSupply(params));

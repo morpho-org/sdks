@@ -1,7 +1,11 @@
 import { type Address, ethAddress, getAddress, type Hex } from "viem";
 import type { AccountAssetChanges, AssetChange } from "../types.js";
 
-/** A single signed contribution to one account's balance for one token. */
+/**
+ * A single signed contribution to one account's balance for one token.
+ *
+ * @internal
+ */
 export interface AssetChangeEntry {
   account: Address;
   token: Address;
@@ -49,6 +53,7 @@ const compareAddress = (a: Address, b: Address) => {
  *
  * @param entries - Signed contributions; `diff` is added per (account, token).
  * @returns One {@link AccountAssetChanges} per account with a non-zero change.
+ * @internal
  */
 export function groupAssetChanges(
   entries: AssetChangeEntry[],

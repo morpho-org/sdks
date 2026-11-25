@@ -34,16 +34,101 @@ import type {
   MempoolPayloadValidationResult,
   MidnightApiBookPriceLevelsResult,
   MidnightApiBookResult,
+  MidnightApiBookSide,
   MidnightApiBooksResult,
   MidnightApiBookTakeableOffersResult,
   MidnightApiClientParams,
   MidnightApiConfig,
   MidnightApiConstructorConfig,
   MidnightApiQuoteResult,
+  MidnightApiTake,
   MidnightApiTakeableOffersResult,
   ValidateMempoolItemsParams,
   ValidateMempoolPayloadParams,
 } from "./types.js";
+
+interface QuoteSettlement {
+  readonly side: MidnightApiBookSide;
+  readonly settlementFee: bigint;
+  readonly rawGuard: boolean;
+  readonly takeableOffers: readonly MidnightApiTake[];
+}
+
+function computeQuoteFillByUnits(
+  { side, settlementFee, rawGuard, takeableOffers }: QuoteSettlement,
+  units: bigint,
+) {
+  let remainingUnits = units;
+  let filledUnits = 0n;
+  let filledAssets = 0n;
+  for (const take of takeableOffers) {
+    if (remainingUnits === 0n) {
+      break;
+    }
+    const { buyerPrice, sellerPrice } = quoteGuardPrices(
+      { offer: take.offer, settlementFee },
+      rawGuard,
+    );
+    const price = side === "asks" ? buyerPrice : sellerPrice;
+    const filled = take.units < remainingUnits ? take.units : remainingUnits;
+    filledUnits += filled;
+    filledAssets += MathLib.mulDiv(
+      filled,
+      price,
+      MathLib.WAD,
+      side === "asks" ? "Up" : "Down",
+    );
+    remainingUnits -= filled;
+  }
+  return { filledUnits, filledAssets };
+}
+
+function computeQuoteFillByAssets(
+  { side, settlementFee, rawGuard, takeableOffers }: QuoteSettlement,
+  assets: bigint,
+) {
+  let remainingAssets = assets;
+  let filledUnits = 0n;
+  let filledAssets = 0n;
+  for (const take of takeableOffers) {
+    if (remainingAssets === 0n) {
+      break;
+    }
+    const { buyerPrice, sellerPrice } = quoteGuardPrices(
+      { offer: take.offer, settlementFee },
+      rawGuard,
+    );
+    const makerPrice = side === "asks" ? sellerPrice : buyerPrice;
+    const settlementPrice = side === "asks" ? buyerPrice : sellerPrice;
+    const takeMakerAssets =
+      side === "asks"
+        ? MathLib.mulDivUp(take.units, makerPrice, MathLib.WAD)
+        : MathLib.mulDivDown(take.units, makerPrice, MathLib.WAD);
+
+    const fillsEntireTake = takeMakerAssets <= remainingAssets;
+    const filled = fillsEntireTake
+      ? take.units
+      : MathLib.mulDiv(
+          remainingAssets,
+          MathLib.WAD,
+          makerPrice,
+          side === "asks" ? "Down" : "Up",
+        );
+    if (filled === 0n) {
+      continue;
+    }
+
+    filledUnits += filled;
+    filledAssets += MathLib.mulDiv(
+      filled,
+      settlementPrice,
+      MathLib.WAD,
+      side === "asks" ? "Up" : "Down",
+    );
+    remainingAssets = fillsEntireTake ? remainingAssets - takeMakerAssets : 0n;
+  }
+  return { filledUnits, filledAssets };
+}
 
 export type {
   FetchBookParams,
@@ -86,6 +171,14 @@ export type {
   ValidateMempoolPayloadParams,
 } from "./types.js";
 export { MempoolPayloadValidationRule } from "./types.js";
+
+function quoteGuardPrices(
+  params: Parameters<typeof TakeAmountsLib.prices>[0],
+  raw: boolean,
+) {
+  const prices = TakeAmountsLib.prices(params);
+  return raw ? TakeAmountsLib.prices({ ...params, settlementFee: 0n }) : prices;
+}
 
 /**
  * Midnight API client and stateless helper surface for books and mempool data.
@@ -353,17 +446,18 @@ export class MidnightApi {
    * @param params.side - Book side to quote.
    * @param params.assets - Optional maker-side target assets amount. Mutually exclusive with `params.units`.
    * @param params.units - Optional target unit amount. Mutually exclusive with `params.assets`.
-   * @param params.averageWorstPrice - Optional WAD-scaled average worst price guard. Mutually exclusive with `params.slippage`.
-   * @param params.slippage - Optional slippage percentage used to derive the guard. Mutually exclusive with `params.averageWorstPrice`.
+   * @param params.averageWorstPrice - Optional WAD-scaled fee-adjusted guard: asks use buyer price including fee, bids use seller price net of fee. Mutually exclusive with `params.slippage`.
+   * @param params.slippage - Optional slippage percentage deriving a raw tick-price (fee-excluded) guard from the API. Mutually exclusive with `params.averageWorstPrice`.
    * @param params.taker - Account that will execute the take (the `taker` passed to Midnight `take`).
    *   The API leaves out offers made by this account, since Midnight rejects self-takes.
    * @param params.limit - Optional maximum number of offers the API walks to build the quote (1 to 10,000, API default 10,000).
-   * @param params.settlementFee - Optional current WAD-scaled settlement fee used for local guard validation. Defaults to zero.
+   * @param params.settlementFee - Optional current WAD-scaled settlement fee for absolute guard pricing and bid fee validation in both modes. Slippage guard pricing excludes it. Defaults to zero.
    * @param params.baseUrl - Optional Midnight API base URL override.
    * @param params.fetch - Optional fetch implementation override.
    * @param params.request - Optional fetch options forwarded to this request.
    * @returns Quote and ABI-ready take caps. `averageWorstPrice` equals the caller's guard when provided,
-   *   otherwise the API's guard. Offers are returned as the API sends them. An `asks` quote by
+   *   otherwise the API's raw tick-price (fee-excluded) guard. `averageBestPrice` is also raw from the API.
+   *   Offers are returned as the API sends them. An `asks` quote by
    *   `assets` can include a sell offer whose buyer price (offer price plus the market's settlement
    *   fee) exceeds one asset per unit, such as a `MAX_TICK` ask when the fee is positive. The
    *   `MidnightBundlesV2` assets-target buy reverts on such an offer before its per-offer error
@@ -372,7 +466,7 @@ export class MidnightApi {
    * @throws {InvalidMidnightApiQuoteTargetError} when the runtime input does not set exactly one of `units` or `assets`.
    * @throws {NegativeValueError} when `settlementFee` is negative.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
-   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON or its envelope or quote aggregates are malformed, when a returned offer cannot be mapped (malformed numeric or hex fields), when its `market_id` does not match, or cannot be derived from, its embedded market, when it falls outside the requested filters, when an offer's maker matches the requested `taker`, when its `receiverIfMakerIsSeller` is not a well-formed address or is the zero address on a sell offer, when its caps or buy-side receiver are not executable, when its units exceed its offer `maxUnits`, or when the returned offers imply a rounded aggregate settlement price outside the effective average-worst-price guard.
+   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON or its envelope or quote aggregates are malformed, when a returned offer cannot be mapped (malformed numeric or hex fields), when its `market_id` does not match, or cannot be derived from, its embedded market, when it falls outside the requested filters, when an offer's maker matches the requested `taker`, when its `receiverIfMakerIsSeller` is not a well-formed address or is the zero address on a sell offer, when its caps or buy-side receiver are not executable, when its units exceed its offer `maxUnits`, or when the returned offers imply a rounded aggregate price outside the guard on its raw (slippage) or fee-adjusted (absolute) surface.
    * @throws {SettlementFeeExceedsPriceError} when a bid's settlement fee exceeds its offer price.
    * @example
    * ```ts
@@ -391,8 +485,9 @@ export class MidnightApi {
     params: FetchBookQuoteParams,
   ): Promise<MidnightApiQuoteResult> {
     const input = params;
-    if ((input.units == null) === (input.assets == null))
+    if ((input.units == null) === (input.assets == null)) {
       throw new InvalidMidnightApiQuoteTargetError();
+    }
     const settlementFee = BigInt(input.settlementFee ?? 0n);
     assertNonNegative("settlementFee", settlementFee);
     const response = await requestMidnightApi<ApiQuoteResponse>({
@@ -438,76 +533,24 @@ export class MidnightApi {
       side: input.side,
       taker: input.taker,
     });
-    const averageWorstPrice =
-      "averageWorstPrice" in input && input.averageWorstPrice != null
-        ? input.averageWorstPrice
-        : "slippage" in input && input.slippage != null
-          ? responseAverageWorstPrice
-          : undefined;
-    const guard =
-      averageWorstPrice == null ? undefined : BigInt(averageWorstPrice);
+    let guard: bigint | undefined;
+    if ("averageWorstPrice" in input && input.averageWorstPrice != null) {
+      guard = BigInt(input.averageWorstPrice);
+    } else if ("slippage" in input && input.slippage != null) {
+      guard = BigInt(responseAverageWorstPrice);
+    }
+    const rawGuard = input.averageWorstPrice == null && input.slippage != null;
     if (guard != null) {
-      let filledUnits = 0n;
-      let filledAssets = 0n;
-      if ("units" in input && input.units != null) {
-        let remainingUnits = BigInt(input.units);
-        for (const take of takeableOffers) {
-          if (remainingUnits === 0n) break;
-          const { buyerPrice, sellerPrice } = TakeAmountsLib.prices({
-            offer: take.offer,
-            settlementFee,
-          });
-          const price = input.side === "asks" ? buyerPrice : sellerPrice;
-          const filled =
-            take.units < remainingUnits ? take.units : remainingUnits;
-          filledUnits += filled;
-          filledAssets += MathLib.mulDiv(
-            filled,
-            price,
-            MathLib.WAD,
-            input.side === "asks" ? "Up" : "Down",
-          );
-          remainingUnits -= filled;
-        }
-      } else {
-        let remainingAssets = BigInt(input.assets);
-        for (const take of takeableOffers) {
-          if (remainingAssets === 0n) break;
-          const { buyerPrice, sellerPrice } = TakeAmountsLib.prices({
-            offer: take.offer,
-            settlementFee,
-          });
-          const makerPrice = input.side === "asks" ? sellerPrice : buyerPrice;
-          const settlementPrice =
-            input.side === "asks" ? buyerPrice : sellerPrice;
-          const takeMakerAssets =
-            input.side === "asks"
-              ? MathLib.mulDivUp(take.units, makerPrice, MathLib.WAD)
-              : MathLib.mulDivDown(take.units, makerPrice, MathLib.WAD);
-
-          const fillsEntireTake = takeMakerAssets <= remainingAssets;
-          const filled = fillsEntireTake
-            ? take.units
-            : MathLib.mulDiv(
-                remainingAssets,
-                MathLib.WAD,
-                makerPrice,
-                input.side === "asks" ? "Down" : "Up",
-              );
-          if (filled === 0n) continue;
-
-          filledUnits += filled;
-          filledAssets += MathLib.mulDiv(
-            filled,
-            settlementPrice,
-            MathLib.WAD,
-            input.side === "asks" ? "Up" : "Down",
-          );
-          remainingAssets = fillsEntireTake
-            ? remainingAssets - takeMakerAssets
-            : 0n;
-        }
-      }
+      const settlement = {
+        side: input.side,
+        settlementFee,
+        rawGuard,
+        takeableOffers,
+      };
+      const { filledUnits, filledAssets } =
+        "units" in input && input.units != null
+          ? computeQuoteFillByUnits(settlement, BigInt(input.units))
+          : computeQuoteFillByAssets(settlement, BigInt(input.assets));
       if (filledUnits > 0n) {
         const averagePrice = MathLib.mulDiv(
           filledAssets,
@@ -852,14 +895,15 @@ export class MidnightApi {
    * @param params.side - Book side to quote.
    * @param params.assets - Optional maker-side target assets amount. Mutually exclusive with `params.units`.
    * @param params.units - Optional target unit amount. Mutually exclusive with `params.assets`.
-   * @param params.averageWorstPrice - Optional WAD-scaled average worst price guard. Mutually exclusive with `params.slippage`.
-   * @param params.slippage - Optional slippage percentage used to derive the guard. Mutually exclusive with `params.averageWorstPrice`.
+   * @param params.averageWorstPrice - Optional WAD-scaled fee-adjusted guard: asks use buyer price including fee, bids use seller price net of fee. Mutually exclusive with `params.slippage`.
+   * @param params.slippage - Optional slippage percentage deriving a raw tick-price (fee-excluded) guard from the API. Mutually exclusive with `params.averageWorstPrice`.
    * @param params.taker - Account that will execute the take (the `taker` passed to Midnight `take`).
    *   The API leaves out offers made by this account, since Midnight rejects self-takes.
    * @param params.limit - Optional maximum number of offers the API walks to build the quote (1 to 10,000, API default 10,000).
-   * @param params.settlementFee - Optional current WAD-scaled settlement fee used for local guard validation. Defaults to zero.
+   * @param params.settlementFee - Optional current WAD-scaled settlement fee for absolute guard pricing and bid fee validation in both modes. Slippage guard pricing excludes it. Defaults to zero.
    * @returns Quote and ABI-ready take caps. `averageWorstPrice` equals the caller's guard when provided,
-   *   otherwise the API's guard. Offers are returned as the API sends them. An `asks` quote by
+   *   otherwise the API's raw tick-price (fee-excluded) guard. `averageBestPrice` is also raw from the API.
+   *   Offers are returned as the API sends them. An `asks` quote by
    *   `assets` can include a sell offer whose buyer price (offer price plus the market's settlement
    *   fee) exceeds one asset per unit, such as a `MAX_TICK` ask when the fee is positive. The
    *   `MidnightBundlesV2` assets-target buy reverts on such an offer before its per-offer error
@@ -868,7 +912,7 @@ export class MidnightApi {
    * @throws {InvalidMidnightApiQuoteTargetError} when the runtime input does not set exactly one of `units` or `assets`.
    * @throws {NegativeValueError} when `settlementFee` is negative.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
-   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON or its envelope or quote aggregates are malformed, when a returned offer cannot be mapped (malformed numeric or hex fields), when its `market_id` does not match, or cannot be derived from, its embedded market, when it falls outside the requested filters, when an offer's maker matches the requested `taker`, when its `receiverIfMakerIsSeller` is not a well-formed address or is the zero address on a sell offer, when its caps or buy-side receiver are not executable, when its units exceed its offer `maxUnits`, or when the returned offers imply a rounded aggregate settlement price outside the effective average-worst-price guard.
+   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON or its envelope or quote aggregates are malformed, when a returned offer cannot be mapped (malformed numeric or hex fields), when its `market_id` does not match, or cannot be derived from, its embedded market, when it falls outside the requested filters, when an offer's maker matches the requested `taker`, when its `receiverIfMakerIsSeller` is not a well-formed address or is the zero address on a sell offer, when its caps or buy-side receiver are not executable, when its units exceed its offer `maxUnits`, or when the returned offers imply a rounded aggregate price outside the guard on its raw (slippage) or fee-adjusted (absolute) surface.
    * @throws {SettlementFeeExceedsPriceError} when a bid's settlement fee exceeds its offer price.
    * @example
    * ```ts

@@ -560,7 +560,7 @@ export interface MidnightSupplyCollateralTakeBorrowAction
     }
   > {}
 
-/** Metadata for a direct Midnight collateral-supply transaction. */
+/** Metadata for a Midnight collateral-supply transaction. */
 export interface MidnightSupplyCollateralAction
   extends BaseAction<
     "midnightSupplyCollateral",
@@ -569,6 +569,21 @@ export interface MidnightSupplyCollateralAction
       readonly collateralIndex: bigint;
       readonly assets: bigint;
       readonly onBehalf: Address;
+    }
+  > {}
+
+/** Metadata for a Midnight collateral supply that wraps native currency. */
+export interface MidnightSupplyCollateralWithNativeAction
+  extends BaseAction<
+    "midnightSupplyCollateralWithNative",
+    {
+      readonly market: Hex;
+      readonly collateralIndex: bigint;
+      readonly assets: bigint;
+      /** Sender that receives collateral credit; not encoded in calldata. */
+      readonly accountAddress: Address;
+      readonly nativeAmount: bigint;
+      readonly deadline: bigint;
     }
   > {}
 
@@ -736,6 +751,7 @@ export type TransactionAction =
   | MidnightTakeWithdrawAction
   | MidnightSupplyCollateralTakeBorrowAction
   | MidnightSupplyCollateralAction
+  | MidnightSupplyCollateralWithNativeAction
   | MidnightSupplyCollateralBatchAction
   | MidnightWithdrawCollateralAction
   | MidnightWithdrawCollateralBatchAction

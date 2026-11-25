@@ -18,7 +18,7 @@ import type {
 } from "./types.js";
 import type { SimulationWarning } from "./warnings.js";
 
-/** Retention coverage after the stage ran with complete user logs and no discarded transfer records. */
+/** Retention coverage after the stage ran with complete user logs, every planned retention balance read and no discarded transfer records. */
 export interface SimulationReportVerification {
   /** Checked against configured restricted addresses, or skipped because none are configured. */
   readonly retention: "checked" | "skipped-unsupported-chain";
@@ -91,7 +91,7 @@ export interface VerifiedSimulationInputResult extends SimulationResult {
 export interface SimulationFailure {
   /** Frozen non-blocking diagnostics, always present; inspect before signing. */
   readonly warnings: readonly SimulationWarning[];
-  /** Present only when retention ran with complete user logs and no discarded transfers, even if other checks failed. */
+  /** Present only when retention ran with complete user logs, every planned retention balance read and no discarded transfers, even if other checks failed. */
   readonly verification?: SimulationReportVerification;
   readonly ok: false;
   /** Highest severity of `failures` (`fatal` > `error` > `warn`). */

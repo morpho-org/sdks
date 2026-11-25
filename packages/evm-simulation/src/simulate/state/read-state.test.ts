@@ -16,8 +16,13 @@ import {
   SimulationValidationError,
   SlippageCheckUnavailableError,
 } from "../../errors.js";
+import type { ResolvedApprovalOperation } from "../backends/resolve-assets.js";
 import type { ParsedOperationLimit } from "../request/parse-request.js";
-import { decodeStateRead, planStateReads } from "./read-state.js";
+import {
+  decodeMarketParamsRead,
+  decodeStateRead,
+  planStateReads,
+} from "./read-state.js";
 
 const owner = "0x0000000000000000000000000000000000000001";
 const receiver = "0x0000000000000000000000000000000000000002";
@@ -48,6 +53,308 @@ const nativeValueCoverageErrorMessage =
   "Native value sent by the request is not covered by any measured native side. Remove the transaction value, or declare the native or wNative asset on the operation it funds.";
 
 describe("planStateReads", () => {
+  test.each([false, true])(
+    "behavior: typed proceeds keep a native collateral quote ETH-only (reverse=%s)",
+    (reverse) => {
+      const operations: ResolvedApprovalOperation[] = [
+        {
+          limit: {
+            type: "blueSupplyCollateral",
+            marketId,
+            assetPaid: ethAddress,
+            quote: { assetsPaid: 100n, collateralSupplied: 100n },
+            slippageTolerance: 0n,
+          },
+          assetsPaid: ethAddress,
+          approvalToken: asset,
+        },
+        {
+          limit: {
+            type: "blueBorrow",
+            marketId,
+            inputs: { assets: 50n },
+            quote: { assetsReceived: 50n, sharesMinted: 50n },
+            slippageTolerance: 0n,
+          },
+          assetsReceived: asset,
+        },
+      ];
+      if (reverse) operations.reverse();
+      const plan = planStateReads({
+        owner,
+        morpho: zeroAddress,
+        midnight: zeroAddress,
+        wNative: asset,
+        operations,
+      });
+      expect(
+        plan.operations
+          .find(
+            ({ limit: plannedLimit }) =>
+              plannedLimit.type === "blueSupplyCollateral",
+          )
+          ?.measurements.find(({ field }) => field === "assetsPaid"),
+      ).toEqual({ field: "assetsPaid", type: "native", account: owner });
+      expect(
+        plan.operations
+          .find(({ limit: plannedLimit }) => plannedLimit.type === "blueBorrow")
+          ?.measurements.find(({ field }) => field === "assetsReceived"),
+      ).toEqual({
+        field: "assetsReceived",
+        type: "balance",
+        readId: `balance:${asset}:${owner}`,
+      });
+    },
+  );
+  test.each(
+    [false, true].flatMap((input) =>
+      ([owner, receiver] as const).map((payoutReceiver) => ({
+        input,
+        payoutReceiver,
+      })),
+    ),
+  )(
+    "behavior: native collateral proceeds coverage (typed=$input, receiver=$payoutReceiver)",
+    ({ input, payoutReceiver }) => {
+      const plan = planStateReads({
+        owner,
+        morpho: zeroAddress,
+        midnight: zeroAddress,
+        wNative: asset,
+        nativeValueSent: true,
+        operations: [
+          {
+            limit: {
+              type: "blueSupplyCollateralBorrow",
+              marketId,
+              receiver: payoutReceiver,
+              assetPaid: ethAddress,
+              ...(input
+                ? { inputs: { collateralAssets: 100n, borrowAssets: 50n } }
+                : {}),
+              quote: {
+                assetsPaid: 100n,
+                collateralSupplied: 100n,
+                assetsReceived: 50n,
+                sharesMinted: 50n,
+              },
+              slippageTolerance: 0n,
+            },
+            assetsPaid: input ? asset : ethAddress,
+            assetsReceived: asset,
+            approvalToken: asset,
+          },
+        ],
+      });
+      const payment = plan.operations[0]?.measurements.find(
+        ({ field }) => field === "assetsPaid",
+      );
+      expect(payment).toEqual({
+        field: "assetsPaid",
+        type: "native",
+        account: owner,
+        ...(input || payoutReceiver !== owner
+          ? { readId: `balance:${asset}:${owner}` }
+          : {}),
+        ...(!input && payoutReceiver !== owner
+          ? { wrappedDebitOnly: true }
+          : {}),
+      });
+      expect(plan.operations[0]?.walletBounds).toBeUndefined();
+    },
+  );
+  test.each(
+    [false, true].flatMap((nativeValueSent) =>
+      [false, true].map((reverse) => ({ nativeValueSent, reverse })),
+    ),
+  )(
+    "behavior: native collateral quote beside typed wNative supply (nativeValueSent=$nativeValueSent, reverse=$reverse)",
+    ({ nativeValueSent, reverse }) => {
+      const operations: ResolvedApprovalOperation[] = [
+        {
+          limit: {
+            type: "blueSupplyCollateral" as const,
+            marketId,
+            assetPaid: ethAddress,
+            quote: { assetsPaid: 100n, collateralSupplied: 100n },
+            slippageTolerance: 0n,
+          },
+          assetsPaid: ethAddress,
+          approvalToken: asset,
+        },
+        {
+          limit: {
+            type: "blueSupply" as const,
+            marketId,
+            inputs: { assets: 10n },
+            quote: { assetsPaid: 10n, sharesMinted: 10n },
+            slippageTolerance: 0n,
+          },
+          assetsPaid: asset,
+        },
+      ];
+      if (reverse) operations.reverse();
+      const plan = () =>
+        planStateReads({
+          owner,
+          morpho: zeroAddress,
+          midnight: zeroAddress,
+          wNative: asset,
+          nativeValueSent,
+          operations,
+        });
+      if (nativeValueSent) {
+        expect(plan).toThrow(SimulationValidationError);
+      } else {
+        expect(plan).not.toThrow();
+      }
+    },
+  );
+  test("does not read refinance market parameters for another account", () => {
+    const plan = planStateReads({
+      owner,
+      morpho: vault,
+      midnight: zeroAddress,
+      operations: [
+        {
+          limit: {
+            type: "blueRefinance",
+            account: receiver,
+            sourceMarketId: marketId,
+            targetMarketId: marketId,
+            quote: { sharesBurned: 1n, sharesMinted: 1n },
+            slippageTolerance: 0n,
+          },
+        },
+      ],
+    });
+    expect(plan.refinanceMarketParamReads).toBeUndefined();
+    expect(plan.reads.some((read) => read.kind === "morpho.marketParams")).toBe(
+      false,
+    );
+  });
+  test("plans deduplicated in-block refinance market reads", () => {
+    const markets = ([vault, receiver, owner] as const).map(
+      (collateralToken) =>
+        new MarketParams({
+          loanToken: asset,
+          collateralToken,
+          oracle: zeroAddress,
+          irm: zeroAddress,
+          lltv: 0n,
+        }),
+    );
+    const targetMarketId = markets[1]!.id;
+    const secondTargetMarketId = markets[2]!.id;
+    const plan = planStateReads({
+      owner,
+      morpho: vault,
+      midnight: zeroAddress,
+      operations: [
+        {
+          limit: {
+            type: "blueRefinance",
+            sourceMarketId: marketId,
+            targetMarketId,
+            quote: { sharesBurned: 1n, sharesMinted: 1n },
+            slippageTolerance: 0n,
+          },
+        },
+        {
+          limit: {
+            type: "blueRefinance",
+            sourceMarketId: targetMarketId,
+            targetMarketId: secondTargetMarketId,
+            quote: { sharesBurned: 1n, sharesMinted: 1n },
+            slippageTolerance: 0n,
+          },
+        },
+      ],
+    });
+    const reads = plan.reads.filter(
+      (read) => read.kind === "morpho.marketParams",
+    );
+    expect(reads).toHaveLength(3);
+    expect(plan.refinanceMarketParamReads).toEqual([
+      {
+        sourceMarketId: marketId,
+        targetMarketId,
+        sourceReadId: reads[0]?.id,
+        targetReadId: reads[1]?.id,
+      },
+      {
+        sourceMarketId: targetMarketId,
+        targetMarketId: secondTargetMarketId,
+        sourceReadId: reads[1]?.id,
+        targetReadId: reads[2]?.id,
+      },
+    ]);
+    for (const read of reads) {
+      const market = markets.find(({ id }) => id === read.marketId)!;
+      expect(decodeFunctionData({ abi: blueAbi, data: read.data })).toEqual({
+        functionName: "idToMarketParams",
+        args: [read.marketId],
+      });
+      expect(
+        decodeMarketParamsRead(
+          read,
+          encodeFunctionResult({
+            abi: blueAbi,
+            functionName: "idToMarketParams",
+            result: [
+              asset,
+              market.collateralToken,
+              zeroAddress,
+              zeroAddress,
+              0n,
+            ],
+          }),
+        ),
+      ).toEqual({
+        loanToken: asset,
+        collateralToken: market.collateralToken,
+        oracle: zeroAddress,
+        irm: zeroAddress,
+        lltv: 0n,
+      });
+      expect(() => decodeMarketParamsRead(read, "0x")).toThrow(
+        SlippageCheckUnavailableError,
+      );
+      expect(() => decodeMarketParamsRead(read, "0x1234")).toThrow(
+        InvalidSimulationResponseError,
+      );
+      expect(() =>
+        decodeMarketParamsRead(
+          read,
+          encodeFunctionResult({
+            abi: blueAbi,
+            functionName: "idToMarketParams",
+            result: [
+              owner,
+              market.collateralToken,
+              zeroAddress,
+              zeroAddress,
+              0n,
+            ],
+          }),
+        ),
+      ).toThrow(
+        new InvalidSimulationResponseError(
+          `Market parameters do not match market "${read.marketId}". Check the RPC endpoint.`,
+        ),
+      );
+      expect(
+        decodeMarketParamsRead(
+          read,
+          encodeFunctionResult({
+            abi: blueAbi,
+            functionName: "idToMarketParams",
+            result: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, 0n],
+          }),
+        ),
+      ).toBeUndefined();
+    }
+  });
   test.each([
     "midnightSupplyCollateralBatch",
     "midnightSupplyCollateralTakeBorrow",
@@ -65,19 +372,41 @@ describe("planStateReads", () => {
       const isRepayment =
         type === "midnightRepayWithdrawCollateral" ||
         type === "midnightTakeRepayWithdrawCollateral";
+      let operationLimit: ParsedOperationLimit;
+      if (type === "midnightSupplyCollateralTakeBorrow") {
+        operationLimit = {
+          type,
+          marketId,
+          quote: {
+            assetsReceived: 10n,
+            unitsSold: 10n,
+            collateralSupplies: [{ collateralIndex: 0n, assets: 10n }],
+          },
+          slippageTolerance: 0n,
+        };
+      } else if (type === "midnightSupplyCollateralBatch") {
+        operationLimit = {
+          type,
+          marketId,
+          quote: { collateralSupplies: [{ collateralIndex: 0n, assets: 10n }] },
+          slippageTolerance: 0n,
+        };
+      } else {
+        operationLimit = {
+          type,
+          marketId,
+          quote: {
+            [field]: [{ collateralIndex: 0n, assets: 10n }],
+            ...(isRepayment ? { assetsPaid: 10n, debtRepaid: 10n } : {}),
+          },
+          slippageTolerance: 0n,
+        };
+      }
       const plan = () =>
         planStateReads({
           operations: [
             {
-              limit: {
-                type,
-                marketId,
-                quote: {
-                  [field]: [{ collateralIndex: 0n, assets: 10n }],
-                  ...(isRepayment ? { assetsPaid: 10n, debtRepaid: 10n } : {}),
-                },
-                slippageTolerance: 0n,
-              },
+              limit: operationLimit,
               midnightMarket: {
                 chainId: 1n,
                 midnight: zeroAddress,

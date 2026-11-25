@@ -1,8 +1,18 @@
-import { midnightSupplyCollateral } from "@morpho-org/morpho-sdk";
+import {
+  midnightSupplyCollateral,
+  midnightSupplyCollateralWithNative,
+} from "@morpho-org/morpho-sdk";
 import { midnightAbi } from "@morpho-org/morpho-sdk/abis";
 import { MarketParams } from "@morpho-org/morpho-sdk/midnight/entities";
+import { fetchMarketParams } from "@morpho-org/morpho-sdk/midnight/fetch";
 import { MarketUtils } from "@morpho-org/morpho-sdk/midnight/utils";
-import { ChainId, getChainAddress } from "@morpho-org/morpho-ts";
+import { wrapE2eNative } from "@morpho-org/morpho-test";
+import { createE2eMidnightMarket } from "@morpho-org/morpho-test/midnight";
+import {
+  ChainId,
+  getChainAddress,
+  getChainAddresses,
+} from "@morpho-org/morpho-ts";
 import {
   type AnvilTestClient,
   BASE_FORK_BLOCK,
@@ -24,14 +34,19 @@ import { base } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
   ConsumerLimitViolationError,
+  LimitAccountMismatchError,
+  SimulationRevertedError,
   SimulationValidationError,
+  simulate,
   toSimulationLimits,
   UnexpectedTokenApprovalError,
 } from "../../src/index.js";
 import {
   simulateOrThrow,
   simulationClientFor,
+  unwrapReport,
 } from "../../src/test-helpers/index.js";
+import { describeE2e } from "../e2e/setup.js";
 
 /** Pinned after the Base Midnight deployment, matching morpho-sdk's Midnight fork tests. */
 const test = createViemTest(base, {
@@ -78,7 +93,9 @@ const marketId = supply(1n, OTHER).action.args.market;
 
 const asTransaction = (
   from: Address,
-  tx: ReturnType<typeof midnightSupplyCollateral>,
+  tx: ReturnType<
+    typeof midnightSupplyCollateral | typeof midnightSupplyCollateralWithNative
+  >,
 ) => ({ from, to: tx.to, data: tx.data, value: tx.value });
 
 /** Install a fixed-price oracle, fund and approve the sender, then create the market with a first supply unless `createMarket` is false. */
@@ -127,6 +144,196 @@ const authorizeSender = async (client: AnvilTestClient<typeof base>) => {
     }),
   });
 };
+
+const nativeScenario = {
+  name: "midnight-standalone-collateral-limits",
+  requires: ["midnight", "midnightBundlesV2", "wNative"],
+} as const;
+
+const mainnetUsdcWethMarket =
+  "0x2adde4b2a21d5f14e8b449bf7cb60d6b9b72a8e340bc1785bb63961c32f09693";
+
+describeE2e(nativeScenario, (nativeTest, { chainId }) => {
+  const cases = [0n, parseEther("0.5"), parseEther("1")].map(
+    (nativeAmount) => ({
+      nativeAmount,
+      collateralIndex: 0n,
+    }),
+  );
+  if (chainId === ChainId.EthMainnet) {
+    cases.push({ nativeAmount: parseEther("0.5"), collateralIndex: 1n });
+  }
+  for (const { nativeAmount, collateralIndex } of cases) {
+    nativeTest(
+      `verifies standalone collateral funded with ${nativeAmount} wei at index ${collateralIndex}`,
+      async ({ client }) => {
+        const user = client.account.address;
+        const coreAddress = getChainAddress(chainId, "midnight");
+        const bundles = getChainAddress(chainId, "midnightBundlesV2");
+        const wrappedNative = getChainAddress(chainId, "wNative");
+        let nativeMarket: MarketParams;
+        if (collateralIndex === 1n) {
+          nativeMarket = await fetchMarketParams(client, {
+            marketId: mainnetUsdcWethMarket,
+          });
+          expect(MarketUtils.getCollateralByIndex(nativeMarket, 1n).token).toBe(
+            wrappedNative,
+          );
+        } else {
+          const { params } = await createE2eMidnightMarket(client, chainId);
+          nativeMarket = new MarketParams({
+            ...params,
+            loanToken: getChainAddresses(chainId).usdc ?? params.loanToken,
+            collateralParams: params.collateralParams.map((collateral) => ({
+              ...collateral,
+              token: wrappedNative,
+            })),
+          });
+        }
+        const assets = parseEther("1");
+        await client.setBalance({ address: user, value: 3n * assets });
+        if (nativeAmount < assets) {
+          await wrapE2eNative(client, {
+            wNative: wrappedNative,
+            account: user,
+            amount: assets - nativeAmount,
+          });
+        }
+        const config = simulationClientFor(client.transport.url, chainId);
+        const deadline = (await client.getBlock()).timestamp + 600n;
+        const supplyParams = {
+          chainId,
+          market: nativeMarket,
+          collateralIndex,
+          assets,
+        };
+        const direct = nativeAmount === 0n;
+        const tx = direct
+          ? midnightSupplyCollateral({ ...supplyParams, onBehalf: user })
+          : midnightSupplyCollateralWithNative({
+              ...supplyParams,
+              accountAddress: user,
+              nativeAmount,
+              deadline,
+            });
+        const nativeMarketId = tx.action.args.market;
+        const limits = toSimulationLimits(tx.action, {
+          owner: user,
+          market: MarketUtils.toStruct(nativeMarket),
+          slippageTolerance: 0n,
+        });
+        expect(() => toSimulationLimits(tx.action, { owner: OTHER })).toThrow(
+          LimitAccountMismatchError,
+        );
+        const approve = (spender: Address) => ({
+          from: user,
+          to: wrappedNative,
+          data: encodeFunctionData({
+            abi: erc20Abi,
+            functionName: "approve",
+            args: [spender, maxUint256],
+          }),
+        });
+        const authorize = {
+          from: user,
+          to: coreAddress,
+          data: encodeFunctionData({
+            abi: midnightAbi,
+            functionName: "setIsAuthorized",
+            args: [bundles, true, user],
+          }),
+        };
+        const authorizations = direct ? [] : [authorize];
+        const transactions = [
+          approve(direct ? coreAddress : bundles),
+          ...authorizations,
+          asTransaction(user, tx),
+        ];
+        const report = await simulate(
+          config,
+          { transactions, limits },
+          { timeoutMs: 30_000 },
+        );
+        expect(report.warnings).toEqual([]);
+        const result = unwrapReport(report);
+        expect(result.verification.operations).toMatchObject([
+          {
+            operation: "midnightSupplyCollateral",
+            account: user,
+            collateralIndex,
+            checkedLimits: {
+              quote: { assetsPaid: assets, collateralSupplied: assets },
+            },
+          },
+        ]);
+        {
+          const maxAssetsPaid = assets - 1n;
+          await expect(
+            simulateOrThrow(config, {
+              transactions,
+              limits: {
+                operations: [
+                  {
+                    type: "midnightSupplyCollateral",
+                    marketId: nativeMarketId,
+                    market: MarketUtils.toStruct(nativeMarket),
+                    collateralIndex,
+                    account: user,
+                    quote: {
+                      assetsPaid: maxAssetsPaid,
+                      collateralSupplied: assets,
+                    },
+                    slippageTolerance: 0n,
+                  },
+                ],
+              },
+            }),
+          ).rejects.toMatchObject({
+            name: ConsumerLimitViolationError.name,
+            field: "assetsPaid",
+            observed: assets,
+            bound: maxAssetsPaid,
+            tolerance: 0n,
+          });
+        }
+        await expect(
+          simulateOrThrow(config, {
+            transactions: [
+              approve(direct ? bundles : coreAddress),
+              ...authorizations,
+              asTransaction(user, tx),
+            ],
+            limits,
+          }),
+        ).rejects.toBeInstanceOf(SimulationRevertedError);
+        await expect(
+          simulateOrThrow(config, {
+            transactions: [approve(OTHER), ...transactions],
+            limits,
+          }),
+        ).rejects.toBeInstanceOf(UnexpectedTokenApprovalError);
+        await expect(
+          simulateOrThrow(config, {
+            transactions,
+            limits: {
+              operations: [
+                {
+                  type: "midnightSupplyCollateral",
+                  marketId: nativeMarketId,
+                  market: MarketUtils.toStruct(nativeMarket),
+                  collateralIndex,
+                  account: OTHER,
+                  quote: { assetsPaid: assets, collateralSupplied: assets },
+                  slippageTolerance: 0n,
+                },
+              ],
+            },
+          }),
+        ).rejects.toBeInstanceOf(ConsumerLimitViolationError);
+      },
+    );
+  }
+});
 
 describe.sequential("midnightSupplyCollateral limits — Base fork", () => {
   test("a single supply verifies the sender debit and the indexed collateral credit", async ({

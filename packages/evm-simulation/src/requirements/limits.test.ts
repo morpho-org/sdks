@@ -20,10 +20,12 @@ import {
   midnightSupplyCollateral,
   midnightSupplyCollateralBatch,
   midnightSupplyCollateralTakeBorrow,
+  midnightSupplyCollateralWithNative,
   midnightTakeBorrow,
   midnightTakeLend,
   midnightTakeRepayWithdrawCollateral,
   midnightTakeWithdraw,
+  midnightWithdrawCollateral,
   midnightWithdrawCollateralBatch,
   type TransactionAction,
   vaultV2Deposit,
@@ -194,6 +196,128 @@ describe("Midnight collateral batch limits", () => {
     ).toThrow(SimulationValidationError);
   });
 });
+describe("Midnight single collateral withdrawal limits", () => {
+  const withdraw = midnightWithdrawCollateral({
+    chainId: base.id,
+    market: BATCH_MARKET,
+    collateralIndex: 1n,
+    assets: 20n,
+    onBehalf: OWNER,
+    receiver: RECEIVER,
+  }).action;
+
+  it.each([undefined, 0n, 10_000_000_000_000_000n])(
+    "normalizes to the batch limit with tolerance %s",
+    (slippageTolerance) => {
+      const options = { owner: OWNER, receiver: RECEIVER, slippageTolerance };
+      const limits = toSimulationLimits(withdraw, options);
+      expect(limits).toEqual(
+        toSimulationLimits(
+          midnightWithdrawCollateralBatch({
+            chainId: base.id,
+            market: BATCH_MARKET,
+            onBehalf: OWNER,
+            receiver: RECEIVER,
+            collateralWithdrawals: [{ collateralIndex: 1n, assets: 20n }],
+          }).action,
+          options,
+        ),
+      );
+      expect(limits.operations).toEqual([
+        {
+          type: "midnightWithdrawCollateralBatch",
+          marketId: MidnightMarketUtils.toId(BATCH_MARKET),
+          receiver: RECEIVER,
+          quote: {
+            collateralWithdrawals: [{ collateralIndex: 1n, assets: 20n }],
+          },
+          ...(slippageTolerance === undefined ? {} : { slippageTolerance }),
+        },
+      ]);
+      expect(
+        parseRequest(
+          { transactions: [{ from: OWNER, to: RECEIVER, data: "0x" }], limits },
+          base.id,
+        ).limits,
+      ).not.toBe("none");
+    },
+  );
+
+  it("defaults the receiver to the sender", () => {
+    const limits = toSimulationLimits(
+      { ...withdraw, args: { ...withdraw.args, receiver: OWNER } },
+      { owner: OWNER },
+    );
+    expect(limits.operations[0]?.receiver).toBe(OWNER);
+  });
+
+  it("rejects a receiver that differs from caller intent", () => {
+    for (const receiver of [undefined, OTHER]) {
+      expect(() =>
+        toSimulationLimits(withdraw, { owner: OWNER, receiver }),
+      ).toThrow(LimitAccountMismatchError);
+      expect(() =>
+        toSimulationLimits(withdraw, { owner: OWNER, receiver }),
+      ).toThrow(
+        new LimitAccountMismatchError({
+          field: "args.receiver",
+          expected: receiver ?? OWNER,
+          actual: RECEIVER,
+        }),
+      );
+    }
+  });
+
+  it("rejects delegated withdrawals instead of measuring the sender's position", () => {
+    const delegated = {
+      ...withdraw,
+      args: { ...withdraw.args, onBehalf: OTHER },
+    };
+    expect(() =>
+      toSimulationLimits(delegated, { owner: OWNER, receiver: RECEIVER }),
+    ).toThrow(LimitAccountMismatchError);
+    expect(() =>
+      toSimulationLimits(delegated, { owner: OWNER, receiver: RECEIVER }),
+    ).toThrow(
+      new LimitAccountMismatchError({
+        field: "onBehalf",
+        expected: OWNER,
+        actual: OTHER,
+      }),
+    );
+    expect(() =>
+      toSimulationLimits(delegated, {
+        owner: OWNER,
+        receiver: RECEIVER,
+        onBehalf: OTHER,
+      }),
+    ).toThrow(LimitAccountMismatchError);
+  });
+
+  it("keeps the derived withdrawal when the quote override is empty", () => {
+    expect(
+      toSimulationLimits(withdraw, {
+        owner: OWNER,
+        receiver: RECEIVER,
+        expected: { collateralWithdrawals: [] },
+      }),
+    ).toEqual(
+      toSimulationLimits(withdraw, { owner: OWNER, receiver: RECEIVER }),
+    );
+  });
+
+  it("rejects quote overrides for an index not withdrawn by the action", () => {
+    expect(() =>
+      toSimulationLimits(withdraw, {
+        owner: OWNER,
+        receiver: RECEIVER,
+        expected: {
+          collateralWithdrawals: [{ collateralIndex: 0n, assets: 20n }],
+        },
+      }),
+    ).toThrow(SimulationValidationError);
+  });
+});
 const MIDNIGHT_MARKET = new MidnightMarketParams({
   chainId: base.id,
   midnight: getChainAddress(base.id, "midnight"),
@@ -359,6 +483,52 @@ describe("toSimulationLimits — blueWithdrawBuyCallback", () => {
 });
 
 describe("toSimulationLimits", () => {
+  it.each<TransactionAction>([
+    { type: "erc20Approval", args: { spender: OTHER, amount: 0n } },
+    {
+      type: "blueAuthorization",
+      args: { authorized: OTHER, isAuthorized: false },
+    },
+    {
+      type: "midnightAuthorization",
+      args: { onBehalf: OWNER, authorized: OTHER, isAuthorized: false },
+    },
+    {
+      type: "midnightCancelOffers",
+      args: { onBehalf: OWNER, groups: [zeroHash] },
+    },
+  ])("enforces account intent for $type control effects", (action) => {
+    const options = { owner: OWNER, token: VAULT };
+    expect(() =>
+      toSimulationLimits(action, { ...options, receiver: OTHER }),
+    ).toThrow(LimitAccountMismatchError);
+    expect(() =>
+      toSimulationLimits(action, { ...options, onBehalf: OTHER }),
+    ).toThrow(LimitAccountMismatchError);
+    expect(
+      toSimulationLimits(action, {
+        ...options,
+        onBehalf: OWNER,
+        receiver: OWNER,
+        expected: { assetsPaid: 10n },
+        slippageTolerance: 1n,
+      }),
+    ).toEqual(toSimulationLimits(action, options));
+    if (
+      action.type === "midnightAuthorization" ||
+      action.type === "midnightCancelOffers"
+    ) {
+      const delegated = {
+        ...action,
+        args: { ...action.args, onBehalf: OTHER },
+      } as TransactionAction;
+      for (const onBehalf of [undefined, OWNER, OTHER]) {
+        expect(() =>
+          toSimulationLimits(delegated, { ...options, onBehalf }),
+        ).toThrow(LimitAccountMismatchError);
+      }
+    }
+  });
   it("returns a deep-frozen limits object with exactly one operation", () => {
     const limits = toSimulationLimits(
       mkAction({
@@ -809,7 +979,7 @@ describe("toSimulationLimits", () => {
     ["one group", [`0x${"aa".repeat(32)}`]],
     ["several groups", [`0x${"aa".repeat(32)}`, `0x${"bb".repeat(32)}`]],
   ] as const)(
-    "rejects a direct Midnight offer cancellation of %s",
+    "derives exact direct Midnight cancellation effects for %s",
     (_, groups) => {
       const tx = midnightCancelOffers({
         chainId: base.id,
@@ -818,23 +988,79 @@ describe("toSimulationLimits", () => {
       });
 
       expect(tx.action.type).toBe("midnightCancelOffers");
-      let error: unknown;
-      try {
-        toSimulationLimits(tx.action, { owner: OWNER });
-      } catch (cause) {
-        error = cause;
-      }
-      expect(error).toBeInstanceOf(UnsupportedLimitActionError);
-      expect(error).toMatchObject({ actionType: "midnightCancelOffers" });
-      // No quote makes a cancellation coverable.
-      expect(() =>
-        toSimulationLimits(tx.action, {
-          owner: OWNER,
-          expected: { assetsPaid: 1n },
-        }),
-      ).toThrowError(UnsupportedLimitActionError);
+      expect(toSimulationLimits(tx.action, { owner: OWNER })).toEqual({
+        operations: [],
+        effects: [{ type: "midnightCancelOffers", onBehalf: OWNER, groups }],
+      });
+      expect(
+        toSimulationLimits(tx.action, { owner: OWNER, txIdx: 1 }).effects?.[0]
+          ?.txIdx,
+      ).toBe(1);
     },
   );
+
+  it("derives approval and authorization effects, requiring the approval token", () => {
+    const approval: TransactionAction = {
+      type: "erc20Approval",
+      args: { spender: OTHER, amount: 0n },
+    };
+    expect(() => toSimulationLimits(approval, { owner: OWNER })).toThrow(
+      SimulationValidationError,
+    );
+    expect(
+      toSimulationLimits(approval, { owner: OWNER, token: VAULT }),
+    ).toEqual({
+      operations: [],
+      effects: [
+        {
+          type: "erc20Approval",
+          token: VAULT,
+          owner: OWNER,
+          spender: OTHER,
+          amount: 0n,
+        },
+      ],
+    });
+    expect(
+      toSimulationLimits(
+        {
+          type: "blueAuthorization",
+          args: { authorized: OTHER, isAuthorized: false },
+        },
+        { owner: OWNER, txIdx: 0 },
+      ),
+    ).toEqual({
+      operations: [],
+      effects: [
+        {
+          type: "blueAuthorization",
+          authorizer: OWNER,
+          authorized: OTHER,
+          isAuthorized: false,
+          txIdx: 0,
+        },
+      ],
+    });
+    expect(
+      toSimulationLimits(
+        {
+          type: "midnightAuthorization",
+          args: { onBehalf: OWNER, authorized: OTHER, isAuthorized: true },
+        },
+        { owner: OWNER },
+      ),
+    ).toEqual({
+      operations: [],
+      effects: [
+        {
+          type: "midnightAuthorization",
+          onBehalf: OWNER,
+          authorized: OTHER,
+          isAuthorized: true,
+        },
+      ],
+    });
+  });
 
   it("throws UnsupportedLimitActionError before checking onBehalf", () => {
     // A Midnight action carrying a foreign onBehalf is unsupported first.
@@ -2054,6 +2280,68 @@ describe("toSimulationLimits — midnightSupplyCollateral", () => {
       assets: 2_000n,
       onBehalf,
     });
+
+  it.each([1_000n, 2_000n])(
+    "quotes the full indexed collateral and binds the native sender (%s wei)",
+    (nativeAmount) => {
+      const nativeMarket = new MidnightMarketParams({
+        ...market,
+        collateralParams: [
+          { ...collateralParams, token: getChainAddress(base.id, "wNative") },
+        ],
+      });
+      const { action } = midnightSupplyCollateralWithNative({
+        chainId: base.id,
+        market: nativeMarket,
+        assets: 2_000n,
+        accountAddress: market.loanToken,
+        nativeAmount,
+        deadline: 1_900_000_000n,
+      });
+      expect(
+        toSimulationLimits(action, { owner: market.loanToken }).operations,
+      ).toMatchObject([
+        {
+          type: "midnightSupplyCollateral",
+          account: market.loanToken,
+          collateralIndex: 0n,
+          quote: { assetsPaid: 2_000n, collateralSupplied: 2_000n },
+        },
+      ]);
+      expect(() =>
+        toSimulationLimits(action, {
+          owner: market.midnight,
+        }),
+      ).toThrow(LimitAccountMismatchError);
+    },
+  );
+  it("uses the native supply's nonzero collateral index in the operation subject", () => {
+    const nativeMarket = new MidnightMarketParams({
+      ...market,
+      collateralParams: [
+        MidnightMarketUtils.getCollateralByIndex(market, 0n),
+        { ...collateralParams, token: getChainAddress(base.id, "wNative") },
+      ],
+    });
+    const { action } = midnightSupplyCollateralWithNative({
+      chainId: base.id,
+      market: nativeMarket,
+      collateralIndex: 1n,
+      assets: 2_000n,
+      accountAddress: market.loanToken,
+      nativeAmount: 1_000n,
+      deadline: 1_900_000_000n,
+    });
+    expect(
+      toSimulationLimits(action, { owner: market.loanToken }).operations,
+    ).toMatchObject([
+      {
+        type: "midnightSupplyCollateral",
+        marketId: MidnightMarketUtils.toId(nativeMarket),
+        collateralIndex: 1n,
+      },
+    ]);
+  });
   const makerRoot = `0x${"aa".repeat(32)}` as Hex;
   const makerGroup = `0x${"bb".repeat(32)}` as Hex;
   const maker = (

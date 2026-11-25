@@ -5,6 +5,7 @@ import {
   BlacklistViolationError,
   RpcTransportError,
   SimulationAssertError,
+  SimulationEffectError,
   SimulationLogAssertError,
   SimulationRevertedError,
   UnexpectedSimulationError,
@@ -12,6 +13,17 @@ import {
 } from "./errors.js";
 
 describe("toSimulationErrorResponse", () => {
+  test("behavior: retains the caller transaction index for an exact effect failure", () => {
+    const error = new SimulationEffectError(2, {
+      effectType: "erc20Approval",
+      reason: "expected amount missing",
+    });
+    expect(toSimulationErrorResponse(error)).toEqual({
+      code: "SIMULATION_EFFECT_FAILED",
+      message: error.message,
+      transactionIndex: 2,
+    });
+  });
   test("behavior: serializes undeclared transfer failures without diagnostics", () => {
     const address = "0x0000000000000000000000000000000000000001";
     const error = new UnexpectedTokenTransferError({

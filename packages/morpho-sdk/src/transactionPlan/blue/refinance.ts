@@ -5,13 +5,17 @@ import {
 } from "@morpho-org/blue-sdk";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
 import type { Client } from "viem";
-import { normalizeBlueBundlesV1CommonParams } from "../../actions/blue/common.js";
+import {
+  parseBlueAllocations,
+  parseBlueBundlesV1Common,
+} from "../../actions/blue/common.js";
 import { blueRefinance } from "../../actions/blue/refinance.js";
 import {
   validateBlueRefinanceQuote,
   validateBlueRefinanceSource,
 } from "../../actions/blue/refinanceValidation.js";
 import { DEFAULT_LLTV_BUFFER } from "../../helpers/index.js";
+import { parseBlueMarket } from "../../helpers/parse.js";
 import type {
   AuthorizationRequirementSignature,
   BlueRefinanceAction,
@@ -169,7 +173,7 @@ export async function prepareBlueRefinance(
             type: "address",
           });
         }
-        normalizeBlueBundlesV1CommonParams({
+        parseBlueBundlesV1Common({
           chainId,
           userAddress: account,
           deadline,
@@ -183,15 +187,24 @@ export async function prepareBlueRefinance(
           borrowShares: source.positionData.position.borrowShares,
         });
         // The quote only gates preparation; the contract migrates the actual live position.
+        const { penaltyAssets } = parseBlueAllocations(
+          reallocations,
+          parseBlueMarket(destinationMarketParams),
+        );
+        for (const [index, reallocation] of reallocations.entries()) {
+          validatePlanReallocationShape(
+            reallocation,
+            `$.reallocations[${index}]`,
+          );
+        }
         validateBlueRefinanceQuote({
           destinationMarketParams,
           sourcePosition: source.positionData.position,
           destinationPosition: destination.positionData.position,
-          reallocations,
+          penaltyAssets,
           referralFeePct,
           now,
         });
-        validatePlanReallocations(reallocations, "$.reallocations");
         return { id, needsAuthorization: true };
       },
     );
@@ -201,7 +214,7 @@ export async function prepareBlueRefinance(
       candidate.kind === "morphoAuthorization" &&
       candidate.id === morphoAuthorizationRequestId,
   );
-  const common = normalizeBlueBundlesV1CommonParams({
+  const common = parseBlueBundlesV1Common({
     chainId,
     userAddress: account,
     ...intent,
@@ -217,7 +230,6 @@ export async function prepareBlueRefinance(
         destinationMarketParams.lltv,
         DEFAULT_LLTV_BUFFER,
       ),
-      deadline: intent.deadline,
       ...common,
       reallocations,
       ...(request && { authorizationNonce: request.args.nonce }),
@@ -271,18 +283,23 @@ function validatePlanReallocations(
   path: string,
 ): void {
   for (const [index, leg] of legs.entries()) {
-    validatePlanReallocation(leg, `${path}[${index}]`);
+    const legPath = `${path}[${index}]`;
+    validatePlanReallocationShape(leg, legPath);
+    validatePlanFields(getPlanObject(leg, legPath), {
+      path: legPath,
+      fields: { assets: "uint256 bigint", penalty: "uint256 bigint" },
+    });
   }
 }
 
-function validatePlanReallocation(value: unknown, path: string): void {
+function validatePlanReallocationShape(value: unknown, path: string): void {
   const leg = getPlanObject(value, path);
   validatePlanFields(leg, {
     path,
     fields: {
       vault: "address",
-      assets: "uint256 bigint",
-      penalty: "uint256 bigint",
+      assets: "bigint",
+      penalty: "bigint",
     },
   });
   validatePlanField(getPlanObject(leg.to, `${path}.to`).adapter, {

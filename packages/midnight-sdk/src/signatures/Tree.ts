@@ -125,7 +125,8 @@ export class Tree<K extends RatifierKind | undefined = undefined> {
    * @returns Tree instance.
    * @throws {InvalidTreeError} when the tree is empty, all padding, or duplicated.
    * @throws {InvalidTreeHeightError} when the resulting height is unsupported.
-   * @throws {InvalidOfferGroupError} for priceV1/rateV1 entries whose explicit groups break `OfferUtils.validateOfferGroup` rules.
+   * @throws {InvalidOfferGroupError} when standalone standard offers from one maker repeat an explicit group id, or V1 groups violate group mechanics.
+   * @throws {InvalidOfferParameterError} when creating a tree from a sell offer with the zero address as its receiver.
    * @throws {InvalidRateRatifierV1RateError} when a Rate leaf has a negative rate.
    * @throws {InvalidRateRatifierV1TickError} when a Rate leaf offer tick is below `RateRatifierV1.MIN_TICK`.
    * @example
@@ -172,6 +173,7 @@ export class Tree<K extends RatifierKind | undefined = undefined> {
    * @returns Untagged standard tree.
    * @throws {InvalidTreeError} When entries are empty, all padding, or duplicated.
    * @throws {InvalidTreeHeightError} When the tree height is unsupported.
+   * @throws {InvalidOfferGroupError} When standalone offers from one maker repeat an explicit group id.
    * @example
    * ```ts
    * import { Tree, type TreeInput } from "@morpho-org/midnight-sdk";
@@ -182,7 +184,9 @@ export class Tree<K extends RatifierKind | undefined = undefined> {
   public static from(
     tree: AnyTree | AnyTreeSnapshot | TreeCreateRequest | TreeInput,
   ): AnyTree | Tree {
-    if (tree instanceof Tree) return tree;
+    if (tree instanceof Tree) {
+      return tree;
+    }
     // Portable snapshots resume through descriptor validation instead of rebuilding.
     if (
       !Array.isArray(tree) &&
@@ -194,7 +198,9 @@ export class Tree<K extends RatifierKind | undefined = undefined> {
         ? Tree.fromDescriptor(tree as AnyTreeSnapshot)
         : Tree.fromDescriptor(tree as TreeSnapshot<undefined>);
     }
-    if ("type" in tree && tree.type != null) return Tree.create(tree);
+    if ("type" in tree && tree.type != null) {
+      return Tree.create(tree);
+    }
     return Tree.create(Array.isArray(tree) ? tree : [tree]);
   }
 
@@ -203,16 +209,18 @@ export class Tree<K extends RatifierKind | undefined = undefined> {
    *
    * Use after `Offer.create` and optional `Group.create`, before
    * `Tree.mempoolValidate`, `EcrecoverRatifier.ratify`, or
-   * `SetterRatifier.ratify`. Groups are flattened, and every standalone
-   * offer is normalized as a singleton group using the router-compatible group
-   * id algorithm.
+   * `SetterRatifier.ratify`. Ecrecover and Setter trees flatten groups and
+   * normalize standalone offers as singleton groups. For these routes, pass
+   * a `Group.create` result as one entry when offers should share a
+   * consumption cap.
    *
    * @param params.type - Ratifier route selecting the leaf commitment format.
    * @param params.entries - Standard offer/groups or route-specific leaves in leaf order.
    * @returns A tree whose entries and validation options are inferred from the route.
    * @throws {InvalidTreeError} when the tree is empty, all padding, or duplicated.
    * @throws {InvalidTreeHeightError} when the resulting height is unsupported.
-   * @throws {InvalidOfferGroupError} for priceV1/rateV1 entries whose explicit groups break `OfferUtils.validateOfferGroup` rules.
+   * @throws {InvalidOfferGroupError} when standalone standard offers from one maker repeat an explicit group id, or V1 groups violate group mechanics.
+   * @throws {InvalidOfferParameterError} when a sell offer has the zero address as its receiver.
    * @throws {InvalidRateRatifierV1RateError} when a Rate leaf has a negative rate.
    * @throws {InvalidRateRatifierV1TickError} when a Rate leaf offer tick is below `RateRatifierV1.MIN_TICK`.
    * @example
@@ -257,8 +265,10 @@ export class Tree<K extends RatifierKind | undefined = undefined> {
    * @deprecated Pass `{ type, entries }` to select a ratifier explicitly.
    * @param params - Standard offer/group inputs.
    * @returns Untagged standard tree.
+   * @throws {InvalidOfferParameterError} when a sell offer has the zero address as its receiver.
    * @throws {InvalidTreeError} when the tree is empty, all padding, or duplicated.
    * @throws {InvalidTreeHeightError} when the resulting height is unsupported.
+   * @throws {InvalidOfferGroupError} when standalone offers from one maker repeat an explicit group id.
    * @example
    * ```ts
    * import { Tree, type IOffer } from "@morpho-org/midnight-sdk";
@@ -379,9 +389,12 @@ export class Tree<K extends RatifierKind | undefined = undefined> {
               : offer,
           ),
         };
-        if (descriptor.type === "ecrecover")
+        if (descriptor.type === "ecrecover") {
           return new Tree("ecrecover", normalized);
-        if (descriptor.type === "setter") return new Tree("setter", normalized);
+        }
+        if (descriptor.type === "setter") {
+          return new Tree("setter", normalized);
+        }
         return new Tree(undefined, normalized);
       }
       default:

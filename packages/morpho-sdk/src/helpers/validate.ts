@@ -1,6 +1,7 @@
 import {
   type AccrualPosition,
   getChainAddresses,
+  type InputMarketParams,
   type MarketId,
   type MarketParams,
   MarketUtils,
@@ -30,6 +31,7 @@ import {
   ExcessiveSlippageToleranceError,
   InconsistentReallocationPenaltyError,
   InputExceedsMaxError,
+  InvalidMidnightNativeAmountTypeError,
   InvalidReallocationAddressError,
   InvalidReallocationSourceTypeError,
   InvalidVaultV2BlueReallocationShapeError,
@@ -102,7 +104,9 @@ export const validateUint256Field = (field: string, value: bigint): void => {
  * @throws {MarketIdMismatchError} when `marketParams.id` differs from the derived id.
  * @internal
  */
-export const validateMarketParamsId = (marketParams: MarketParams): void => {
+export const validateMarketParamsId = (
+  marketParams: InputMarketParams & Pick<MarketParams, "id">,
+): void => {
   const derivedId = MarketUtils.getMarketId(marketParams);
   if (marketParams.id !== derivedId) {
     throw new MarketIdMismatchError(marketParams.id, derivedId);
@@ -515,6 +519,7 @@ export const validateNativeAsset = (chainId: number, asset: Address): void => {
  *   for the full pulled amount.
  * @param params.pulls - Token pulls performed by the bundle action.
  * @returns The transaction `value` and the `wrappedNative` contract argument.
+ * @throws {InvalidMidnightNativeAmountTypeError} when `nativeAmount` is supplied as a non-bigint.
  * @throws {NegativeInputError} when `nativeAmount` is negative.
  * @throws {ChainWNativeMissingError} when wNative is not configured for the chain.
  * @throws {MidnightCalldataEncodingError} when a pulled `token` is not a 20-byte hex address.
@@ -547,6 +552,9 @@ export const validateMidnightNativeAmount = (params: {
   const { nativeAmount, chainId, pulls } = params;
   if (nativeAmount === undefined || nativeAmount === 0n) {
     return { value: 0n, wrappedNative: zeroAddress };
+  }
+  if (typeof nativeAmount !== "bigint") {
+    throw new InvalidMidnightNativeAmountTypeError(nativeAmount);
   }
   if (nativeAmount < 0n) {
     throw new NegativeInputError("nativeAmount", nativeAmount);

@@ -1,0 +1,71 @@
+{
+  // This config runs only the address check until the shared baseline is adopted.
+  // Biome still enforces the rules below. Use this map when removing Biome.
+  //
+  // Repository-wide overrides:
+  //   useMaxParams -> eslint/max-params (max: 2)
+  //   noUnusedImports, noUnusedVariables -> eslint/no-unused-vars
+  //     (also reports unused imports; the import fix behavior differs)
+  //   useExhaustiveDependencies -> react/exhaustive-deps
+  //   noParameterAssign -> eslint/no-param-reassign
+  //   noUselessElse -> eslint/no-else-return (partial: return branches only)
+  //   noShadow -> eslint/no-shadow
+  //   noFloatingPromises -> typescript/no-floating-promises
+  //   noMisusedPromises -> typescript/no-misused-promises
+  //   useExhaustiveSwitchCases -> typescript/switch-exhaustiveness-check
+  //   The three promise/switch rules require type-aware linting.
+  //
+  // Production src only (preserve Biome's test exclusions):
+  //   noExcessiveLinesPerFunction -> eslint/max-lines-per-function
+  //     (max: 120, skipBlankLines: true, IIFEs: true; line counting differs)
+  //   noNestedTernary -> eslint/no-nested-ternary
+  //   useCollapsedElseIf -> eslint/no-lonely-if
+  //   noNegationElse -> eslint/no-negated-condition
+  //   useBlockStatements -> eslint/curly
+  //   noNonNullAssertion -> typescript/no-non-null-assertion
+  //   noExplicitAny -> typescript/no-explicit-any
+  //   noTsIgnore -> typescript/ban-ts-comment (check the baseline's comment policy)
+  //
+  // Recommended rules with less obvious replacements:
+  //   noAccumulatingSpread -> oxc/no-accumulating-spread
+  //   noConstEnum -> oxc/no-const-enum
+  //   noDuplicateTestHooks, noFocusedTests, noIdenticalTestTitle ->
+  //     vitest/no-duplicate-hooks, vitest/no-focused-tests, vitest/no-identical-title
+  //   noGlobalIsFinite, noGlobalIsNan -> eslint/no-restricted-globals
+  //     (restrict isFinite and isNaN; Biome also checks global object accesses)
+  //   noUnusedFunctionParameters -> eslint/no-unused-vars (args: all; review ignores)
+  //   noUselessEscapeInString -> eslint/no-useless-escape
+  //   noVoidTypeReturn -> typescript/strict-void-return (different type-aware scope)
+  //   useExportType, useImportType ->
+  //     typescript/consistent-type-exports, typescript/consistent-type-imports
+  //   useSimpleNumberKeys -> eslint/no-useless-computed-key (computed keys only)
+  //
+  // Known gaps (no equivalent or remaining coverage difference):
+  //   noExcessiveCognitiveComplexity: eslint/complexity measures cyclomatic,
+  //     not cognitive, complexity. Do not carry over the threshold of 50.
+  //   noEmptyTypeParameters, noFlatMapIdentity, noThisInStatic,
+  //   noUselessContinue (eslint/no-continue bans all uses), noUselessStringRaw,
+  //   noUselessUndefinedInitialization, noStringCaseMismatch,
+  //   noDynamicNamespaceImportAccess, noApproximativeNumericConstant,
+  //   noImplicitAnyLet, noMisrefactoredShorthandAssign, noRedundantUseStrict.
+  //   noConfusingLabels: eslint/no-labels is broader.
+  //   noDuplicateParameters, noOctalEscape: TS syntax checks cover invalid
+  //     TypeScript; Oxlint has no corresponding lint rules.
+  //   noExportsInTest: jest/no-export is not a Vitest rule.
+  //   useArrowFunction: eslint/prefer-arrow-callback only covers callbacks.
+  //   The partial mappings above also leave case or fix differences.
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": { "correctness": "off" },
+  "ignorePatterns": [
+    "**/.context/**",
+    "**/lib/**",
+    "**/.vscode/**",
+    "**/cache/**",
+    "**/coverage/**",
+    "**/artifacts/**"
+  ],
+  "jsPlugins": ["./scripts/lint/oxlint-plugin.ts"],
+  "rules": {
+    "morpho-sdk/checksum-address": "error"
+  }
+}

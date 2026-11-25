@@ -2,7 +2,10 @@ import { permit2Abi } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, type Client, maxUint256 } from "viem";
 import { readContract } from "viem/actions";
-import { validateClientChainId } from "../../actions/requirements/validateClientChainId.js";
+import {
+  type ChainCheck,
+  createChainCheck,
+} from "../../actions/requirements/chainCheck.js";
 import { validateChainId } from "../../helpers/index.js";
 import { validateUint256Field } from "../../helpers/validate.js";
 import { NoUnusedPermit2NonceError } from "../../types/index.js";
@@ -19,6 +22,29 @@ export interface GetUnusedPermit2NonceParams {
   /** Lowest nonce to consider; defaults to 0. */
   readonly startNonce?: bigint;
 }
+
+declare const unusedPermit2NonceInput: unique symbol;
+/** Complete checked legacy nonce lookup invocation. @internal */
+export type UnusedPermit2NonceInput = Readonly<GetUnusedPermit2NonceParams> & {
+  readonly startNonce: bigint;
+  readonly [unusedPermit2NonceInput]: true;
+};
+
+/** Owns the complete lookup's chain declaration, bounds and default start nonce. @internal */
+export const parseUnusedPermit2Nonce = (
+  viemClient: Client,
+  params: GetUnusedPermit2NonceParams,
+): UnusedPermit2NonceInput => {
+  const input = {
+    owner: params.owner,
+    chainId: params.chainId,
+    startNonce: params.startNonce,
+  };
+  validateChainId(viemClient.chain?.id, input.chainId);
+  const startNonce = input.startNonce ?? 0n;
+  validateUint256Field("startNonce", startNonce);
+  return { ...input, startNonce } as UnusedPermit2NonceInput;
+};
 
 /** Highest Permit2 nonce-bitmap word index; each word covers 256 unordered nonces. */
 const MAX_PERMIT2_NONCE_WORD = maxUint256 >> 8n;
@@ -65,10 +91,24 @@ export const getUnusedPermit2Nonce = async (
   viemClient: Client,
   params: GetUnusedPermit2NonceParams,
 ): Promise<bigint> => {
-  validateChainId(viemClient.chain?.id, params.chainId);
-  const startNonce = params.startNonce ?? 0n;
-  validateUint256Field("startNonce", startNonce);
-  await validateClientChainId(viemClient, params.chainId);
+  return getParsedUnusedPermit2Nonce(
+    { viemClient },
+    parseUnusedPermit2Nonce(viemClient, params),
+  );
+};
+
+/** Scans from the complete checked lookup, preserving registry and RPC ordering. @internal */
+export const getParsedUnusedPermit2Nonce = async (
+  {
+    viemClient,
+    chainCheck: providedChainCheck,
+  }: { readonly viemClient: Client; readonly chainCheck?: ChainCheck },
+  params: UnusedPermit2NonceInput,
+): Promise<bigint> => {
+  const chainCheck =
+    providedChainCheck ?? createChainCheck(viemClient, params.chainId);
+  const { startNonce } = params;
+  await chainCheck();
   const permit2 = getChainAddress(params.chainId, "permit2");
 
   const startWord = startNonce >> 8n;

@@ -963,6 +963,46 @@ test("fails closed for malformed approval logs", () => {
 });
 
 describe("findApprovalEventFailures", () => {
+  test.each([permit2Approval, permit2Permit])(
+    "direct token effects never allow Permit2 grants for the same pair",
+    (permit2Event) => {
+      const pair = {
+        type: "token" as const,
+        token: TOKEN,
+        owner: OWNER,
+        spender: SPENDER,
+      };
+      const approval = erc20Approval({
+        eventOwner: OWNER,
+        spender: SPENDER,
+        value: 1n,
+      });
+      const permit = permit2Event({
+        eventOwner: OWNER,
+        spender: SPENDER,
+        amount: 1n,
+      });
+      const params = {
+        owner: OWNER,
+        allowed: [],
+        addresses: ADDRESSES,
+        directTokenApprovals: [pair],
+      };
+      expect(
+        findApprovalEventFailures({ ...params, logs: [approval] }),
+      ).toEqual([]);
+      expect(
+        findApprovalEventFailures({ ...params, logs: [approval, permit] }),
+      ).toEqual([expect.any(UnexpectedTokenApprovalError)]);
+      expect(
+        findApprovalEventFailures({
+          ...params,
+          allowed: [pair],
+          logs: [approval, permit],
+        }),
+      ).toEqual([]);
+    },
+  );
   const owner = zeroAddress;
   const spender = "0x1111111111111111111111111111111111111111" as const;
   const approval = {

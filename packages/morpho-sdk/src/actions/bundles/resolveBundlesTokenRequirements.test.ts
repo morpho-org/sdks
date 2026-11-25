@@ -1,7 +1,7 @@
 import { addressesRegistry, MathLib } from "@morpho-org/blue-sdk";
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import fc from "fast-check";
-import { maxUint256 } from "viem";
+import { InvalidAddressError, maxUint256 } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
@@ -16,7 +16,9 @@ import {
 } from "../../types/index.js";
 import {
   type BundlesTokenRequirementsState,
+  parseBundlesTokenRequirements,
   resolveBundlesTokenRequirements,
+  resolveParsedBundlesTokenRequirements,
 } from "./resolveBundlesTokenRequirements.js";
 
 const chainId = mainnet.id;
@@ -26,6 +28,85 @@ const owner = "0x0000000000000000000000000000000000000001" as const;
 const deadline = 1_900_000_000n;
 
 describe("resolveBundlesTokenRequirements", () => {
+  test.each([0n, 1n])(
+    "legacy Permit2 approval validates a malformed token before deadline bounds with allowance %s",
+    (permit2Allowance) => {
+      expect(() =>
+        resolveBundlesTokenRequirements({
+          token: "0x123",
+          spender,
+          owner,
+          chainId,
+          amount: 2n,
+          deadline: 0n,
+          now: 100n,
+          state: {
+            type: "permit2SignatureTransfer",
+            permit2Allowance,
+            permit2Nonce: 0n,
+            nonceBitmap: 0n,
+          },
+        }),
+      ).toThrow(InvalidAddressError);
+    },
+  );
+
+  test("legacy Permit2 keeps deadline precedence when the token approval is a no-op", () => {
+    expect(() =>
+      resolveBundlesTokenRequirements({
+        token: "0x123",
+        spender,
+        owner,
+        chainId,
+        amount: 2n,
+        deadline: 0n,
+        now: 100n,
+        state: {
+          type: "permit2SignatureTransfer",
+          permit2Allowance: 2n,
+          permit2Nonce: 0n,
+          nonceBitmap: 0n,
+        },
+      }),
+    ).toThrow(NonPositiveInputError);
+  });
+
+  test("the complete constructor retains the selected legacy nonce, approvals and deadline", () => {
+    const state = {
+      type: "permit2SignatureTransfer" as const,
+      permit2Allowance: 0n,
+      permit2Nonce: 257n,
+      nonceBitmap: 0n,
+    };
+    const params = {
+      token: usdc,
+      spender,
+      owner,
+      chainId,
+      amount: 2n,
+      deadline: 200n,
+      now: 100n,
+      state,
+    };
+    const parsed = parseBundlesTokenRequirements(params);
+    state.permit2Nonce = 1n;
+    state.permit2Allowance = maxUint256;
+    params.deadline = 0n;
+    const requirements = resolveParsedBundlesTokenRequirements(parsed);
+    expect(
+      requirements.map(({ action }) => ({
+        type: action.type,
+        args: action.args,
+      })),
+    ).toEqual([
+      { type: "erc20Approval", args: { spender: permit2, amount: maxUint256 } },
+      {
+        type: "permit2SignatureTransfer",
+        args: { spender, amount: 2n, nonce: 257n, deadline: 200n },
+      },
+    ]);
+  });
+
   const states = [
     { type: "approval", allowance: 0n },
     {

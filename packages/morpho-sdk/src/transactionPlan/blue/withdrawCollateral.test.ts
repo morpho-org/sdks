@@ -100,6 +100,27 @@ test("restored withdrawal ignores an authorization outside requests", async () =
   ).toEqual(buildTransactions(plan));
 });
 
+test("restored withdrawal ignores an extra token requirement signature", async () => {
+  const plan = await prepareBlueWithdrawCollateral(client(true), params);
+  const [step] = plan.steps;
+  assert(step?.action.type === "blueWithdrawCollateral");
+  const extra = {
+    ...plan,
+    steps: [
+      {
+        ...step,
+        action: {
+          ...step.action,
+          inputs: { ...step.action.inputs, requirementSignature: {} },
+        },
+      },
+    ],
+  };
+  expect(
+    buildTransactions(parseTransactionPlan(serializeTransactionPlan(extra))),
+  ).toEqual(buildTransactions(plan));
+});
+
 test("uses the validated inputs when options change during preparation", async () => {
   const mutableParams = { ...params };
   const pending = prepareBlueWithdrawCollateral(client(true), mutableParams);

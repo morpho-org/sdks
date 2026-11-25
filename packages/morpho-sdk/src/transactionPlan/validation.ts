@@ -104,6 +104,7 @@ type PlanFieldType =
   | "hex"
   | "safe integer"
   | "positive safe integer"
+  | "bigint"
   | "uint256 bigint"
   | "array";
 
@@ -131,6 +132,9 @@ export function validatePlanField(
     case "positive safe integer":
       valid =
         typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+      break;
+    case "bigint":
+      valid = typeof value === "bigint";
       break;
     case "uint256 bigint":
       valid = typeof value === "bigint" && value >= 0n && value <= maxUint256;

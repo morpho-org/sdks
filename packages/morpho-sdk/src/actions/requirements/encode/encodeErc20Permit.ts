@@ -3,13 +3,19 @@ import { fetchToken, getPermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
 import type { Client, WalletClient } from "viem";
 import { signAndVerifyTypedData } from "../../../helpers/signAndVerifyTypedData.js";
-import { validateUserAddress } from "../../../helpers/validate.js";
-import { validateErc2612Permit } from "../../../reads/readErc2612Permit.js";
-import type {
-  Erc2612RequirementSignature,
-  ReferenceTimestampParams,
-  Requirement,
+import {
+  validateDeadline,
+  validateUserAddress,
+} from "../../../helpers/validate.js";
+import { validateRequirementSpender } from "../../../helpers/validateRequirementSpender.js";
+import {
+  ChainIdMismatchError,
+  type Erc2612RequirementSignature,
+  ExpiredDeadlineError,
+  type ReferenceTimestampParams,
+  type Requirement,
 } from "../../../types/index.js";
+import { type ChainCheck, createChainCheck } from "../chainCheck.js";
 
 /** Parameters for {@link encodeErc20Permit}. */
 interface EncodeErc20PermitParams extends ReferenceTimestampParams {
@@ -23,6 +29,42 @@ interface EncodeErc20PermitParams extends ReferenceTimestampParams {
   supportDeployless?: boolean;
   deadline?: bigint;
 }
+
+declare const erc20PermitInput: unique symbol;
+/** Complete checked ERC-2612 invocation; token metadata remains an RPC concern. @internal */
+export type Erc20PermitInput = Readonly<EncodeErc20PermitParams> & {
+  readonly [erc20PermitInput]: true;
+};
+
+/** Checks the complete direct encoder invocation before RPC. @internal */
+export const parseErc20Permit = (
+  viemClient: Client,
+  params: EncodeErc20PermitParams,
+): Erc20PermitInput => {
+  const input = {
+    token: params.token,
+    owner: params.owner,
+    spender: params.spender,
+    amount: params.amount,
+    chainId: params.chainId,
+    nonce: params.nonce,
+    supportDeployless: params.supportDeployless,
+    deadline: params.deadline,
+    now: params.now,
+  };
+  if (viemClient.chain?.id !== input.chainId) {
+    throw new ChainIdMismatchError(viemClient.chain?.id, input.chainId);
+  }
+  validateRequirementSpender({
+    chainId: input.chainId,
+    spender: input.spender,
+    allowed: ["vaultBundlesV1", "blueBundlesV1"],
+  });
+  if (input.deadline != null) {
+    validateDeadline(input.deadline);
+  }
+  return { ...input } as Erc20PermitInput;
+};
 
 /**
  * Builds an EIP-2612 permit `Requirement` that, once signed, lets a supported SDK spender pull
@@ -96,15 +138,31 @@ export const encodeErc20Permit = async (
   viemClient: Client,
   params: EncodeErc20PermitParams,
 ): Promise<Requirement<Erc2612RequirementSignature>> => {
+  return encodeParsedErc20Permit(
+    { viemClient },
+    parseErc20Permit(viemClient, params),
+  );
+};
+
+/** Completes dynamic time defaults and consumes the checked permit before RPC. @internal */
+export const encodeParsedErc20Permit = async (
+  {
+    viemClient,
+    chainCheck: providedChainCheck,
+  }: { readonly viemClient: Client; readonly chainCheck?: ChainCheck },
+  params: Erc20PermitInput,
+): Promise<Requirement<Erc2612RequirementSignature>> => {
+  const chainCheck =
+    providedChainCheck ?? createChainCheck(viemClient, params.chainId);
   const { token, owner, spender, amount, chainId, nonce, supportDeployless } =
     params;
+  const timestamp = params.now ?? Time.timestamp();
+  if (params.deadline != null && params.deadline <= timestamp) {
+    throw new ExpiredDeadlineError(params.deadline, timestamp);
+  }
+  const deadline = params.deadline ?? timestamp + Time.s.from.h(2n);
 
-  const deadline = await validateErc2612Permit(viemClient, {
-    chainId,
-    spender,
-    deadline: params.deadline,
-    now: params.now ?? Time.timestamp(),
-  });
+  await chainCheck();
   const tokenData = await fetchToken(token, viemClient, {
     deployless: supportDeployless,
   });

@@ -1,9 +1,7 @@
-import { getChainAddresses, SharesMath } from "@morpho-org/blue-sdk";
+import { getChainAddresses } from "@morpho-org/blue-sdk";
 import {
-  type ActionRequirement,
   isRequirementSignature,
   morphoViemExtension,
-  type RequirementSignature,
   type Transaction,
 } from "@morpho-org/morpho-sdk";
 import { blueAbi, vaultV2FactoryAbi } from "@morpho-org/morpho-sdk/abis";
@@ -19,53 +17,51 @@ import {
   isAddressEqual,
   maxUint256,
   parseEther,
+  parseUnits,
   zeroHash,
 } from "viem";
-import type { TestAPI } from "vitest";
-import { describe, expect } from "vitest";
+import { describe, expect, type TestAPI } from "vitest";
 import {
   type SimulationResult,
   SimulationRevertedError,
+  simulate,
   toSimulationAuthorizations,
-  type VerifiedSimulationResult,
+  toSimulationLimits,
 } from "../../src/index.js";
 import {
   simulateOrThrow,
   simulationClientFor,
+  unwrapReport,
 } from "../../src/test-helpers/index.js";
 import { seededMarketData, seededVaultData } from "../setup.js";
+import { fundE2eAsset, getE2eAssets } from "./assets.js";
 import {
   createE2eMarket,
   describeE2e,
   E2E_ACTORS,
+  type E2eActor,
   type E2eTestContext,
   installE2eAsset,
+  installE2eAssetAt,
   withE2eActor,
 } from "./setup.js";
+import { expectE2eReport, sendE2eSimulated } from "./simulate.js";
 
 const blueSupplyScenario: E2eScenario = {
   name: "simulation",
   requires: ["blue", "adaptiveCurveIrm", "bundles.blueBundlesV1"],
 };
-
 const vaultV2Scenario: E2eScenario = {
   name: "simulationVaultV2",
   requires: ["vaultV2Factory", "bundles.vaultBundlesV1"],
 };
-
 const blueBorrowScenario: E2eScenario = {
   name: "simulationBlueBorrow",
   requires: ["blue", "adaptiveCurveIrm", "bundles.blueBundlesV1"],
 };
-
 const assets = parseEther("1");
-// The fresh market is empty, so the supply mints exactly this many shares.
-const sharesMinted = SharesMath.toShares(assets, 0n, 0n, "Down");
-
 const configFor = (client: AnvilTestClient<Chain>) =>
-  // Cold fork reads may exceed viem's default timeout while fetching upstream state.
   simulationClientFor(client.transport.url, client.chain);
-
 const diffOf = (
   result: SimulationResult,
   params: { readonly account: Address; readonly token: Address },
@@ -74,7 +70,6 @@ const diffOf = (
     .find(({ account }) => isAddressEqual(account, params.account))
     ?.changes.find(({ token }) => isAddressEqual(token, params.token))?.diff ??
   0n;
-
 const toTransaction = (
   client: AnvilTestClient<Chain>,
   tx: Pick<Transaction, "to" | "data" | "value">,
@@ -85,177 +80,81 @@ const toTransaction = (
   value: tx.value,
 });
 
-/**
- * Funds installed E2E assets with `client.deal` because chains like Tempo reject native value
- * transfers; real wNative continues to be funded by wrapping native tokens.
- */
-const wrapNative = async (
-  client: AnvilTestClient<Chain>,
-  params: { readonly wNative: Address; readonly amount: bigint },
-) => {
-  if (getE2eAsset(client.chain.id).requiresInstall) {
-    await client.deal({
-      erc20: params.wNative,
-      amount:
-        (await client.balanceOf({ erc20: params.wNative })) + params.amount,
-    });
-    return;
-  }
-
-  await client.deal({ amount: params.amount + parseEther("1") });
-  await client.writeContract({
-    address: params.wNative,
-    abi: [
-      {
-        type: "function",
-        name: "deposit",
-        stateMutability: "payable",
-        inputs: [],
-        outputs: [],
-      },
-    ],
-    functionName: "deposit",
-    value: params.amount,
-  });
-};
-
-/** Sends the call requirements and signs the signature requirements, in order. */
-const fulfil = async (
-  client: AnvilTestClient<Chain>,
-  requirements: readonly ActionRequirement[],
-) => {
-  const signatures: RequirementSignature[] = [];
-  for (const requirement of requirements)
-    if (isRequirementSignature(requirement))
-      signatures.push(await requirement.sign(client, client.account.address));
-    else await client.sendTransaction(requirement);
-
-  return signatures;
-};
-
-/**
- * Executes `transaction` and expects each ERC-20 balance to move by its simulated diff. The
- * simulated block is the pinned block or its successor, depending on the Anvil version, so the
- * execution block reuses its timestamp when no later block exists: interest then accrues over the
- * same elapsed time.
- */
-const expectExecutionMatches = async (
-  client: AnvilTestClient<Chain>,
-  params: {
-    readonly result: VerifiedSimulationResult;
-    readonly transaction: ReturnType<typeof toTransaction>;
-    readonly balances: readonly { account: Address; token: Address }[];
-  },
-) => {
-  const read = () =>
-    Promise.all(
-      params.balances.map(({ account, token }) =>
-        client.balanceOf({ erc20: token, owner: account }),
-      ),
-    );
-  const before = await read();
-  const { timestamp } = await client.getBlock();
-  const simulated = params.result.verification.blockTimestamp;
-  await client.setNextBlockTimestamp({
-    timestamp: simulated > timestamp ? simulated : timestamp,
-  });
-  await client.sendTransaction(params.transaction);
-  const after = await read();
-  expect(after.map((balance, i) => balance - before[i]!)).toStrictEqual(
-    params.balances.map((balance) => diffOf(params.result, balance)),
-  );
-};
-
-/** Runs `body` once per actor, each test on a fork whose test account is that actor. */
 const describeActors = (
   scenario: E2eScenario,
-  body: (test: TestAPI<E2eTestContext>, chainId: number) => void,
+  body: (
+    test: TestAPI<E2eTestContext>,
+    params: { readonly chainId: number; readonly actor: E2eActor },
+  ) => void,
 ) =>
   describeE2e(scenario, (test, { chainId }) => {
     for (const actor of E2E_ACTORS)
-      describe(actor, () => body(withE2eActor(test, actor), chainId));
+      describe(actor, () =>
+        body(withE2eActor(test, actor), { chainId, actor }),
+      );
   });
 
-describeActors(blueSupplyScenario, (test, chainId) => {
-  test("preview: simulated test-asset supply with a pending approval matches the executed bundle", async ({
-    client,
-  }) => {
-    const { blue } = getChainAddresses(chainId);
-    const market = await createE2eMarket(client, { chainId });
-    await wrapNative(client, { wNative: market.loanToken, amount: assets });
-    const action = client
-      .extend(morphoViemExtension({ supportSignature: false }))
-      .morpho.blue(market, chainId)
-      .supply({
-        marketData: await seededMarketData(client, market),
-        userAddress: client.account.address,
-        assets,
-        deadline: maxUint256,
+describeActors(blueSupplyScenario, (test, { chainId, actor }) => {
+  describe.each(getE2eAssets(chainId))("$symbol", (asset) => {
+    test("Blue supply: SDK limits and every tracked balance match execution", {
+      tags:
+        asset.symbol === getE2eAssets(chainId)[0]!.symbol && actor === "EOA"
+          ? []
+          : ["nightly"],
+    }, async ({ client }) => {
+      const { blue } = getChainAddresses(chainId);
+      const user = client.account.address;
+      const market = await createE2eMarket(client, {
+        chainId,
+        loanToken: asset.address,
       });
-    const requirements = await action.getRequirements();
-    expect(requirements).not.toHaveLength(0);
-    const transaction = toTransaction(client, action.buildTx());
-    // Pin the fork head: Monad otherwise defaults to "finalized", before the fixture setup.
-    const blockNumber = await client.getBlockNumber({ cacheTime: 0 });
-
-    const result = await simulateOrThrow(configFor(client), {
-      blockNumber,
-      mode: "preview",
-      authorizations: toSimulationAuthorizations({
-        owner: client.account.address,
-        requirements,
-      }),
-      limits: {
-        operations: [
-          {
-            type: "blueSupply",
-            marketId: market.id,
-            quote: { assetsPaid: assets, sharesMinted },
-            slippageTolerance: 0n,
-          },
-        ],
-      },
-      transactions: [transaction],
-    });
-    const simulatedUserDiff = diffOf(result, {
-      account: client.account.address,
-      token: market.loanToken,
-    });
-    const simulatedBlueDiff = diffOf(result, {
-      account: blue,
-      token: market.loanToken,
-    });
-    expect(result.verification.authorizations).toHaveLength(
-      requirements.length,
-    );
-    expect(result.verification.operations).toMatchObject([
-      {
-        operation: "blueSupply",
+      const { amount } = await fundE2eAsset(client, {
+        token: asset.address,
+        amount: "1",
+      });
+      const marketData = await seededMarketData(client, market);
+      const output = client
+        .extend(morphoViemExtension({ supportSignature: false }))
+        .morpho.blue(market, chainId)
+        .supply({
+          marketData,
+          userAddress: user,
+          assets: amount,
+          deadline: maxUint256,
+        });
+      expect((await output.getRequirements()).length).toBeGreaterThan(0);
+      const { result } = await sendE2eSimulated(client, {
+        chainId,
+        account: user,
+        output,
+        preview: true,
+        wallets: [user, blue],
+        tokens: [asset.address],
+        limits: {
+          slippageTolerance: 0n,
+          expected: { sharesMinted: marketData.toSupplyShares(amount, "Down") },
+        },
+      });
+      expect(result.verification.operations[0]?.operation).toBe("blueSupply");
+      expect(result.verification.operations[0]).toMatchObject({
         marketId: market.id,
         checkedLimits: {
-          quote: { assetsPaid: assets, sharesMinted },
+          quote: {
+            assetsPaid: amount,
+            sharesMinted: marketData.toSupplyShares(amount, "Down"),
+          },
           slippageTolerance: 0n,
         },
-      },
-    ]);
-    expect(result.calls.map(({ status }) => status)).toStrictEqual([true]);
-    expect(simulatedUserDiff).toBe(-assets);
-    expect(simulatedBlueDiff).toBe(assets);
-
-    // Preview is read-only: the same bundle executed for real moves exactly the simulated amounts.
-    await fulfil(client, requirements);
-    await expectExecutionMatches(client, {
-      result,
-      transaction,
-      balances: [
-        { account: client.account.address, token: market.loanToken },
-        { account: blue, token: market.loanToken },
-      ],
+      });
+      expect(diffOf(result, { account: user, token: asset.address })).toBe(
+        -amount,
+      );
     });
   });
 
   test.skipIf(getChainAddresses(chainId).wNative == null)(
     "final: simulated native-funded supply matches the executed wrap and Blue transfer",
+    { tags: ["nightly"] },
     async ({ client }) => {
       const { blue } = getChainAddresses(chainId);
       const market = await createE2eMarket(client, { chainId });
@@ -276,22 +175,22 @@ describeActors(blueSupplyScenario, (test, chainId) => {
         value: assets + parseEther("1"),
       });
 
-      const result = await simulateOrThrow(configFor(client), {
-        // Pin the fork head: Monad otherwise defaults to "finalized", before the fixture setup.
-        blockNumber: await client.getBlockNumber({ cacheTime: 0 }),
-        limits: {
-          operations: [
-            {
-              type: "blueSupply",
-              marketId: market.id,
-              assetPaid: ethAddress,
-              quote: { assetsPaid: assets, sharesMinted: 1n },
-              slippageTolerance: 0n,
-            },
-          ],
+      const report = await simulate(
+        configFor(client),
+        {
+          // Pin the fork head: Monad otherwise defaults to "finalized", before the fixture setup.
+          blockNumber: await client.getBlockNumber({ cacheTime: 0 }),
+          limits: toSimulationLimits(tx.action, {
+            owner: client.account.address,
+            expected: { sharesMinted: 1n },
+            slippageTolerance: 0n,
+          }),
+          transactions: [transaction],
         },
-        transactions: [transaction],
-      });
+        { timeoutMs: 30_000 },
+      );
+      expectE2eReport(report);
+      const result = unwrapReport(report);
       const simulatedNativeDiff = diffOf(result, {
         account: client.account.address,
         token: ethAddress,
@@ -332,9 +231,9 @@ describeActors(blueSupplyScenario, (test, chainId) => {
     },
   );
 
-  test("final: an unfunded supply rejects with SimulationRevertedError, as its execution reverts", async ({
-    client,
-  }) => {
+  test("final: an unfunded supply rejects with SimulationRevertedError, as its execution reverts", {
+    tags: ["nightly"],
+  }, async ({ client }) => {
     const { blueBundlesV1 } = getChainAddresses(chainId).bundles!;
     const market = await createE2eMarket(client, { chainId });
     await client.approve({
@@ -370,289 +269,246 @@ describeActors(blueSupplyScenario, (test, chainId) => {
   });
 });
 
-describeActors(vaultV2Scenario, (test, chainId) => {
-  test("Vault V2: a previewed ERC-20 approval deposit and a final permit-signed redeem match their execution", async ({
-    client,
-  }) => {
-    const { vaultV2Factory } = getChainAddresses(chainId);
-    const asset = getE2eAsset(chainId);
-    await installE2eAsset(client, chainId);
-    const user = client.account.address;
-    const { request, result: vault } = await client.simulateContract({
-      address: vaultV2Factory!,
-      abi: vaultV2FactoryAbi,
-      functionName: "createVaultV2",
-      args: [user, asset.address, zeroHash],
-    });
-    await client.writeContract(request);
-    await wrapNative(client, { wNative: asset.address, amount: assets });
-    const vaultV2 = client
-      .extend(morphoViemExtension({ supportSignature: true }))
-      .morpho.vaultV2(vault, chainId);
-    const balances = [
-      { account: user, token: asset.address },
-      { account: vault, token: asset.address },
-      { account: user, token: vault },
-    ];
-
-    const shares = await client.readContract({
-      address: vault,
-      abi: erc4626Abi,
-      functionName: "previewDeposit",
-      args: [assets],
-    });
-    const deposit = vaultV2.deposit({
-      amount: assets,
-      userAddress: user,
-      vaultData: await seededVaultData(client, vaultV2),
-    });
-    const depositRequirements = await deposit.getRequirements({
-      useSimplePermit: false,
-    });
-    const blockNumber = await client.getBlockNumber({ cacheTime: 0 });
-    const authorizations = toSimulationAuthorizations({
-      owner: user,
-      requirements: depositRequirements,
-    });
-    expect(authorizations.at(-1)?.type).toBe("erc20Approval");
-    const depositQuote = { assetsPaid: assets, sharesMinted: shares };
-    const depositResult = await simulateOrThrow(configFor(client), {
-      blockNumber,
-      mode: "preview",
-      authorizations,
-      limits: {
-        operations: [
-          {
-            type: "vaultV2Deposit",
-            vault,
-            quote: depositQuote,
-            slippageTolerance: 0n,
-          },
-        ],
-      },
-      transactions: [toTransaction(client, deposit.buildTx())],
-    });
-    expect(
-      depositResult.verification.authorizations.map(
-        ({ authorization }) => authorization,
-      ),
-    ).toStrictEqual(authorizations);
-    expect(depositResult.verification.operations).toMatchObject([
-      {
-        operation: "vaultV2Deposit",
+describeActors(vaultV2Scenario, (test, { chainId, actor }) => {
+  describe.each(getE2eAssets(chainId))("$symbol", (asset) => {
+    test("Vault V2 deposit and signed redeem: SDK limits and every tracked balance match execution", {
+      tags:
+        asset.symbol === getE2eAssets(chainId)[0]!.symbol && actor === "EOA"
+          ? []
+          : ["nightly"],
+    }, async ({ client }) => {
+      const { vaultV2Factory } = getChainAddresses(chainId);
+      await installE2eAsset(client, chainId);
+      const user = client.account.address;
+      const { request, result: vault } = await client.simulateContract({
+        address: vaultV2Factory!,
+        abi: vaultV2FactoryAbi,
+        functionName: "createVaultV2",
+        args: [user, asset.address, zeroHash],
+      });
+      await client.writeContract(request);
+      const { amount } = await fundE2eAsset(client, {
+        token: asset.address,
+        amount: "1",
+      });
+      const vaultV2 = client
+        .extend(morphoViemExtension({ supportSignature: true }))
+        .morpho.vaultV2(vault, chainId);
+      const vaultData = await seededVaultData(client, vaultV2);
+      const shares = await client.readContract({
+        address: vault,
+        abi: erc4626Abi,
+        functionName: "previewDeposit",
+        args: [amount],
+      });
+      const deposit = vaultV2.deposit({ amount, userAddress: user, vaultData });
+      const depositRequirements = await deposit.getRequirements({
+        useSimplePermit: false,
+      });
+      expect(depositRequirements.length).toBeGreaterThan(0);
+      expect(
+        toSimulationAuthorizations({
+          owner: user,
+          requirements: depositRequirements,
+        }).at(-1)?.type,
+      ).toBe("erc20Approval");
+      const { result: deposited } = await sendE2eSimulated(client, {
+        preview: true,
+        chainId,
+        account: user,
+        output: {
+          ...deposit,
+          getRequirements: async () => depositRequirements,
+        },
+        wallets: [user, vault],
+        tokens: [asset.address, vault],
+        limits: { slippageTolerance: 0n, expected: { sharesMinted: shares } },
+      });
+      expect(deposited.verification.operations[0]?.operation).toBe(
+        "vaultV2Deposit",
+      );
+      expect(deposited.verification.operations[0]).toMatchObject({
         vault,
-        checkedLimits: { quote: depositQuote, slippageTolerance: 0n },
-      },
-    ]);
-    const depositSignatures = await fulfil(client, depositRequirements);
-    await expectExecutionMatches(client, {
-      result: depositResult,
-      transaction: toTransaction(client, deposit.buildTx(depositSignatures)),
-      balances,
-    });
-    expect(await client.balanceOf({ erc20: vault })).toBe(shares);
-
-    const redeemed = await client.readContract({
-      address: vault,
-      abi: erc4626Abi,
-      functionName: "previewRedeem",
-      args: [shares],
-    });
-    const redeem = vaultV2.redeem({ shares, userAddress: user });
-    const redeemRequirements = await redeem.getRequirements();
-    expect(
-      toSimulationAuthorizations({
-        owner: user,
-        requirements: redeemRequirements,
-      }).map(({ type }) => type),
-    ).toStrictEqual(["erc2612Permit"]);
-    const redeemTransaction = toTransaction(
-      client,
-      redeem.buildTx(await fulfil(client, redeemRequirements)),
-    );
-    const redeemQuote = { sharesBurned: shares, assetsReceived: redeemed };
-    const redeemResult = await simulateOrThrow(configFor(client), {
-      blockNumber: await client.getBlockNumber({ cacheTime: 0 }),
-      limits: {
-        operations: [
-          {
-            type: "vaultV2Redeem",
-            vault,
-            quote: redeemQuote,
-            slippageTolerance: 0n,
-          },
-        ],
-      },
-      transactions: [redeemTransaction],
-    });
-    expect(redeemResult.verification.operations).toMatchObject([
-      {
-        operation: "vaultV2Redeem",
+        checkedLimits: {
+          quote: { assetsPaid: amount, sharesMinted: shares },
+          slippageTolerance: 0n,
+        },
+      });
+      expect(await client.balanceOf({ erc20: vault })).toBe(shares);
+      const redeemedAssets = await client.readContract({
+        address: vault,
+        abi: erc4626Abi,
+        functionName: "previewRedeem",
+        args: [shares],
+      });
+      const redeem = vaultV2.redeem({ shares, userAddress: user });
+      expect(
+        (await redeem.getRequirements()).some(isRequirementSignature),
+      ).toBe(true);
+      const { result: redeemed } = await sendE2eSimulated(client, {
+        chainId,
+        account: user,
+        output: redeem,
+        wallets: [user, vault],
+        tokens: [asset.address, vault],
+        limits: {
+          slippageTolerance: 0n,
+          expected: { assetsReceived: redeemedAssets },
+        },
+      });
+      expect(redeemed.verification.operations[0]?.operation).toBe(
+        "vaultV2Redeem",
+      );
+      expect(redeemed.verification.operations[0]).toMatchObject({
         vault,
-        checkedLimits: { quote: redeemQuote, slippageTolerance: 0n },
-      },
-    ]);
-    await expectExecutionMatches(client, {
-      result: redeemResult,
-      transaction: redeemTransaction,
-      balances,
+        checkedLimits: {
+          quote: { sharesBurned: shares, assetsReceived: redeemedAssets },
+          slippageTolerance: 0n,
+        },
+      });
+      expect(await client.balanceOf({ erc20: vault })).toBe(0n);
     });
   });
 });
 
-describeActors(blueBorrowScenario, (test, chainId) => {
-  test("Blue: a previewed supplyCollateralBorrow with a Morpho authorization signature and a final full repayWithdrawCollateral match their execution", async ({
-    client,
-  }) => {
-    const { blue: morpho } = getChainAddresses(chainId);
-    const user = client.account.address;
-    // A distinct collateral token keeps the loan and collateral wallet deltas
-    // unmixed, so every combined-op side stays quotable. On chains without a
-    // wNative (e.g. Arc) the fallback loan asset is E2E_ASSET itself, so the
-    // collateral uses the next dedicated test address.
-    const collateralToken: Address =
-      "0xE2e0000000000000000000000000000000000004";
-    const market = await createE2eMarket(client, {
-      chainId,
-      collateralToken,
-    });
-    expect(collateralToken).not.toBe(market.loanToken);
-    const liquidity = parseEther("10");
-    const collateralAssets = parseEther("5");
-    const borrowAssets = parseEther("2");
-    // The extra test asset covers the interest accrued before the full repay.
-    await wrapNative(client, {
-      wNative: market.loanToken,
-      amount: liquidity + assets,
-    });
-    await client.deal({ erc20: collateralToken, amount: collateralAssets });
-    await client.approve({
-      address: market.loanToken,
-      args: [morpho, liquidity],
-    });
-    await client.writeContract({
-      address: morpho,
-      abi: blueAbi,
-      functionName: "supply",
-      args: [market, liquidity, 0n, user, "0x"],
-    });
-    const blue = client
-      .extend(morphoViemExtension({ supportSignature: true }))
-      .morpho.blue(market, chainId);
-    const balances = [
-      { account: user, token: market.loanToken },
-      { account: morpho, token: market.loanToken },
-    ];
-
-    const borrow = blue.supplyCollateralBorrow({
-      userAddress: user,
-      collateralAssets,
-      borrowAssets,
-      positionData: await blue.getPositionData(user),
-      deadline: maxUint256,
-    });
-    const borrowRequirements = await borrow.getRequirements();
-    const blockNumber = await client.getBlockNumber({ cacheTime: 0 });
-    const authorizations = toSimulationAuthorizations({
-      owner: user,
-      requirements: borrowRequirements,
-    });
-    expect(authorizations.map(({ type }) => type)).toContain(
-      "blueAuthorizationSignature",
-    );
-    // No debt exists yet, so the borrow mints exactly this many shares.
-    const borrowQuote = {
-      sharesMinted: SharesMath.toShares(borrowAssets, 0n, 0n, "Up"),
-      collateralSupplied: collateralAssets,
-      assetsPaid: collateralAssets,
-      assetsReceived: borrowAssets,
-    };
-    const borrowResult = await simulateOrThrow(configFor(client), {
-      blockNumber,
-      mode: "preview",
-      authorizations,
-      limits: {
-        operations: [
-          {
-            type: "blueSupplyCollateralBorrow",
-            marketId: market.id,
-            quote: borrowQuote,
-            slippageTolerance: 0n,
+describeActors(blueBorrowScenario, (test, { chainId, actor }) => {
+  const native = getE2eAsset(chainId);
+  const collateralFallback: Address =
+    "0xE2e0000000000000000000000000000000000004";
+  describe.each(getE2eAssets(chainId))("$symbol loan", (asset) => {
+    test("Blue supplyCollateralBorrow and full repayWithdrawCollateral: SDK limits match execution", {
+      tags:
+        asset.symbol === getE2eAssets(chainId)[0]!.symbol && actor === "EOA"
+          ? []
+          : ["nightly"],
+    }, async ({ client }) => {
+      const user = client.account.address;
+      const { blue: morpho } = getChainAddresses(chainId);
+      const collateralToken = isAddressEqual(asset.address, native.address)
+        ? collateralFallback
+        : native.address;
+      if (collateralToken === collateralFallback)
+        await installE2eAssetAt(client, collateralFallback);
+      const market = await createE2eMarket(client, {
+        chainId,
+        loanToken: asset.address,
+        collateralToken,
+      });
+      const { decimals: loanDecimals } = await fundE2eAsset(client, {
+        token: asset.address,
+        amount: "11",
+      });
+      const { amount: collateralAssets } = await fundE2eAsset(client, {
+        token: collateralToken,
+        amount: "5",
+      });
+      const liquidity = parseUnits("10", loanDecimals);
+      const borrowAssets = parseUnits("2", loanDecimals);
+      await client.approve({
+        address: asset.address,
+        args: [morpho, liquidity],
+      });
+      await client.writeContract({
+        address: morpho,
+        abi: blueAbi,
+        functionName: "supply",
+        args: [market, liquidity, 0n, user, "0x"],
+      });
+      await seededMarketData(client, market);
+      const blue = client
+        .extend(morphoViemExtension({ supportSignature: true }))
+        .morpho.blue(market, chainId);
+      const positionData = await blue.getPositionData(user);
+      const borrow = blue.supplyCollateralBorrow({
+        userAddress: user,
+        collateralAssets,
+        borrowAssets,
+        positionData,
+        deadline: maxUint256,
+      });
+      expect(
+        (await borrow.getRequirements()).some(isRequirementSignature),
+      ).toBe(true);
+      const tracked = {
+        wallets: [user, morpho],
+        tokens: [asset.address, collateralToken],
+      };
+      const { result: borrowedResult } = await sendE2eSimulated(client, {
+        preview: true,
+        chainId,
+        account: user,
+        output: borrow,
+        ...tracked,
+        limits: {
+          slippageTolerance: 0n,
+          expected: {
+            sharesMinted: positionData.market.toBorrowShares(
+              borrowAssets,
+              "Up",
+            ),
+            assetsReceived: borrowAssets,
           },
-        ],
-      },
-      transactions: [toTransaction(client, borrow.buildTx())],
-    });
-    expect(
-      borrowResult.verification.authorizations.map(
-        ({ authorization }) => authorization,
-      ),
-    ).toStrictEqual(authorizations);
-    expect(borrowResult.verification.operations).toMatchObject([
-      {
-        operation: "blueSupplyCollateralBorrow",
+        },
+      });
+      expect(borrowedResult.verification.operations[0]?.operation).toBe(
+        "blueSupplyCollateralBorrow",
+      );
+      expect(borrowedResult.verification.operations[0]).toMatchObject({
         marketId: market.id,
-        checkedLimits: { quote: borrowQuote, slippageTolerance: 0n },
-      },
-    ]);
-    // Loan and collateral are distinct tokens, so the user's loan-token diff
-    // is exactly the borrowed amount.
-    expect(diffOf(borrowResult, balances[0]!)).toBe(borrowAssets);
-    const borrowSignatures = await fulfil(client, borrowRequirements);
-    await expectExecutionMatches(client, {
-      result: borrowResult,
-      transaction: toTransaction(client, borrow.buildTx(borrowSignatures)),
-      balances,
-    });
-    const borrowed = await blue.getPositionData(user);
-    expect(borrowed.borrowShares).toBe(borrowQuote.sharesMinted);
-
-    const repay = blue.repayWithdrawCollateral({
-      userAddress: user,
-      positionData: borrowed,
-      repayShares: borrowed.borrowShares,
-      collateralAssets,
-      // A full repay funds the debt accrued until the deadline, capped at two hours ahead.
-      deadline: BigInt(Math.floor(Date.now() / 1000)) + 3_600n,
-    });
-    const repayTransaction = toTransaction(
-      client,
-      repay.buildTx(await fulfil(client, await repay.getRequirements())),
-    );
-    const repayQuote = {
-      sharesBurned: borrowed.borrowShares,
-      // Generous cap on the repaid assets (includes accrued interest).
-      assetsPaid: borrowed.borrowAssets * 2n,
-      collateralWithdrawn: collateralAssets,
-      assetsReceived: collateralAssets,
-    };
-    const repayResult = await simulateOrThrow(configFor(client), {
-      blockNumber: await client.getBlockNumber({ cacheTime: 0 }),
-      limits: {
-        operations: [
-          {
-            type: "blueRepayWithdrawCollateral",
-            marketId: market.id,
-            quote: repayQuote,
-            slippageTolerance: 0n,
+        checkedLimits: {
+          quote: {
+            assetsPaid: collateralAssets,
+            collateralSupplied: collateralAssets,
+            assetsReceived: borrowAssets,
+            sharesMinted: positionData.market.toBorrowShares(
+              borrowAssets,
+              "Up",
+            ),
           },
-        ],
-      },
-      transactions: [repayTransaction],
-    });
-    expect(repayResult.verification.operations).toMatchObject([
-      {
-        operation: "blueRepayWithdrawCollateral",
+          slippageTolerance: 0n,
+        },
+      });
+      const borrowed = await blue.getPositionData(user);
+      expect(borrowed.borrowShares).toBe(
+        positionData.market.toBorrowShares(borrowAssets, "Up"),
+      );
+      expect(borrowed.collateral).toBe(collateralAssets);
+      const repayNow = (await client.getBlock()).timestamp;
+      const repay = blue.repayWithdrawCollateral({
+        now: repayNow,
+        userAddress: user,
+        positionData: borrowed,
+        repayShares: borrowed.borrowShares,
+        collateralAssets,
+        deadline: repayNow + 3_600n,
+      });
+      const { result: repaidResult } = await sendE2eSimulated(client, {
+        chainId,
+        account: user,
+        output: repay,
+        ...tracked,
+        limits: {
+          slippageTolerance: 0n,
+          expected: { assetsReceived: collateralAssets },
+        },
+      });
+      expect(repaidResult.verification.operations[0]?.operation).toBe(
+        "blueRepayWithdrawCollateral",
+      );
+      expect(repaidResult.verification.operations[0]).toMatchObject({
         marketId: market.id,
-        checkedLimits: { quote: repayQuote, slippageTolerance: 0n },
-      },
-    ]);
-    await expectExecutionMatches(client, {
-      result: repayResult,
-      transaction: repayTransaction,
-      balances,
+        checkedLimits: {
+          quote: {
+            sharesBurned: borrowed.borrowShares,
+            assetsPaid: repay.buildTx().action.args.maxRepayAssets,
+            collateralWithdrawn: collateralAssets,
+            assetsReceived: collateralAssets,
+          },
+          slippageTolerance: 0n,
+        },
+      });
+      const repaid = await blue.getPositionData(user);
+      expect([repaid.borrowShares, repaid.collateral]).toStrictEqual([0n, 0n]);
     });
-    const repaid = await blue.getPositionData(user);
-    expect([repaid.borrowShares, repaid.collateral]).toStrictEqual([0n, 0n]);
   });
 });

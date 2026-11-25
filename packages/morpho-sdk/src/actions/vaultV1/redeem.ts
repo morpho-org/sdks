@@ -1,7 +1,7 @@
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData } from "viem";
 import { vaultBundlesV1Abi } from "../../abis.js";
-import { validateUint256Field } from "../../helpers/validate.js";
+import { parseUint256 } from "../../helpers/parse.js";
 import {
   type Erc2612RequirementSignature,
   type Metadata,
@@ -11,8 +11,8 @@ import {
 } from "../../types/index.js";
 import {
   finalizeVaultBundlesV1Transaction,
-  getBundlesSharesPermit,
-  normalizeBundlesCommonParams,
+  getParsedBundlesSharesPermit,
+  normalizeBundlesCommonParams as parseBundlesCommon,
 } from "../bundles/common.js";
 
 /** Parameters for {@link vaultV1Redeem}. */
@@ -44,6 +44,23 @@ export interface VaultV1RedeemParams {
   /** Optional analytics metadata appended to the transaction calldata. */
   readonly metadata?: Metadata;
 }
+
+declare const parsedVaultV1Redeem: unique symbol;
+/** Validated redeem inputs, independent of signatures. @internal */
+export type VaultV1RedeemInput = {
+  readonly vault: Readonly<VaultV1RedeemParams["vault"]>;
+  readonly args: Omit<
+    VaultV1RedeemParams["args"],
+    "requirementSignature" | "shares" | "deadline"
+  > & {
+    readonly shares: bigint;
+    readonly deadline: ReturnType<typeof parseBundlesCommon>["deadline"];
+  };
+  readonly common: ReturnType<typeof parseBundlesCommon>;
+  readonly metadata?: Metadata;
+  readonly requirementSignature?: VaultV1RedeemParams["args"]["requirementSignature"];
+  readonly [parsedVaultV1Redeem]: true;
+};
 
 /**
  * Encodes an exact-shares Vault V1 redemption through VaultBundlesV1.
@@ -88,18 +105,49 @@ export interface VaultV1RedeemParams {
  */
 export const vaultV1Redeem = (
   params: VaultV1RedeemParams,
-): Readonly<Transaction<VaultV1RedeemAction>> => {
+): Readonly<Transaction<VaultV1RedeemAction>> =>
+  buildVaultV1Redeem(parseVaultV1Redeem(params));
+
+/** Parses the amount and common fields in standalone order. @internal */
+export const parseVaultV1Redeem = (
+  params: VaultV1RedeemParams,
+): VaultV1RedeemInput => {
   if (params.args.shares <= 0n) {
     throw new NonPositiveInputError("shares", params.args.shares);
   }
-  // Reject ABI overflow with SDK errors before calldata encoding.
-  validateUint256Field("shares", params.args.shares);
-  const common = normalizeBundlesCommonParams(params.args);
+  const shares = parseUint256("shares", params.args.shares);
+  const common = parseBundlesCommon(params.args);
+
+  return {
+    vault: { chainId: params.vault.chainId, address: params.vault.address },
+    args: { shares, userAddress: params.args.userAddress, ...common },
+    common,
+    metadata: params.metadata,
+    requirementSignature: params.args.requirementSignature,
+  } as VaultV1RedeemInput;
+};
+
+/** Encodes parsed inputs and validates a fresh share signature. @internal */
+export const buildVaultV1Redeem = (
+  parsed: VaultV1RedeemInput,
+  signatures: Pick<
+    VaultV1RedeemParams["args"],
+    "requirementSignature"
+  > = parsed,
+): Readonly<Transaction<VaultV1RedeemAction>> => {
+  const { common } = parsed;
+  const params = {
+    ...parsed,
+    args: {
+      ...parsed.args,
+      requirementSignature: signatures.requirementSignature,
+    },
+  };
   const spender = getChainAddress(
     params.vault.chainId,
     "bundles.vaultBundlesV1",
   );
-  const sharesPermit = getBundlesSharesPermit({
+  const sharesPermit = getParsedBundlesSharesPermit({
     vault: params.vault.address,
     deadline: common.deadline,
     owner: params.args.userAddress,

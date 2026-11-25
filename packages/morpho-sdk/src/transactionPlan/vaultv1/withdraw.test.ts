@@ -15,7 +15,7 @@ import {
 } from "../../../test/fixtures/inKindRedeem.js";
 import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { vaultBundlesV1Abi } from "../../abis.js";
-import { morphoViemExtension } from "../../client/index.js";
+import { vaultV1Withdraw } from "../../actions/vaultV1/withdraw.js";
 import { computeVaultMaxShareAllowance } from "../../helpers/index.js";
 import {
   ChainIdMismatchError,
@@ -197,19 +197,16 @@ test("fee and slippage withdrawal calldata matches the entity flow", async () =>
       slippageTolerance,
     }),
   );
-  const entityTx = handle.client
-    .extend(morphoViemExtension())
-    .morpho.vaultV1(params.vault.address, params.chainId)
-    .withdraw({
+  const entityTx = vaultV1Withdraw({
+    vault: { chainId: params.chainId, address: params.vault.address },
+    args: {
       amount: params.assets,
-      vaultData,
       userAddress: params.account,
       deadline: BigInt(expiresAt),
-      slippageTolerance,
       referralFeePct: 25_000000000000000n,
       referralFeeRecipient: IN_KIND_USER,
-    })
-    .buildTx();
+    },
+  });
   const tx = buildTransaction(plan, plan.steps[1]!);
   expect(tx.data).toBe(entityTx.data);
   expect(tx.to).toBe(entityTx.to);

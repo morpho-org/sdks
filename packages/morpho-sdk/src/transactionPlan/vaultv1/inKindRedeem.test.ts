@@ -16,18 +16,18 @@ import {
   signerWalletClient,
 } from "../../../test/helpers/signer.js";
 import { withChainTimestamp } from "../../../test/helpers/time.js";
-import { morphoViemExtension } from "../../client/morphoViemExtension.js";
+import { vaultV1InKindRedeem } from "../../actions/vaultV1/inKindRedeem.js";
 import * as sdk from "../../index.js";
 import {
   EmptyMarketParamsListError,
   InsufficientBlueBalanceForInKindRedeemError,
-  isRequirementSignature,
 } from "../../types/index.js";
 import {
   IncompleteTransactionPlanError,
   InvalidTransactionPlanError,
   TransactionPlanSignatureMismatchError,
 } from "../error.js";
+import { getVaultPermit } from "../permit.js";
 import {
   applySignatures,
   buildTransactions,
@@ -174,17 +174,16 @@ describe("prepareVaultV1InKindRedeem", () => {
       shares: maxUint256,
     });
     expect(plan.signatureRequests).toEqual([]);
-    const stable = client
-      .extend(morphoViemExtension())
-      .morpho.vaultV1(input.vault.address, 1)
-      .inKindRedeem({
-        ...input,
-        vaultData: input.vault,
+    const stable = vaultV1InKindRedeem({
+      vault: { address: input.vault.address, chainId: 1 },
+      args: {
+        marketParamsList: input.marketParamsList,
         amount: input.assets,
         userAddress: input.account,
         deadline: BigInt(input.expiresAt),
-      });
-    expect(buildTransactions(plan).at(-1)).toEqual(stable.buildTx());
+      },
+    });
+    expect(buildTransactions(plan).at(-1)).toEqual(stable);
     expect(
       buildTransactions(parseTransactionPlan(serializeTransactionPlan(plan))),
     ).toEqual(buildTransactions(plan));
@@ -209,21 +208,23 @@ describe("prepareVaultV1InKindRedeem", () => {
         serializeTransactionPlan(complete).replace('"assets":', '"amount":'),
       ),
     ).toThrow(InvalidTransactionPlanError);
-    const fresh = setup()
-      .extend(morphoViemExtension({ supportSignature: true }))
-      .morpho.vaultV1(input.vault.address, 1)
-      .inKindRedeem({
-        ...input,
-        vaultData: input.vault,
+    const permit = getVaultPermit(restored.signatureRequests, {
+      id: request.id,
+      asset: input.vault.address,
+      owner: input.account,
+    });
+    expect(permit?.action.type).toBe("permit");
+    const fresh = vaultV1InKindRedeem({
+      vault: { address: input.vault.address, chainId: 1 },
+      args: {
+        marketParamsList: input.marketParamsList,
         amount: input.assets,
         userAddress: input.account,
         deadline: BigInt(input.expiresAt),
-      });
-    const [requirement] = await fresh.getRequirements();
-    expect(isRequirementSignature(requirement)).toBe(true);
-    if (!isRequirementSignature(requirement)) return;
-    const signed = await requirement.sign(signerWalletClient, signerAddress);
-    expect(buildTransactions(restored)).toEqual([fresh.buildTx([signed])]);
+        requirementSignature: permit,
+      },
+    });
+    expect(buildTransactions(restored)).toEqual([fresh]);
     expect(buildTransactions(restored)).toEqual(buildTransactions(complete));
   });
 

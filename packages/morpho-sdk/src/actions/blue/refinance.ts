@@ -1,10 +1,5 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
-import { type Address, encodeFunctionData } from "viem";
-import { blueBundlesV1Abi } from "../../abis.js";
-import {
-  validateMarketParamsId,
-  validateUint256Field,
-} from "../../helpers/validate.js";
+import type { Address } from "viem";
 import type {
   AuthorizationRequirementSignature,
   BlueRefinanceAction,
@@ -12,15 +7,8 @@ import type {
   Transaction,
   VaultV2BlueReallocation,
 } from "../../types/index.js";
-import {
-  type BlueBundlesV1CommonParams,
-  finalizeBlueBundlesV1Transaction,
-  getBlueBundlesV1PenaltyAssets,
-  getBlueBundlesV1PublicAllocations,
-  getBlueBundlesV1SignedAuthorization,
-  normalizeBlueBundlesV1CommonParams,
-} from "./common.js";
-import { validateBlueRefinanceMarkets } from "./refinanceValidation.js";
+import { encodeBlueRefinance } from "./encode.js";
+import { parseBlueRefinance } from "./refinance.internal.js";
 
 /** Parameters for {@link blueRefinance}. */
 export interface BlueRefinanceParams {
@@ -78,7 +66,8 @@ export interface BlueRefinanceParams {
  * @param params.metadata - Optional transaction metadata.
  * @returns A deep-frozen `Readonly<Transaction<BlueRefinanceAction>>` whose
  *   `to` address is BlueBundlesV1 and whose `action` records the normalized migration inputs.
- * @throws {MarketIdMismatchError} when either market's `id` does not hash from its tuple fields.
+ * @throws {MarketIdMismatchError} when the migration source, destination, or a reallocation
+ *   source market has an `id` that does not hash from its tuple fields.
  * @throws {RefinanceSameMarketError} when source and destination IDs match.
  * @throws {RefinanceTokenMismatchError} when their loan or collateral tokens differ.
  * @throws {NegativeInputError} when `maxLtv`, a referral fee, or a reallocation penalty is negative.
@@ -115,70 +104,8 @@ export interface BlueRefinanceParams {
  * // tx satisfies Readonly<Transaction<BlueRefinanceAction>>
  * ```
  */
+
 export const blueRefinance = (
   params: BlueRefinanceParams,
-): Readonly<Transaction<BlueRefinanceAction>> => {
-  const { chainId, sourceMarketParams, destinationMarketParams } =
-    params.market;
-  validateMarketParamsId(sourceMarketParams);
-  validateMarketParamsId(destinationMarketParams);
-  const { userAddress, maxLtv, authorizationSignature } = params.args;
-  // Reject same-market migrations and token mismatches before encoding.
-  validateBlueRefinanceMarkets(sourceMarketParams, destinationMarketParams);
-  validateUint256Field("maxLtv", maxLtv);
-
-  const common: BlueBundlesV1CommonParams = {
-    chainId,
-    userAddress,
-    deadline: params.args.deadline,
-    referralFeePct: params.args.referralFeePct,
-    referralFeeRecipient: params.args.referralFeeRecipient,
-    metadata: params.metadata,
-  };
-  const { referralFeePct, referralFeeRecipient } =
-    normalizeBlueBundlesV1CommonParams(common);
-  const signedAuthorization = getBlueBundlesV1SignedAuthorization({
-    chainId,
-    userAddress,
-    authorizationSignature,
-  });
-  const publicAllocations = getBlueBundlesV1PublicAllocations(
-    [...(params.args.reallocations ?? [])],
-    destinationMarketParams,
-  );
-  const reallocationPenaltyAssets =
-    getBlueBundlesV1PenaltyAssets(publicAllocations);
-
-  return finalizeBlueBundlesV1Transaction({
-    common,
-    value: 0n,
-    data: encodeFunctionData({
-      abi: blueBundlesV1Abi,
-      functionName: "blueBundlesV1MigrateBorrowPosition",
-      args: [
-        sourceMarketParams,
-        destinationMarketParams,
-        maxLtv,
-        signedAuthorization,
-        publicAllocations,
-        referralFeePct,
-        referralFeeRecipient,
-        params.args.deadline,
-      ],
-    }),
-    action: {
-      type: "blueRefinance",
-      args: {
-        sourceMarket: sourceMarketParams.id,
-        destinationMarket: destinationMarketParams.id,
-        maxLtv,
-        onBehalf: userAddress,
-        reallocations: publicAllocations.length,
-        reallocationPenaltyAssets,
-        referralFeePct,
-        referralFeeRecipient,
-        deadline: params.args.deadline,
-      },
-    },
-  });
-};
+): Readonly<Transaction<BlueRefinanceAction>> =>
+  encodeBlueRefinance(parseBlueRefinance(params));

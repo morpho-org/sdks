@@ -5,17 +5,17 @@ import { createViemTest } from "@morpho-org/test/vitest";
 import { erc20Abi, maxUint256, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { expect } from "vitest";
+import { fetchAccrualVault } from "../../../src/fetch.js";
 import {
   applySignatures,
   buildTransactions,
   getPendingSignatureRequests,
-  isRequirementSignature,
-  morphoViemExtension,
   parseTransactionPlan,
   prepareVaultV1InKindRedeem,
-  type RequirementSignature,
   serializeTransactionPlan,
+  vaultV1InKindRedeem,
 } from "../../../src/index.js";
+import { getVaultPermit } from "../../../src/transactionPlan/permit.js";
 import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
 import { withChainTimestamp } from "../../helpers/time.js";
 
@@ -31,10 +31,10 @@ for (const mode of ["existing allowance", "approval", "permit"] as const) {
   test(`prepareVaultV1InKindRedeem: ${mode}`, async ({ client }) => {
     await client.setCode({ address: client.account.address, bytecode: "0x" });
     const supportSignature = mode !== "approval";
-    const vault = client
-      .extend(morphoViemExtension({ supportSignature }))
-      .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
-    const vaultData = await vault.getData();
+    const vaultData = await fetchAccrualVault(
+      SteakhouseUsdcVaultV1.address,
+      client,
+    );
     const amount = parseUnits("1", 6);
     const marketParamsList = [...vaultData.allocations.values()]
       .filter(
@@ -103,30 +103,24 @@ for (const mode of ["existing allowance", "approval", "permit"] as const) {
       })),
     );
     plan = applySignatures(plan, signatures);
-    const exit = withChainTimestamp(timestamp, () =>
-      vault.inKindRedeem({
+    const exit = vaultV1InKindRedeem({
+      vault: { address: vaultData.address, chainId: mainnet.id },
+      args: {
         amount,
         marketParamsList,
-        vaultData,
         userAddress: client.account.address,
         deadline: BigInt(expiresAt),
-      }),
-    );
-    const stableSignatures: RequirementSignature[] = [];
-    if (mode === "permit") {
-      const [requirement] = await withChainTimestamp(timestamp, () =>
-        exit.getRequirements(),
-      );
-      expect(isRequirementSignature(requirement)).toBe(true);
-      if (!isRequirementSignature(requirement)) return;
-      stableSignatures.push(
-        await requirement.sign(client, client.account.address),
-      );
-    }
+        requirementSignature: getVaultPermit(plan.signatureRequests, {
+          id: pending[0]?.id,
+          asset: vaultData.address,
+          owner: client.account.address,
+        }),
+      },
+    });
     const transactions = buildTransactions(
       parseTransactionPlan(serializeTransactionPlan(plan)),
     );
-    expect(transactions.at(-1)).toEqual(exit.buildTx(stableSignatures));
+    expect(transactions.at(-1)).toEqual(exit);
     for (const transaction of transactions)
       await client.sendTransaction(transaction);
     const finalShares = await client.readContract({

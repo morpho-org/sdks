@@ -35,6 +35,7 @@ import {
   resolveRatifierV1Tree,
 } from "./ratifierV1Internal.js";
 import { type TreeProof, TreeUtils } from "./TreeUtils.js";
+import { requireTreeItem } from "./treeMathInternal.js";
 import type { TreeData, TreeSnapshot } from "./treeTypes.js";
 
 const priceRatifierV1DataAbi = [
@@ -362,6 +363,7 @@ export namespace PriceRatifierV1 {
    *
    * @param leaves - Price-bounded offer leaves in leaf order.
    * @returns PriceRatifierV1 tree descriptor.
+   * @throws {InvalidOfferParameterError} when a sell offer has the zero address as its receiver.
    * @throws {InvalidOfferGroupError} when an explicitly grouped offer breaks `OfferUtils.validateOfferGroup` rules (members differ in maker, side, loan token, chain, Midnight contract or cap mode/value, an offer has an invalid cap, or a buy offer sets `receiverIfMakerIsSeller`).
    * @throws {InvalidTreeError} when the leaf list is empty, contains duplicate leaf hashes, or mixes ratifier addresses.
    * @throws {InvalidTreeHeightError} when the padded tree exceeds supported ratifier typehashes.
@@ -384,7 +386,7 @@ export namespace PriceRatifierV1 {
     const assignedOffers = assignRatifierV1Groups(normalized, groupId);
     const offers: Offer[] = [];
     const structs = normalized.map(({ allowedTaker }, index) => {
-      const offer = assignedOffers[index]!;
+      const offer = requireTreeItem(assignedOffers, index);
       offers.push(offer);
 
       return { offer: OfferUtils.toStruct({ offer }), allowedTaker };
@@ -423,6 +425,7 @@ export namespace PriceRatifierV1 {
    * @param params.tree - PriceRatifierV1 tree descriptor or raw leaf input.
    * @param params.leafIndex - Leaf index to prove.
    * @returns Proof descriptor.
+   * @throws {InvalidOfferParameterError} when raw tree input contains a sell offer with a zero receiver.
    * @throws {InvalidOfferGroupError} when an explicitly grouped offer breaks `OfferUtils.validateOfferGroup` rules (members differ in maker, side, loan token, chain, Midnight contract or cap mode/value, an offer has an invalid cap, or a buy offer sets `receiverIfMakerIsSeller`). For raw leaf input only.
    * @throws {InvalidTreeError} when the tree is invalid or the leaf index is out of range.
    * @throws {InvalidTreeHeightError} when the tree exceeds the supported height.
@@ -528,6 +531,8 @@ export namespace PriceRatifierV1 {
    * `PriceRatifierV1.ratification` state. Consumers can query that value at
    * their own block context after local proof verification.
    *
+   * This verifies the existing commitment without applying tree-construction checks.
+   *
    * @param params.offer - Offer carried by the payload item.
    * @param params.ratifierData - ABI-encoded PriceRatifierV1 ratifier data.
    * @param params.taker - Optional taker to check against the leaf's allowed taker.
@@ -582,6 +587,7 @@ export namespace PriceRatifierV1 {
    * @param params.tree - PriceRatifierV1 tree descriptor or raw leaf input.
    * @param params.leafIndex - Leaf index to prove.
    * @returns ABI-encoded PriceRatifierV1 data.
+   * @throws {InvalidOfferParameterError} when raw tree input contains a sell offer with a zero receiver.
    * @throws {InvalidOfferGroupError} when an explicitly grouped offer breaks `OfferUtils.validateOfferGroup` rules (members differ in maker, side, loan token, chain, Midnight contract or cap mode/value, an offer has an invalid cap, or a buy offer sets `receiverIfMakerIsSeller`). For raw leaf input only.
    * @throws {InvalidTreeError} when the tree is invalid, the leaf index is outside the tree, or the tree contains multiple ratifiers.
    * @throws {InvalidTreeHeightError} when the tree exceeds the supported height.
@@ -603,7 +609,7 @@ export namespace PriceRatifierV1 {
   }): Hex {
     const tree = resolveRatifierV1Tree(params.tree, treeHelpers);
     const proof = TreeUtils.buildProof({ tree, leafIndex: params.leafIndex });
-    const entry = tree.entries[Number(proof.leafIndex)]!;
+    const entry = requireTreeItem(tree.entries, Number(proof.leafIndex));
 
     return encodeRatifierData({
       root: proof.root,
@@ -623,6 +629,7 @@ export namespace PriceRatifierV1 {
    *
    * @param params.tree - PriceRatifierV1 tree descriptor or raw leaf input whose root has already been ratified onchain.
    * @returns Items containing each non-padding offer and its ratifier data.
+   * @throws {InvalidOfferParameterError} when raw tree input contains a sell offer with a zero receiver.
    * @throws {InvalidOfferGroupError} when an explicitly grouped offer breaks `OfferUtils.validateOfferGroup` rules (members differ in maker, side, loan token, chain, Midnight contract or cap mode/value, an offer has an invalid cap, or a buy offer sets `receiverIfMakerIsSeller`). For raw leaf input only.
    * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
    * @throws {InvalidTreeHeightError} when the tree exceeds the supported height.
@@ -648,8 +655,8 @@ export namespace PriceRatifierV1 {
     });
 
     return tree.offers.map((offer, leafIndex) => {
-      const entry = tree.entries[leafIndex]!;
-      const proof = proofs[leafIndex]!;
+      const entry = requireTreeItem(tree.entries, leafIndex);
+      const proof = requireTreeItem(proofs, leafIndex);
 
       return {
         offer,

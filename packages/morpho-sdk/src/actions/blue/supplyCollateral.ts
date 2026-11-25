@@ -1,13 +1,15 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
-import { deepFreeze } from "@morpho-org/morpho-ts";
-import { type Address, maxUint256 } from "viem";
+import type { Address } from "viem";
 import type {
   BlueSupplyCollateralAction,
   BundlesTokenRequirementSignature,
   Metadata,
   Transaction,
 } from "../../types/index.js";
-import { blueSupplyCollateralBorrow } from "./supplyCollateralBorrow.js";
+import {
+  buildBlueSupplyCollateral,
+  parseBlueSupplyCollateral,
+} from "./supplyCollateral.internal.js";
 
 /** Parameters for {@link blueSupplyCollateral}. */
 export interface BlueSupplyCollateralParams {
@@ -92,18 +94,5 @@ export interface BlueSupplyCollateralParams {
  */
 export const blueSupplyCollateral = (
   params: BlueSupplyCollateralParams,
-): Readonly<Transaction<BlueSupplyCollateralAction>> => {
-  const transaction = blueSupplyCollateralBorrow({
-    ...params,
-    args: {
-      ...params.args,
-      borrowAssets: 0n,
-      maxLtv: maxUint256,
-    },
-  });
-
-  return deepFreeze({
-    ...transaction,
-    action: { ...transaction.action, type: "blueSupplyCollateral" },
-  });
-};
+): Readonly<Transaction<BlueSupplyCollateralAction>> =>
+  buildBlueSupplyCollateral(parseBlueSupplyCollateral(params));

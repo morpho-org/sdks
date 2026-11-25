@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -10,7 +10,13 @@ import {
   createAnvilFailureCleanupError,
 } from "./errors.js";
 import { isolateForkCache } from "./forkCache.js";
-import { type ForkProxy, startForkProxy } from "./forkProxy.js";
+import {
+  type createForkBootstrapBlock,
+  type ForkProxy,
+  startForkProxy,
+} from "./forkProxy.js";
+
+type ForkCache = Awaited<ReturnType<typeof isolateForkCache>>;
 
 // The fork proxy's fetch ignores these, so Anvil forks directly when one is set.
 const EGRESS_PROXY_VARIABLES = [
@@ -319,20 +325,29 @@ export interface AnvilArgs {
 function toArgs(obj: AnvilArgs) {
   return Object.entries(obj).flatMap<string>(([key, value]) => {
     // Output is already captured; --silent would hide the readiness banner.
-    if (key === "silent") return [];
-    if (value === undefined) return [];
+    if (key === "silent") {
+      return [];
+    }
+    if (value === undefined) {
+      return [];
+    }
 
-    if (key === "forkHeader")
+    if (key === "forkHeader") {
       return Object.entries(obj.forkHeader ?? {}).flatMap(([name, header]) => [
         "--fork-header",
         `${name}: ${header}`,
       ]);
+    }
 
-    if (Array.isArray(value)) return [`--${_kebabCase(key)}`, value.join(",")];
+    if (Array.isArray(value)) {
+      return [`--${_kebabCase(key)}`, value.join(",")];
+    }
 
     if (typeof value === "object" && value !== null) {
       return Object.entries(value).flatMap(([subKey, subValue]) => {
-        if (subValue === undefined) return [];
+        if (subValue === undefined) {
+          return [];
+        }
 
         const flag = `--${_kebabCase(`${key}.${subKey}`)}`;
         return [flag, Array.isArray(subValue) ? subValue.join(",") : subValue];
@@ -341,11 +356,17 @@ function toArgs(obj: AnvilArgs) {
 
     const flag = `--${_kebabCase(key)}`;
 
-    if (value === false) return [];
-    if (value === true) return [flag];
+    if (value === false) {
+      return [];
+    }
+    if (value === true) {
+      return [flag];
+    }
 
     const stringified = value.toString();
-    if (stringified === "") return [flag];
+    if (stringified === "") {
+      return [flag];
+    }
 
     return [flag, stringified];
   });
@@ -355,6 +376,10 @@ function toArgs(obj: AnvilArgs) {
 export interface SpawnAnvilOptions {
   /** Cancels startup when aborted. */
   readonly signal?: AbortSignal | undefined;
+  /** @internal A historical block cache scoped to one upstream and Vitest fixture. */
+  readonly bootstrapBlock?:
+    | ReturnType<typeof createForkBootstrapBlock>
+    | undefined;
   /**
    * Maximum time in milliseconds to wait for Anvil to start listening.
    *
@@ -385,6 +410,564 @@ export interface SpawnedAnvil {
    * @throws {AnvilCleanupError} When process cleanup cannot be confirmed.
    */
   readonly stopAndWait: () => Promise<boolean>;
+}
+
+function createAnvilDiagnostics(args: AnvilArgs) {
+  const shouldRedactForkCredentials =
+    args.redactForkUrl ?? process.env.CI === "true";
+  const diagnosticRedactions: {
+    readonly replacement: string;
+    readonly value: string;
+  }[] = [];
+  if (args.forkUrl) {
+    diagnosticRedactions.push({
+      replacement: "<redacted-fork-url>",
+      value: args.forkUrl,
+    });
+  }
+  for (const value of Object.values(args.forkHeader ?? {})) {
+    if (
+      value !== "" &&
+      !diagnosticRedactions.some((redaction) => redaction.value === value)
+    ) {
+      diagnosticRedactions.push({
+        replacement: "<redacted-fork-header>",
+        value,
+      });
+    }
+  }
+  diagnosticRedactions.sort((a, b) => b.value.length - a.value.length);
+  const maxRedactionLength = shouldRedactForkCredentials
+    ? (diagnosticRedactions[0]?.value.length ?? 0)
+    : 0;
+  const formatAnvilDiagnostics = (diagnostics: string) => {
+    if (!shouldRedactForkCredentials || diagnosticRedactions.length === 0) {
+      return diagnostics;
+    }
+
+    const formatted: string[] = [];
+    let cursor = 0;
+    let plainStart = 0;
+    while (cursor < diagnostics.length) {
+      const redaction = diagnosticRedactions.find(({ value }) =>
+        diagnostics.startsWith(value, cursor),
+      );
+      if (redaction === undefined) {
+        cursor += 1;
+        continue;
+      }
+
+      formatted.push(
+        diagnostics.slice(plainStart, cursor),
+        redaction.replacement,
+      );
+      cursor += redaction.value.length;
+      plainStart = cursor;
+    }
+    formatted.push(diagnostics.slice(plainStart));
+    return formatted.join("");
+  };
+  const formatAnvilCause = (cause: unknown) => {
+    if (!shouldRedactForkCredentials || diagnosticRedactions.length === 0) {
+      return cause;
+    }
+    if (typeof cause === "string") {
+      return formatAnvilDiagnostics(cause);
+    }
+    if (!(cause instanceof Error)) {
+      return cause;
+    }
+
+    // Clone errors before replacing credential-bearing Node spawn metadata.
+    const formattedCause = Object.create(
+      Object.getPrototypeOf(cause),
+      Object.getOwnPropertyDescriptors(cause),
+    ) as Error;
+    for (const property of Reflect.ownKeys(formattedCause)) {
+      const value = Reflect.get(formattedCause, property);
+      if (typeof value === "string") {
+        Reflect.set(formattedCause, property, formatAnvilDiagnostics(value));
+      } else if (Array.isArray(value)) {
+        Reflect.set(
+          formattedCause,
+          property,
+          value.map((item) =>
+            typeof item === "string" ? formatAnvilDiagnostics(item) : item,
+          ),
+        );
+      }
+    }
+    return formattedCause;
+  };
+  return {
+    shouldRedactForkCredentials,
+    diagnosticRedactions,
+    maxRedactionLength,
+    formatAnvilDiagnostics,
+    formatAnvilCause,
+  };
+}
+
+function trackAnvilStderr({
+  shouldRedactForkCredentials,
+  diagnosticRedactions,
+  maxRedactionLength,
+  formatAnvilDiagnostics,
+}: ReturnType<typeof createAnvilDiagnostics>) {
+  let stderr = "";
+  let stderrCarry = "";
+  let stderrLine = "";
+  const diagnosticCarryLength = Math.max(maxRedactionLength - 1, 0);
+  const stderrLineBufferLength =
+    ANVIL_DIAGNOSTICS_MAX_LENGTH + diagnosticCarryLength;
+
+  function append(dataString: string, warnPort: number | undefined) {
+    // Startup warnings are diagnostic; only timeout, error, or early close is fatal.
+    if (!shouldRedactForkCredentials || diagnosticRedactions.length === 0) {
+      stderr = `${stderr}${dataString}`.slice(-ANVIL_DIAGNOSTICS_MAX_LENGTH);
+    } else {
+      const rawDiagnostics = `${stderrCarry}${dataString}`;
+      const safeEnd = rawDiagnostics.length - diagnosticCarryLength;
+      let cursor = 0;
+      while (cursor < safeEnd) {
+        const redaction = diagnosticRedactions.find(({ value }) =>
+          rawDiagnostics.startsWith(value, cursor),
+        );
+        cursor += redaction?.value.length ?? 1;
+      }
+      stderr =
+        `${stderr}${formatAnvilDiagnostics(rawDiagnostics.slice(0, cursor))}`.slice(
+          -ANVIL_DIAGNOSTICS_MAX_LENGTH,
+        );
+      stderrCarry = rawDiagnostics.slice(cursor);
+    }
+    if (warnPort === undefined) {
+      return;
+    }
+
+    if (!shouldRedactForkCredentials || diagnosticRedactions.length === 0) {
+      console.warn(`[port ${warnPort || "??"}] ${dataString}`);
+      return;
+    }
+
+    // Buffer complete lines so stream chunks cannot split a credential around replacement.
+    stderrLine += dataString;
+    const lastLineBreak = stderrLine.lastIndexOf("\n");
+    if (lastLineBreak !== -1) {
+      console.warn(
+        `[port ${warnPort || "??"}] ${formatAnvilDiagnostics(stderrLine.slice(0, lastLineBreak + 1))}`,
+      );
+      stderrLine = stderrLine.slice(lastLineBreak + 1);
+    }
+    if (stderrLine.length > stderrLineBufferLength) {
+      const safeEnd = stderrLine.length - diagnosticCarryLength;
+      let cursor = 0;
+      while (cursor < safeEnd) {
+        const redaction = diagnosticRedactions.find(({ value }) =>
+          stderrLine.startsWith(value, cursor),
+        );
+        cursor += redaction?.value.length ?? 1;
+      }
+      console.warn(
+        `[port ${warnPort || "??"}] ${formatAnvilDiagnostics(stderrLine.slice(0, cursor))}`,
+      );
+      stderrLine = stderrLine.slice(cursor);
+    }
+  }
+  return {
+    append,
+    getDetails: () =>
+      `${stderr}${formatAnvilDiagnostics(stderrCarry)}`
+        .slice(-ANVIL_DIAGNOSTICS_MAX_LENGTH)
+        .trim(),
+  };
+}
+
+function getProcessCloseTimeout(
+  forceKillAfterMs: number | false,
+  signalSent: boolean,
+) {
+  if (forceKillAfterMs === false) {
+    return signalSent ? undefined : ANVIL_PROCESS_CLOSE_GRACE_MS;
+  }
+  return forceKillAfterMs + ANVIL_PROCESS_CLOSE_GRACE_MS;
+}
+
+function createAnvilStop(
+  subprocess: ChildProcessWithoutNullStreams,
+  {
+    forceKillAfterMs,
+    rejectProcessClosed,
+    formatAnvilCause,
+    getProcessError,
+  }: {
+    readonly forceKillAfterMs: number | false;
+    readonly rejectProcessClosed: (error: AnvilCleanupError) => void;
+    readonly formatAnvilCause: ReturnType<
+      typeof createAnvilDiagnostics
+    >["formatAnvilCause"];
+    readonly getProcessError: () => unknown;
+  },
+) {
+  let stopInitiated = false;
+  let stopRequested = false;
+  let forceKillSent = false;
+  let processCloseObserved = false;
+  let forceKillTimeout: ReturnType<typeof globalThis.setTimeout> | undefined;
+  let processCloseTimeout: ReturnType<typeof globalThis.setTimeout> | undefined;
+
+  // Signal synchronously for API compatibility; close owns cleanup.
+  function stop() {
+    if (stopInitiated) {
+      return false;
+    }
+    stopInitiated = true;
+    if (processCloseObserved) {
+      return false;
+    }
+
+    // An exit code can be visible before stdio closes. Wait for `close`.
+    let signalSent = false;
+    if (subprocess.exitCode === null && subprocess.signalCode === null) {
+      stopRequested = true;
+      try {
+        signalSent = subprocess.kill("SIGINT");
+      } catch (error) {
+        console.warn(
+          "Failed to send SIGINT to Anvil.",
+          formatAnvilCause(error),
+        );
+      }
+
+      if (forceKillAfterMs !== false) {
+        forceKillTimeout = globalThis.setTimeout(() => {
+          if (processCloseObserved || subprocess.exitCode !== null) {
+            return;
+          }
+
+          try {
+            forceKillSent = subprocess.kill("SIGKILL");
+            if (!forceKillSent) {
+              console.warn("Failed to send SIGKILL to Anvil after timeout.");
+            }
+          } catch (error) {
+            console.warn(
+              "Failed to send SIGKILL to Anvil after timeout.",
+              formatAnvilCause(error),
+            );
+          }
+        }, forceKillAfterMs);
+        if (
+          typeof forceKillTimeout === "object" &&
+          "unref" in forceKillTimeout
+        ) {
+          forceKillTimeout.unref();
+        }
+      }
+    }
+
+    const processCloseTimeoutMs = getProcessCloseTimeout(
+      forceKillAfterMs,
+      signalSent,
+    );
+    if (processCloseTimeoutMs !== undefined) {
+      processCloseTimeout = globalThis.setTimeout(() => {
+        if (processCloseObserved) {
+          return;
+        }
+        const processError = getProcessError();
+        rejectProcessClosed(
+          new AnvilCleanupError(
+            `Anvil did not close within "${processCloseTimeoutMs}" ms after shutdown began. Stop it manually before retrying.`,
+            processError === undefined ? undefined : { cause: processError },
+          ),
+        );
+      }, processCloseTimeoutMs);
+      if (
+        typeof processCloseTimeout === "object" &&
+        "unref" in processCloseTimeout
+      ) {
+        processCloseTimeout.unref();
+      }
+    }
+
+    return signalSent;
+  }
+
+  return {
+    stop,
+    stopRequested: () => stopRequested,
+    noteClose() {
+      processCloseObserved = true;
+      if (forceKillTimeout !== undefined) {
+        globalThis.clearTimeout(forceKillTimeout);
+      }
+      if (processCloseTimeout !== undefined) {
+        globalThis.clearTimeout(processCloseTimeout);
+      }
+      return { stopRequested, forceKillSent };
+    },
+  };
+}
+
+function trackAnvilProcess(
+  subprocess: ChildProcessWithoutNullStreams,
+  {
+    forkCache,
+    forkProxy,
+    forceKillAfterMs,
+    formatAnvilCause,
+  }: {
+    readonly forkCache: ForkCache;
+    readonly forkProxy: ForkProxy | undefined;
+    readonly forceKillAfterMs: number | false;
+    readonly formatAnvilCause: ReturnType<
+      typeof createAnvilDiagnostics
+    >["formatAnvilCause"];
+  },
+) {
+  let processError: unknown;
+  let cleanupAwaited = false;
+  const {
+    promise: processCloseResult,
+    resolve: resolveProcessClosed,
+    reject: rejectProcessClosed,
+  } = Promise.withResolvers<void>();
+  const processClosed = processCloseResult.finally(() => {
+    forkProxy?.close();
+    subprocess.stdin.destroy();
+    subprocess.stdout.destroy();
+    subprocess.stderr.destroy();
+    subprocess.unref();
+  });
+  // Keep `stop()` backward-compatible without hiding a cleanup failure from stop-only callers.
+  void processClosed.catch((error) => {
+    if (!cleanupAwaited) {
+      console.warn(
+        "Anvil process lifecycle failed. Use stopAndWait() to handle process and cleanup failures.",
+        error,
+      );
+    }
+  });
+  const shutdown = createAnvilStop(subprocess, {
+    forceKillAfterMs,
+    rejectProcessClosed,
+    formatAnvilCause,
+    getProcessError: () => processError,
+  });
+  const stopForCleanup = () => {
+    cleanupAwaited = true;
+    return shutdown.stop();
+  };
+  return {
+    processClosed,
+    stop: shutdown.stop,
+    stopForCleanup,
+    async stopAndWait() {
+      const signalSent = stopForCleanup();
+      await processClosed;
+      return signalSent;
+    },
+    stopRequested: shutdown.stopRequested,
+    noteProcessError(cause: unknown) {
+      processError ??= cause;
+    },
+    async finish(
+      {
+        code,
+        signal,
+      }: {
+        readonly code: number | null;
+        readonly signal: NodeJS.Signals | null;
+      },
+      {
+        listening,
+        details,
+      }: { readonly listening: boolean; readonly details: string },
+    ) {
+      const { stopRequested, forceKillSent } = shutdown.noteClose();
+      const expectedShutdown =
+        stopRequested &&
+        (code === 0 ||
+          (code === null &&
+            (signal === "SIGINT" || (signal === "SIGKILL" && forceKillSent))));
+      const processExitError =
+        // A close before the listening banner confirms cleanup for a startup failure.
+        listening && (processError !== undefined || !expectedShutdown)
+          ? new AnvilProcessError(
+              `Anvil ${stopRequested ? "failed during shutdown" : "exited unexpectedly after startup"} (code "${code}", signal "${signal}"). Retry the test and inspect the process logs.${
+                details ? ` ${details}` : ""
+              }`,
+              processError === undefined ? undefined : { cause: processError },
+            )
+          : undefined;
+      await forkCache?.close();
+      if (processExitError === undefined) {
+        resolveProcessClosed();
+      } else {
+        rejectProcessClosed(processExitError);
+      }
+    },
+  };
+}
+
+function waitForAnvilListening(
+  subprocess: ChildProcessWithoutNullStreams,
+  {
+    initialPort,
+    signal,
+    startupTimeoutMs,
+    diagnostics,
+    lifecycle,
+  }: {
+    readonly initialPort: number;
+    readonly signal: AbortSignal | undefined;
+    readonly startupTimeoutMs: number;
+    readonly diagnostics: ReturnType<typeof createAnvilDiagnostics>;
+    readonly lifecycle: ReturnType<typeof trackAnvilProcess>;
+  },
+) {
+  const { append, getDetails } = trackAnvilStderr(diagnostics);
+  const { formatAnvilCause } = diagnostics;
+  let port = initialPort;
+  return new Promise<number>((resolve, reject) => {
+    let listening = false;
+    let settled = false;
+    let stdout = "";
+    const startupTimeout = globalThis.setTimeout(() => {
+      const details = getDetails();
+      fail(
+        new AnvilStartupError(
+          `Anvil did not start listening within "${startupTimeoutMs}" ms. Check the fork URL and Anvil arguments.${details ? ` ${details}` : ""}`,
+        ),
+      );
+    }, startupTimeoutMs);
+
+    const fail = (error: AnvilStartupError) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      globalThis.clearTimeout(startupTimeout);
+      signal?.removeEventListener("abort", abortStartup);
+      lifecycle.stopForCleanup();
+      void lifecycle.processClosed.then(
+        () => reject(error),
+        (cleanupError) =>
+          reject(
+            createAnvilFailureCleanupError({
+              cleanupError,
+              failure: error,
+              message:
+                "Anvil failed during startup and cleanup also failed. Inspect both failures and stop the process manually before retrying.",
+            }),
+          ),
+      );
+    };
+
+    function abortStartup() {
+      fail(
+        new AnvilStartupError(
+          "Anvil startup was cancelled before its RPC server began listening. Retry when startup can continue.",
+          { cause: signal?.reason },
+        ),
+      );
+    }
+    subprocess.stdout.on("data", (data) => {
+      // Anvil can split its listening message across stdout chunks.
+      stdout = `${stdout}${data.toString()}`.slice(-1_024);
+      const listenMatch = stdout.match(/Listening on 127\.0\.0\.1:(\d+)\r?\n/);
+      if (!listenMatch || settled) {
+        return;
+      }
+      const listenedPort = listenMatch[1];
+      if (listenedPort === undefined) {
+        return;
+      }
+
+      port = Number.parseInt(listenedPort, 10);
+      listening = true;
+      settled = true;
+      globalThis.clearTimeout(startupTimeout);
+      signal?.removeEventListener("abort", abortStartup);
+      resolve(port);
+    });
+
+    subprocess.stderr.on("data", (data) => {
+      append(
+        data.toString(),
+        settled && !lifecycle.stopRequested() ? port : undefined,
+      );
+    });
+
+    subprocess.on("error", (error) => {
+      // Node spawn errors retain raw CLI arguments in `spawnargs`, including fork credentials.
+      const cause = formatAnvilCause(error);
+      if (listening) {
+        // Keep `close` as cleanup owner so a failed kill cannot unref a live child early.
+        lifecycle.noteProcessError(cause);
+        return;
+      }
+      fail(
+        new AnvilStartupError(
+          `Anvil failed to start on port "${port || "auto"}". Check that the binary and arguments are valid.`,
+          { cause },
+        ),
+      );
+    });
+
+    subprocess.once("close", (code, killSignal) => {
+      const details = getDetails();
+      void lifecycle.finish(
+        { code, signal: killSignal },
+        { listening, details },
+      );
+      if (settled) {
+        return;
+      }
+      fail(
+        new AnvilStartupError(
+          `Anvil exited before listening on port "${port || "auto"}" (code "${code}", signal "${killSignal}").${details ? ` ${details}` : ""}`,
+        ),
+      );
+    });
+
+    if (!settled) {
+      signal?.addEventListener("abort", abortStartup, { once: true });
+      if (signal?.aborted) {
+        abortStartup();
+      }
+    }
+  });
+}
+
+function getAnvilEnv(forkProxy: ForkProxy | undefined, forkCache: ForkCache) {
+  const originalHome = homedir();
+  const dataHome =
+    process.env.XDG_DATA_HOME ??
+    (process.platform === "win32"
+      ? (process.env.LOCALAPPDATA ?? join(originalHome, "AppData/Local"))
+      : join(originalHome, ".local/share"));
+  const configHome =
+    process.env.XDG_CONFIG_HOME ?? join(originalHome, ".config");
+  return {
+    ...process.env,
+    ...(forkCache && {
+      XDG_DATA_HOME: dataHome,
+      XDG_CONFIG_HOME: configHome,
+      ASDF_DATA_DIR: process.env.ASDF_DATA_DIR ?? join(originalHome, ".asdf"),
+      MISE_DATA_DIR: process.env.MISE_DATA_DIR ?? join(dataHome, "mise"),
+      MISE_CONFIG_DIR: process.env.MISE_CONFIG_DIR ?? join(configHome, "mise"),
+      HOME: forkCache.home,
+      ...(process.platform === "win32" && { USERPROFILE: forkCache.home }),
+    }),
+    ...(forkProxy && {
+      HTTP_PROXY: forkProxy.url,
+      http_proxy: forkProxy.url,
+      NO_PROXY: "",
+      no_proxy: "",
+    }),
+  };
 }
 
 /**
@@ -420,87 +1003,10 @@ export const spawnAnvil = async (
 
   const {
     binary = "anvil",
-    redactForkUrl: redactForkUrlOption,
+    redactForkUrl: _redactForkUrl,
     ...anvilArgs
   } = args;
-  const shouldRedactForkCredentials =
-    redactForkUrlOption ?? process.env.CI === "true";
-  const diagnosticRedactions: {
-    readonly replacement: string;
-    readonly value: string;
-  }[] = [];
-  if (args.forkUrl)
-    diagnosticRedactions.push({
-      replacement: "<redacted-fork-url>",
-      value: args.forkUrl,
-    });
-  for (const value of Object.values(args.forkHeader ?? {})) {
-    if (
-      value !== "" &&
-      !diagnosticRedactions.some((redaction) => redaction.value === value)
-    )
-      diagnosticRedactions.push({
-        replacement: "<redacted-fork-header>",
-        value,
-      });
-  }
-  diagnosticRedactions.sort((a, b) => b.value.length - a.value.length);
-  const maxRedactionLength = shouldRedactForkCredentials
-    ? (diagnosticRedactions[0]?.value.length ?? 0)
-    : 0;
-  const formatAnvilDiagnostics = (diagnostics: string) => {
-    if (!shouldRedactForkCredentials || diagnosticRedactions.length === 0)
-      return diagnostics;
-
-    const formatted: string[] = [];
-    let cursor = 0;
-    let plainStart = 0;
-    while (cursor < diagnostics.length) {
-      const redaction = diagnosticRedactions.find(({ value }) =>
-        diagnostics.startsWith(value, cursor),
-      );
-      if (redaction === undefined) {
-        cursor += 1;
-        continue;
-      }
-
-      formatted.push(
-        diagnostics.slice(plainStart, cursor),
-        redaction.replacement,
-      );
-      cursor += redaction.value.length;
-      plainStart = cursor;
-    }
-    formatted.push(diagnostics.slice(plainStart));
-    return formatted.join("");
-  };
-  const formatAnvilCause = (cause: unknown) => {
-    if (!shouldRedactForkCredentials || diagnosticRedactions.length === 0)
-      return cause;
-    if (typeof cause === "string") return formatAnvilDiagnostics(cause);
-    if (!(cause instanceof Error)) return cause;
-
-    // Clone errors before replacing credential-bearing Node spawn metadata.
-    const formattedCause = Object.create(
-      Object.getPrototypeOf(cause),
-      Object.getOwnPropertyDescriptors(cause),
-    ) as Error;
-    for (const property of Reflect.ownKeys(formattedCause)) {
-      const value = Reflect.get(formattedCause, property);
-      if (typeof value === "string")
-        Reflect.set(formattedCause, property, formatAnvilDiagnostics(value));
-      else if (Array.isArray(value))
-        Reflect.set(
-          formattedCause,
-          property,
-          value.map((item) =>
-            typeof item === "string" ? formatAnvilDiagnostics(item) : item,
-          ),
-        );
-    }
-    return formattedCause;
-  };
-
+  const diagnostics = createAnvilDiagnostics(args);
   const forceKillAfterMs =
     options.forceKillAfterMs ??
     (args.dumpState !== undefined || args.state !== undefined
@@ -514,11 +1020,11 @@ export const spawnAnvil = async (
       : (args.timeout ?? ANVIL_FORK_REQUEST_TIMEOUT_MS) * (retries + 1) +
         (args.forkRetryBackoff ?? ANVIL_FORK_RETRY_BACKOFF_MS) * retries +
         ANVIL_STARTUP_GRACE_MS);
-  let port = args.port ?? 0;
+  const port = args.port ?? 0;
   let forkProxy: ForkProxy | undefined;
-
-  let forkCache: Awaited<ReturnType<typeof isolateForkCache>>;
+  let forkCache: ForkCache;
   let childLaunched = false;
+
   try {
     // Keep a trailing `@<block>` on the URL passed to Anvil, which parses it.
     const forkUrlParts = anvilArgs.forkUrl?.match(
@@ -529,24 +1035,20 @@ export const spawnAnvil = async (
       upstreamUrl !== undefined &&
       /^https?:/i.test(upstreamUrl) &&
       !EGRESS_PROXY_VARIABLES.some((name) => process.env[name])
-    )
-      forkProxy = await startForkProxy(upstreamUrl);
-    if (upstreamUrl !== undefined && !anvilArgs.noStorageCaching)
+    ) {
+      forkProxy = await startForkProxy(upstreamUrl, options.bootstrapBlock);
+    }
+    if (upstreamUrl !== undefined && !anvilArgs.noStorageCaching) {
+      const blockSuffix = forkUrlParts?.[2];
+      const pinnedBlock =
+        blockSuffix && /^@\d+$/.test(blockSuffix)
+          ? BigInt(blockSuffix.slice(1))
+          : undefined;
       forkCache = await isolateForkCache(
         undefined,
-        anvilArgs.forkBlockNumber ??
-          (forkUrlParts?.[2] && /^@\d+$/.test(forkUrlParts[2])
-            ? BigInt(forkUrlParts[2].slice(1))
-            : undefined),
+        anvilArgs.forkBlockNumber ?? pinnedBlock,
       );
-    const originalHome = homedir();
-    const dataHome =
-      process.env.XDG_DATA_HOME ??
-      (process.platform === "win32"
-        ? (process.env.LOCALAPPDATA ?? join(originalHome, "AppData/Local"))
-        : join(originalHome, ".local/share"));
-    const configHome =
-      process.env.XDG_CONFIG_HOME ?? join(originalHome, ".config");
+    }
     const subprocess = spawn(
       binary,
       toArgs({
@@ -563,340 +1065,40 @@ export const spawnAnvil = async (
                 .slice(0, 16)}.invalid${forkUrlParts?.[2] ?? ""}`,
         port,
       }),
-      {
-        env: {
-          ...process.env,
-          ...(forkCache && {
-            XDG_DATA_HOME: dataHome,
-            XDG_CONFIG_HOME: configHome,
-            ASDF_DATA_DIR:
-              process.env.ASDF_DATA_DIR ?? join(originalHome, ".asdf"),
-            MISE_DATA_DIR: process.env.MISE_DATA_DIR ?? join(dataHome, "mise"),
-            MISE_CONFIG_DIR:
-              process.env.MISE_CONFIG_DIR ?? join(configHome, "mise"),
-            HOME: forkCache.home,
-            ...(process.platform === "win32" && {
-              USERPROFILE: forkCache.home,
-            }),
-          }),
-          ...(forkProxy && {
-            HTTP_PROXY: forkProxy.url,
-            http_proxy: forkProxy.url,
-            NO_PROXY: "",
-            no_proxy: "",
-          }),
-        },
-      },
+      { env: getAnvilEnv(forkProxy, forkCache) },
     );
     childLaunched = true;
     subprocess.stderr.setEncoding("utf8");
-    let stopInitiated = false;
-    let stopRequested = false;
-    let forceKillSent = false;
-    let forceKillTimeout: ReturnType<typeof globalThis.setTimeout> | undefined;
-    let processCloseTimeout:
-      | ReturnType<typeof globalThis.setTimeout>
-      | undefined;
-    let processCloseObserved = false;
-    let processError: unknown;
-    let cleanupAwaited = false;
-    const {
-      promise: processCloseResult,
-      resolve: resolveProcessClosed,
-      reject: rejectProcessClosed,
-    } = Promise.withResolvers<void>();
-    const processClosed = processCloseResult.finally(async () => {
-      forkProxy?.close();
-      subprocess.stdin.destroy();
-      subprocess.stdout.destroy();
-      subprocess.stderr.destroy();
-      subprocess.unref();
+    const lifecycle = trackAnvilProcess(subprocess, {
+      forkCache,
+      forkProxy,
+      forceKillAfterMs,
+      formatAnvilCause: diagnostics.formatAnvilCause,
     });
-    // Keep `stop()` backward-compatible without hiding a cleanup failure from stop-only callers.
-    void processClosed.catch((error) => {
-      if (!cleanupAwaited)
-        console.warn(
-          "Anvil process lifecycle failed. Use stopAndWait() to handle process and cleanup failures.",
-          error,
-        );
+    const listeningPort = await waitForAnvilListening(subprocess, {
+      initialPort: port,
+      signal: options.signal,
+      startupTimeoutMs,
+      diagnostics,
+      lifecycle,
     });
-
-    // Signal synchronously for API compatibility; close owns cleanup.
-    const stopProcess = () => {
-      if (stopInitiated) return false;
-      stopInitiated = true;
-      if (processCloseObserved) return false;
-
-      // An exit code can be visible before stdio closes. Wait for `close`.
-      let signalSent = false;
-      if (subprocess.exitCode === null && subprocess.signalCode === null) {
-        stopRequested = true;
-        try {
-          signalSent = subprocess.kill("SIGINT");
-        } catch (error) {
-          console.warn(
-            "Failed to send SIGINT to Anvil.",
-            formatAnvilCause(error),
-          );
-        }
-
-        if (forceKillAfterMs !== false) {
-          forceKillTimeout = globalThis.setTimeout(() => {
-            if (processCloseObserved || subprocess.exitCode !== null) return;
-
-            try {
-              forceKillSent = subprocess.kill("SIGKILL");
-              if (!forceKillSent)
-                console.warn("Failed to send SIGKILL to Anvil after timeout.");
-            } catch (error) {
-              console.warn(
-                "Failed to send SIGKILL to Anvil after timeout.",
-                formatAnvilCause(error),
-              );
-            }
-          }, forceKillAfterMs);
-          if (
-            typeof forceKillTimeout === "object" &&
-            "unref" in forceKillTimeout
-          ) {
-            forceKillTimeout.unref();
-          }
-        }
-      }
-
-      const processCloseTimeoutMs =
-        forceKillAfterMs === false
-          ? signalSent
-            ? undefined
-            : ANVIL_PROCESS_CLOSE_GRACE_MS
-          : forceKillAfterMs + ANVIL_PROCESS_CLOSE_GRACE_MS;
-      if (processCloseTimeoutMs !== undefined) {
-        processCloseTimeout = globalThis.setTimeout(() => {
-          if (processCloseObserved) return;
-          rejectProcessClosed(
-            new AnvilCleanupError(
-              `Anvil did not close within "${processCloseTimeoutMs}" ms after shutdown began. Stop it manually before retrying.`,
-              processError === undefined ? undefined : { cause: processError },
-            ),
-          );
-        }, processCloseTimeoutMs);
-        if (
-          typeof processCloseTimeout === "object" &&
-          "unref" in processCloseTimeout
-        ) {
-          processCloseTimeout.unref();
-        }
-      }
-
-      return signalSent;
-    };
-
-    const stopAndWait = async () => {
-      cleanupAwaited = true;
-      const signalSent = stopProcess();
-      await processClosed;
-      return signalSent;
-    };
-
-    await new Promise<void>((resolve, reject) => {
-      let listening = false;
-      let settled = false;
-      let stderr = "";
-      let stderrCarry = "";
-      let stderrLine = "";
-      let stdout = "";
-      const diagnosticCarryLength = Math.max(maxRedactionLength - 1, 0);
-      const stderrLineBufferLength =
-        ANVIL_DIAGNOSTICS_MAX_LENGTH + diagnosticCarryLength;
-      const startupTimeout = globalThis.setTimeout(() => {
-        const details = `${stderr}${formatAnvilDiagnostics(stderrCarry)}`
-          .slice(-ANVIL_DIAGNOSTICS_MAX_LENGTH)
-          .trim();
-        fail(
-          new AnvilStartupError(
-            `Anvil did not start listening within "${startupTimeoutMs}" ms. Check the fork URL and Anvil arguments.${details ? ` ${details}` : ""}`,
-          ),
-        );
-      }, startupTimeoutMs);
-
-      const fail = (error: AnvilStartupError) => {
-        if (settled) return;
-        settled = true;
-        globalThis.clearTimeout(startupTimeout);
-        options.signal?.removeEventListener("abort", abortStartup);
-        cleanupAwaited = true;
-        stopProcess();
-        void processClosed.then(
-          () => reject(error),
-          (cleanupError) =>
-            reject(
-              createAnvilFailureCleanupError({
-                cleanupError,
-                failure: error,
-                message:
-                  "Anvil failed during startup and cleanup also failed. Inspect both failures and stop the process manually before retrying.",
-              }),
-            ),
-        );
-      };
-
-      function abortStartup() {
-        fail(
-          new AnvilStartupError(
-            "Anvil startup was cancelled before its RPC server began listening. Retry when startup can continue.",
-            { cause: options.signal?.reason },
-          ),
-        );
-      }
-      subprocess.stdout.on("data", (data) => {
-        // Anvil can split its listening message across stdout chunks.
-        stdout = `${stdout}${data.toString()}`.slice(-1_024);
-        const listenMatch = stdout.match(
-          /Listening on 127\.0\.0\.1:(\d+)\r?\n/,
-        );
-        if (!listenMatch || settled) return;
-        const listenedPort = listenMatch[1];
-        if (listenedPort === undefined) return;
-
-        port = Number.parseInt(listenedPort, 10);
-        listening = true;
-        settled = true;
-        globalThis.clearTimeout(startupTimeout);
-        options.signal?.removeEventListener("abort", abortStartup);
-        resolve();
-      });
-
-      subprocess.stderr.on("data", (data) => {
-        // Startup warnings are diagnostic; only timeout, error, or early close is fatal.
-        const dataString = data.toString();
-        if (!shouldRedactForkCredentials || diagnosticRedactions.length === 0) {
-          stderr = `${stderr}${dataString}`.slice(
-            -ANVIL_DIAGNOSTICS_MAX_LENGTH,
-          );
-        } else {
-          const rawDiagnostics = `${stderrCarry}${dataString}`;
-          const safeEnd = rawDiagnostics.length - diagnosticCarryLength;
-          let cursor = 0;
-          while (cursor < safeEnd) {
-            const redaction = diagnosticRedactions.find(({ value }) =>
-              rawDiagnostics.startsWith(value, cursor),
-            );
-            cursor += redaction?.value.length ?? 1;
-          }
-          stderr =
-            `${stderr}${formatAnvilDiagnostics(rawDiagnostics.slice(0, cursor))}`.slice(
-              -ANVIL_DIAGNOSTICS_MAX_LENGTH,
-            );
-          stderrCarry = rawDiagnostics.slice(cursor);
-        }
-        if (!settled || stopRequested) return;
-
-        if (!shouldRedactForkCredentials || diagnosticRedactions.length === 0) {
-          console.warn(`[port ${port || "??"}] ${dataString}`);
-          return;
-        }
-
-        // Buffer complete lines so stream chunks cannot split a credential around replacement.
-        stderrLine += dataString;
-        const lastLineBreak = stderrLine.lastIndexOf("\n");
-        if (lastLineBreak !== -1) {
-          console.warn(
-            `[port ${port || "??"}] ${formatAnvilDiagnostics(stderrLine.slice(0, lastLineBreak + 1))}`,
-          );
-          stderrLine = stderrLine.slice(lastLineBreak + 1);
-        }
-        if (stderrLine.length > stderrLineBufferLength) {
-          const safeEnd = stderrLine.length - diagnosticCarryLength;
-          let cursor = 0;
-          while (cursor < safeEnd) {
-            const redaction = diagnosticRedactions.find(({ value }) =>
-              stderrLine.startsWith(value, cursor),
-            );
-            cursor += redaction?.value.length ?? 1;
-          }
-          console.warn(
-            `[port ${port || "??"}] ${formatAnvilDiagnostics(stderrLine.slice(0, cursor))}`,
-          );
-          stderrLine = stderrLine.slice(cursor);
-        }
-      });
-
-      subprocess.on("error", (error) => {
-        // Node spawn errors retain raw CLI arguments in `spawnargs`, including fork credentials.
-        const cause = formatAnvilCause(error);
-        if (listening) {
-          // Keep `close` as cleanup owner so a failed kill cannot unref a live child early.
-          processError ??= cause;
-          return;
-        }
-        fail(
-          new AnvilStartupError(
-            `Anvil failed to start on port "${port || "auto"}". Check that the binary and arguments are valid.`,
-            { cause },
-          ),
-        );
-      });
-
-      subprocess.once("close", (code, signal) => {
-        processCloseObserved = true;
-        const details = `${stderr}${formatAnvilDiagnostics(stderrCarry)}`
-          .slice(-ANVIL_DIAGNOSTICS_MAX_LENGTH)
-          .trim();
-        const expectedShutdown =
-          stopRequested &&
-          (code === 0 ||
-            (code === null &&
-              (signal === "SIGINT" ||
-                (signal === "SIGKILL" && forceKillSent))));
-        const processExitError =
-          // A close before the listening banner confirms cleanup for a startup failure.
-          listening && (processError !== undefined || !expectedShutdown)
-            ? new AnvilProcessError(
-                `Anvil ${stopRequested ? "failed during shutdown" : "exited unexpectedly after startup"} (code "${code}", signal "${signal}"). Retry the test and inspect the process logs.${
-                  details ? ` ${details}` : ""
-                }`,
-                processError === undefined
-                  ? undefined
-                  : { cause: processError },
-              )
-            : undefined;
-        if (forceKillTimeout !== undefined)
-          globalThis.clearTimeout(forceKillTimeout);
-        if (processCloseTimeout !== undefined)
-          globalThis.clearTimeout(processCloseTimeout);
-        void (async () => {
-          await forkCache?.close();
-          if (processExitError === undefined) resolveProcessClosed();
-          else rejectProcessClosed(processExitError);
-        })();
-        if (settled) return;
-        fail(
-          new AnvilStartupError(
-            `Anvil exited before listening on port "${port || "auto"}" (code "${code}", signal "${signal}").${details ? ` ${details}` : ""}`,
-          ),
-        );
-      });
-
-      if (!settled) {
-        options.signal?.addEventListener("abort", abortStartup, { once: true });
-        if (options.signal?.aborted) abortStartup();
-      }
-    });
-
+    forkProxy?.finishStartup();
     return {
-      rpcUrl: `http://localhost:${port}`,
-      stop: stopProcess,
-      stopAndWait,
+      rpcUrl: `http://localhost:${listeningPort}`,
+      stop: lifecycle.stop,
+      stopAndWait: lifecycle.stopAndWait,
     };
   } catch (error) {
     forkProxy?.close();
-    if (!childLaunched) await forkCache?.close();
+    if (!childLaunched) {
+      await forkCache?.close();
+    }
     const failure =
       error instanceof AnvilStartupError || error instanceof AnvilCleanupError
         ? error
         : new AnvilStartupError(
             "Anvil failed before startup completed. Check the binary, arguments, and temporary directory.",
-            { cause: formatAnvilCause(error) },
+            { cause: diagnostics.formatAnvilCause(error) },
           );
 
     throw failure;

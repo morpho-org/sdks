@@ -51,7 +51,7 @@ unpublished versions fail the full plan before any npm mutations.
 
 ## CI setup
 
-`setup-npm.ts` downloads npm **11.21.0**, verifies its reviewed SHA-512 digest,
+`setup-npm.ts` downloads npm **11.21.2**, verifies its reviewed SHA-512 digest,
 then extracts its bundled distribution. It runs no install scripts and installs
 no dependencies. The workflow's bundled npm 11.20.0 supports OIDC publishing but
 not OIDC dist-tag operations. Both identity verification and publishing use the

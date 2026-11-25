@@ -13,7 +13,7 @@ export type SimulationMode = (typeof SIMULATION_MODES)[number];
 export interface StateBlock {
   /** Block number the simulation runs on top of. */
   readonly number: bigint;
-  /** Hash of that block; compared to the next block's `parentHash`. */
+  /** Hash selecting simulation state with `requireCanonical: true`; also checked against successor `parentHash`. */
   readonly hash: Hex;
   /** Block timestamp in Unix seconds; the simulated block must not be earlier. */
   readonly timestamp: bigint;
@@ -56,15 +56,18 @@ export interface SimulateParams {
    * "latest" block is not final). Only canonical (mined) blocks can be
    * pinned; `pending` has no stable hash and is rejected at runtime. */
   readonly blockNumber?: bigint | Exclude<BlockTag, "pending">;
-  /** State block supplied by the caller, so `simulate()` skips the block
-   * lookup; with no asset metadata reads it then sends only `eth_simulateV1`.
+  /** State block supplied by the caller, verified with one `eth_getBlockByHash`
+   * before code or asset reads. Mismatched number, hash or timestamp is an
+   * `InvalidSimulationResponseError`; a missing hash is an `RpcTransportError`.
    * Cannot be combined with `blockNumber`.
-   * Not checked against the endpoint: `hash` is compared only when the node
-   * reports the next block (its `parentHash`) and `parentHashCheck` is on (off
-   * by default on Stable, 988), and `timestamp` only bounds the simulated
-   * block's timestamp. On Monad (143), supply a finalized block: `latest` is
-   * not final there, so the block at that number can change and fail the
-   * `parentHash` check. */
+   * The hash selects onchain code and metadata reads and simulation state with
+   * `requireCanonical: true`, requesting rejection of retained non-canonical blocks;
+   * the supplied fields must describe the same block. The successor
+   * `parentHash` check is independent (off by default on Stable, 988), and
+   * `timestamp` only bounds the simulated block's timestamp.
+   * On Monad (143), supply a finalized block: `latest` is
+   * not final there, so the block at that number can be replaced and its hash
+   * rejected as an `RpcTransportError`. */
   readonly block?: StateBlock;
   /**
    * Caller-controlled hypothetical state for all calls in `eth_simulateV1`, in
@@ -75,15 +78,17 @@ export interface SimulateParams {
    */
   readonly stateOverrides?: SimulationStateOverrides;
   /**
-   * Required caller-selected quotes, or the explicit
+   * Required caller-selected quotes and/or validated control effects, or the explicit
    * `"none"` opt-out, which skips limit reads and checks, but not final signed-request use checks. Omitted `limits`
    * is rejected rather than silently unchecked.
+   * Empty operations require non-empty validated effects covering every caller
+   * transaction, excluding preparations. Effect violations report `SimulationEffectError`.
    */
   readonly limits: SimulationLimits | "none";
 }
 
 /** Input to `simulate()` accepting typed input limits alongside quote limits. */
 export interface SimulateInputParams extends Omit<SimulateParams, "limits"> {
-  /** Caller-selected quotes or typed inputs with pinned-block derivations, or the explicit opt-out. */
+  /** Caller-selected quotes, typed inputs with pinned-block derivations and/or validated effects, or the explicit opt-out. Empty operations require validated effects covering every caller transaction, excluding preparations; effect violations report `SimulationEffectError`. */
   readonly limits: SimulationLimits | SimulationInputLimits | "none";
 }

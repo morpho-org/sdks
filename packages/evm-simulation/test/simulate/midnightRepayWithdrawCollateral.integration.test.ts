@@ -49,6 +49,7 @@ import {
 import {
   simulateOrThrowFirst,
   simulationClientFor,
+  unwrapReport,
 } from "../../src/test-helpers/index.js";
 
 const takeRepayViolation = (field: string) => (error: unknown) =>
@@ -543,17 +544,48 @@ describe.sequential("Midnight repay-withdraw limits — Base fork", () => {
       receiver: RECEIVER,
       collateralWithdrawals: withdrawals,
     });
-    const withdrawn = await simulateOrThrowFirst(configFor(client), {
-      transactions: [asTransaction(user, withdraw)],
-      limits: toSimulationLimits(withdraw.action, {
-        owner: user,
-        receiver: RECEIVER,
-      }),
-    });
+    const withdrawnReport = await simulate(
+      configFor(client),
+      {
+        transactions: [asTransaction(user, withdraw)],
+        limits: toSimulationLimits(withdraw.action, {
+          owner: user,
+          receiver: RECEIVER,
+        }),
+      },
+      { timeoutMs: 30_000 },
+    );
+    expect(withdrawnReport.ok).toBe(true);
+    expect(withdrawnReport.warnings.map(({ code }) => code)).not.toContain(
+      "UNEXPECTED_POSITION_CHANGE",
+    );
+    const withdrawn = unwrapReport(withdrawnReport);
     expect(
       withdrawn.verification.operations[0]?.checkedLimits.quote
         .collateralWithdrawals,
     ).toEqual(withdrawals);
+    const quotedWithdrawal = midnightWithdrawCollateralBatch({
+      chainId: base.id,
+      market: fixture.market,
+      onBehalf: user,
+      receiver: RECEIVER,
+      collateralWithdrawals: [withdrawals[0]!],
+    });
+    const unquoted = await simulate(
+      configFor(client),
+      {
+        transactions: [asTransaction(user, withdraw)],
+        limits: toSimulationLimits(quotedWithdrawal.action, {
+          owner: user,
+          receiver: RECEIVER,
+        }),
+      },
+      { timeoutMs: 30_000 },
+    );
+    expect(unquoted.ok).toBe(true);
+    expect(unquoted.warnings.map(({ code }) => code)).toContain(
+      "UNEXPECTED_POSITION_CHANGE",
+    );
     await createDebt(client, { user, fixture });
     const unhealthy = midnightWithdrawCollateralBatch({
       chainId: base.id,
@@ -643,15 +675,28 @@ describe.sequential("Midnight repay-withdraw limits — Base fork", () => {
       takeableOffers: offers,
       deadline: Time.timestamp() + 600n,
     });
-    const error = await simulateOrThrowFirst(configFor(client), {
-      transactions: [
-        asTransaction(user, repay),
-        asTransaction(user, laterBorrow),
-      ],
-      limits,
-    }).catch((caught: unknown) => caught);
-    expect(error).toBeInstanceOf(ConsumerLimitViolationError);
-    expect((error as Error).message).toContain("position.maxDebt");
+    const report = await simulate(
+      configFor(client),
+      {
+        transactions: [
+          asTransaction(user, repay),
+          asTransaction(user, laterBorrow),
+        ],
+        limits,
+      },
+      { timeoutMs: 30_000 },
+    );
+    expect(report.ok).toBe(false);
+    expect(report.warnings.map(({ code }) => code)).toContain(
+      "UNEXPECTED_POSITION_CHANGE",
+    );
+    const limitError =
+      !report.ok &&
+      report.failures.find(
+        (failure) => failure instanceof ConsumerLimitViolationError,
+      );
+    expect(limitError).toBeInstanceOf(ConsumerLimitViolationError);
+    expect((limitError as Error).message).toContain("position.maxDebt");
   });
 
   test("withdraw-all delivers to an external receiver and a wrong limit receiver fails", async ({
@@ -1031,15 +1076,28 @@ describe.sequential("Midnight take-repay-withdraw limits — Base fork", () => {
       takeableOffers: offers,
       deadline: Time.timestamp() + 600n,
     });
-    const error = await simulateOrThrowFirst(configFor(client), {
-      transactions: [
-        asTransaction(user, repayOnly),
-        asTransaction(user, laterBorrow),
-      ],
-      limits: toSimulationLimits(repayOnly.action, { owner: user }),
-    }).catch((caught: unknown) => caught);
-    expect(error).toBeInstanceOf(ConsumerLimitViolationError);
-    expect((error as Error).message).toContain("position.maxDebt");
+    const report = await simulate(
+      configFor(client),
+      {
+        transactions: [
+          asTransaction(user, repayOnly),
+          asTransaction(user, laterBorrow),
+        ],
+        limits: toSimulationLimits(repayOnly.action, { owner: user }),
+      },
+      { timeoutMs: 30_000 },
+    );
+    expect(report.ok).toBe(false);
+    expect(report.warnings.map(({ code }) => code)).toContain(
+      "UNEXPECTED_POSITION_CHANGE",
+    );
+    const limitError =
+      !report.ok &&
+      report.failures.find(
+        (failure) => failure instanceof ConsumerLimitViolationError,
+      );
+    expect(limitError).toBeInstanceOf(ConsumerLimitViolationError);
+    expect((limitError as Error).message).toContain("position.maxDebt");
   });
 
   test("stale offers fall back to direct repayment; short collateral delivery fails", async ({

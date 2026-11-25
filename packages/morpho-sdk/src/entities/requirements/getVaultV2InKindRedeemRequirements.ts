@@ -8,7 +8,7 @@ import {
   encodeErc20Approval,
   encodeVaultSharesPermit,
 } from "../../actions/index.js";
-import { validateClientChainId } from "../../actions/requirements/validateClientChainId.js";
+import { createChainCheck } from "../../actions/requirements/chainCheck.js";
 import {
   type ActionRequirement,
   ExpiredDeadlineError,
@@ -55,14 +55,20 @@ export async function getVaultV2InKindRedeemRequirements(
   if (deadline <= requirementsTimestamp) {
     throw new ExpiredDeadlineError(deadline, requirementsTimestamp);
   }
-  await validateClientChainId(client, chainId);
-  await assertRegistryTargetsHaveCode(client, chainId, [
-    {
-      role: "bundles.vaultExitBundlesV1",
-      address: getChainAddress(chainId, "bundles.vaultExitBundlesV1"),
-    },
-    { role: "blue", address: getChainAddress(chainId, "blue") },
-  ]);
+  const chainCheck = createChainCheck(client, chainId);
+  await chainCheck();
+  await assertRegistryTargetsHaveCode(
+    client,
+    chainId,
+    [
+      {
+        role: "bundles.vaultExitBundlesV1",
+        address: getChainAddress(chainId, "bundles.vaultExitBundlesV1"),
+      },
+      { role: "blue", address: getChainAddress(chainId, "blue") },
+    ],
+    chainCheck,
+  );
   // Vault gates are intentionally left to the final transaction. A receive gate may inspect
   // VaultExitBundlesV1's transient `initiator`, which is populated only during the actual
   // periphery call. A send-share gate is arbitrary external code and is evaluated repeatedly

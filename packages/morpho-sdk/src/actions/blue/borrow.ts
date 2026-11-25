@@ -1,5 +1,4 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
-import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
 import type {
   AuthorizationRequirementSignature,
@@ -8,7 +7,7 @@ import type {
   Transaction,
   VaultV2BlueReallocation,
 } from "../../types/index.js";
-import { blueSupplyCollateralBorrow } from "./supplyCollateralBorrow.js";
+import { buildBlueBorrow, parseBlueBorrow } from "./borrow.internal.js";
 
 /** Parameters for {@link blueBorrow}. */
 export interface BlueBorrowParams {
@@ -60,7 +59,8 @@ export interface BlueBorrowParams {
  * @param params.metadata - Optional transaction metadata.
  * @returns A deep-frozen `Readonly<Transaction<BlueBorrowAction>>` whose calldata invokes the
  *   combined BlueBundlesV1 entrypoint with a zero collateral leg.
- * @throws {MarketIdMismatchError} when `marketParams.id` does not hash from its tuple fields.
+ * @throws {MarketIdMismatchError} when the target market or a reallocation source market has an
+ *   `id` that does not hash from its tuple fields.
  * @throws {NegativeInputError} when an amount, LTV, fee, or reallocation penalty is negative.
  * @throws {NonPositiveInputError} when the borrow, deadline, or reallocation amount is not positive.
  * @throws {InputExceedsMaxError} when a fee, reallocation amount, or penalty exceeds its bound.
@@ -96,17 +96,5 @@ export interface BlueBorrowParams {
  */
 export const blueBorrow = (
   params: BlueBorrowParams,
-): Readonly<Transaction<BlueBorrowAction>> => {
-  const transaction = blueSupplyCollateralBorrow({
-    ...params,
-    args: {
-      ...params.args,
-      collateralAssets: 0n,
-    },
-  });
-
-  return deepFreeze({
-    ...transaction,
-    action: { ...transaction.action, type: "blueBorrow" },
-  });
-};
+): Readonly<Transaction<BlueBorrowAction>> =>
+  buildBlueBorrow(parseBlueBorrow(params));

@@ -1,22 +1,14 @@
+import { type MarketInput, MarketUtils } from "@morpho-org/midnight-sdk";
+import { deepFreeze } from "@morpho-org/morpho-ts";
+import { type Address, maxUint256 } from "viem";
+import { parseDeadline, parseUint256 } from "../../helpers/parse.js";
 import {
-  type MarketInput,
-  MarketUtils,
-  midnightBundlesV2Abi,
-} from "@morpho-org/midnight-sdk";
-import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
-import { type Address, maxUint256, zeroAddress } from "viem";
-import {
-  encodeMidnightCalldata,
-  encodeMidnightMarketId,
-} from "../../helpers/encodeMidnightCalldata.js";
-import { addTransactionMetadata } from "../../helpers/index.js";
-import {
-  validateDeadline,
-  validateMidnightNativeAmount,
-  validateUint256Field,
-} from "../../helpers/validate.js";
+  type MidnightMarket,
+  parseMidnightMarketDeployment,
+  parseMidnightMarketInput,
+  parseMidnightNativeFunding,
+} from "../../helpers/parseMidnight.js";
 import { validateMidnightAddress } from "../../helpers/validateMidnightAccount.js";
-import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import { validateMidnightReceiver } from "../../helpers/validateMidnightReceiver.js";
 import { validatePositiveInput } from "../../helpers/validatePositiveInput.js";
 import {
@@ -28,6 +20,8 @@ import {
   NonPositiveInputError,
   type Transaction,
 } from "../../types/index.js";
+import { encodeMidnightRepayWithdrawCollateral } from "./encode.js";
+import { snapshotMidnightMetadata } from "./parse.js";
 
 /** Parameters for encoding a direct Midnight repayment and/or collateral withdrawal. */
 export interface MidnightRepayWithdrawCollateralParams {
@@ -87,6 +81,7 @@ export interface MidnightRepayWithdrawCollateralParams {
  * @throws {NegativeInputError} when `repay.assets` or `nativeAmount` is negative.
  * @throws {NonPositiveInputError} when nothing is repaid or withdrawn, a withdrawal amount is zero, `repay.maxBuyerAssets` is zero, or `deadline` is not positive.
  * @throws {InputExceedsMaxError} when `repay.assets` or `repay.maxBuyerAssets` is at least `maxUint256`, a withdrawal amount or `deadline` exceeds uint256, or `nativeAmount` exceeds the maximum wNative pull, including zero for a withdraw-only call.
+ * @throws {InvalidMidnightNativeAmountTypeError} when `nativeAmount` is supplied as a non-bigint.
  * @throws {ChainWNativeMissingError} when wNative is not configured for the chain.
  * @throws {NativeAmountOnNonWNativeAssetError} when `market.loanToken` is not wNative.
  * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
@@ -115,8 +110,31 @@ export interface MidnightRepayWithdrawCollateralParams {
  */
 export const midnightRepayWithdrawCollateral = (
   params: MidnightRepayWithdrawCollateralParams,
-): Readonly<Transaction<MidnightRepayWithdrawCollateralAction>> => {
-  const { repay } = params;
+): Readonly<Transaction<MidnightRepayWithdrawCollateralAction>> =>
+  encodeMidnightRepayWithdrawCollateral(
+    parseMidnightRepayWithdrawCollateral(params),
+  );
+
+const parsedRepayWithdrawCollateral = Symbol();
+
+/** Owned inputs for the repayWithdrawCollateral encoder. @internal */
+export interface ParsedMidnightRepayWithdrawCollateral
+  extends Omit<MidnightRepayWithdrawCollateralParams, "market"> {
+  readonly market: MidnightMarket;
+  readonly nativeFunding: ReturnType<typeof parseMidnightNativeFunding>;
+  readonly deadline: bigint;
+  readonly [parsedRepayWithdrawCollateral]: true;
+}
+
+/** Parses static repayWithdrawCollateral constraints using the existing error order. @internal */
+export const parseMidnightRepayWithdrawCollateral = (
+  params: MidnightRepayWithdrawCollateralParams,
+): ParsedMidnightRepayWithdrawCollateral => {
+  const repay = Object.freeze(
+    params.repay.type === "assets"
+      ? { type: "assets" as const, assets: params.repay.assets }
+      : { type: "full" as const, maxBuyerAssets: params.repay.maxBuyerAssets },
+  );
   if (
     repay.type === "assets" &&
     repay.assets === 0n &&
@@ -136,17 +154,23 @@ export const midnightRepayWithdrawCollateral = (
     }
   }
 
-  validateMidnightMarket({ market: params.market, chainId: params.chainId });
+  const parsedMarket = parseMidnightMarketDeployment(
+    params.market,
+    params.chainId,
+  );
+  const collateralWithdrawals = params.collateralWithdrawals.map(
+    ({ collateralIndex, assets }) => ({ collateralIndex, assets }),
+  );
 
   for (const [
     index,
     { collateralIndex, assets },
-  ] of params.collateralWithdrawals.entries()) {
-    // Validation only; rejects non-positive amounts.
+  ] of collateralWithdrawals.entries()) {
+    // Validation only; retain main's positivity guard and the owned withdrawal ABI bound.
     validatePositiveInput(`collateralWithdrawals[${index}].assets`, assets);
-    validateUint256Field(`collateralWithdrawals[${index}].assets`, assets);
+    parseUint256(`collateralWithdrawals[${index}].assets`, assets);
     // Throws UnknownCollateralIndexError when the index is not configured on the market.
-    MarketUtils.getCollateralByIndex(params.market, collateralIndex);
+    MarketUtils.getCollateralByIndex(parsedMarket.struct, collateralIndex);
   }
 
   validateMidnightAddress("collateralReceiver", params.collateralReceiver);
@@ -154,14 +178,15 @@ export const midnightRepayWithdrawCollateral = (
     // Rejects receivers that would strand the withdrawn collateral in a contract.
     validateMidnightReceiver({
       chainId: params.chainId,
-      market: params.market,
+      market: parsedMarket.struct,
       field: "collateralReceiver",
       receiver: params.collateralReceiver,
     });
   }
 
   if (repay.type === "assets") {
-    validateUint256Field("repay.assets", repay.assets);
+    // Enforce the assets-repay ABI bound.
+    parseUint256("repay.assets", repay.assets);
     // An assets repay has no "whole debt" sentinel; use `{ type: "full" }` for that.
     if (repay.assets === maxUint256) {
       throw new InputExceedsMaxError({
@@ -171,9 +196,9 @@ export const midnightRepayWithdrawCollateral = (
       });
     }
   }
-  validateDeadline(params.deadline);
-  const market = MarketUtils.toStruct(params.market);
-  const nativeFunding = validateMidnightNativeAmount({
+  const deadline = parseDeadline(params.deadline);
+  const market = parsedMarket.struct;
+  const nativeFunding = parseMidnightNativeFunding({
     chainId: params.chainId,
     nativeAmount: params.nativeAmount,
     pulls: [
@@ -183,59 +208,20 @@ export const midnightRepayWithdrawCollateral = (
       },
     ],
   });
-  const args = [
-    true, // reduceOnly
-    true, // repayEnabled
-    [], // offerFills
-    params.collateralWithdrawals.map(({ collateralIndex, assets }) => ({
-      collateralIndex,
-      assets,
-    })), // collateralWithdrawals
-    params.collateralReceiver, // collateralReceiver
-    0n, // referralFeePct
-    zeroAddress, // referralFeeRecipient
-    // MidnightBundlesV2 checks maxContinuousFee only per offer fill; there are none here.
-    0n, // maxContinuousFee
-    params.deadline, // deadline
-    nativeFunding.wrappedNative, // wrappedNative
-  ] as const;
-
-  let tx = {
-    to: getChainAddress(params.chainId, "midnightBundlesV2"),
-    value: nativeFunding.value,
-    data:
-      repay.type === "assets"
-        ? encodeMidnightCalldata({
-            abi: midnightBundlesV2Abi,
-            functionName:
-              "midnightBundlesV2BuyWithAssetsTargetAndWithdrawCollateral",
-            args: [market, repay.assets, repay.assets, ...args],
-          })
-        : encodeMidnightCalldata({
-            abi: midnightBundlesV2Abi,
-            functionName:
-              "midnightBundlesV2BuyWithUnitsTargetAndWithdrawCollateral",
-            args: [market, maxUint256, repay.maxBuyerAssets, ...args],
-          }),
-  };
-
-  if (params.metadata) {
-    tx = addTransactionMetadata(tx, params.metadata);
-  }
-
   return deepFreeze({
-    ...tx,
-    action: {
-      type: "midnightRepayWithdrawCollateral",
-      args: {
-        market: encodeMidnightMarketId(params.market),
-        repay: { ...repay },
-        collateralWithdrawals: params.collateralWithdrawals.map(
-          ({ collateralIndex, assets }) => ({ collateralIndex, assets }),
-        ),
-        collateralReceiver: params.collateralReceiver,
-        deadline: params.deadline,
-      },
-    },
+    chainId: params.chainId,
+    market: parseMidnightMarketInput(
+      parsedMarket,
+      repay.type === "assets"
+        ? "midnightBundlesV2BuyWithAssetsTargetAndWithdrawCollateral"
+        : "midnightBundlesV2BuyWithUnitsTargetAndWithdrawCollateral",
+    ),
+    repay,
+    deadline,
+    nativeFunding,
+    collateralWithdrawals,
+    collateralReceiver: params.collateralReceiver,
+    metadata: snapshotMidnightMetadata(params.metadata),
+    [parsedRepayWithdrawCollateral]: true as const,
   });
 };

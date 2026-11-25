@@ -10,10 +10,10 @@ import {
   buildTransactions,
   encodeVaultSharesPermit,
   getPendingSignatureRequests,
-  morphoViemExtension,
   parseTransactionPlan,
   prepareVaultV2Redeem,
   serializeTransactionPlan,
+  vaultV2Redeem,
 } from "../../../src/index.js";
 import { KeyrockUsdcVaultV2, Re7UsdtVaultV2 } from "../../fixtures/vaultV2.js";
 import { vaultBundlesV1Test as test } from "../../helpers/vaultBundlesV1.js";
@@ -122,16 +122,6 @@ describe.each([false, true])(
           parseTransactionPlan(serializeTransactionPlan(signed)),
         );
         expect(transactions).toEqual(buildTransactions(signed));
-        const legacy = client
-          .extend(morphoViemExtension({ metadata: { origin: "0xcafe" } }))
-          .morpho.vaultV2(vault, client.chain.id)
-          .redeem({
-            shares: amount,
-            userAddress: account,
-            deadline: BigInt(expiresAt),
-            referralFeePct,
-            referralFeeRecipient,
-          });
         const legacySignature = needsPermit
           ? await encodeVaultSharesPermit({
               vault: new Token({ address: vault }),
@@ -143,9 +133,18 @@ describe.each([false, true])(
               deadline: BigInt(expiresAt),
             }).sign(client, account)
           : undefined;
-        const expected = legacy.buildTx(
-          legacySignature ? [legacySignature] : [],
-        );
+        const expected = vaultV2Redeem({
+          vault: { address: vault, chainId: client.chain.id },
+          metadata: { origin: "0xcafe" },
+          args: {
+            shares: amount,
+            userAddress: account,
+            deadline: BigInt(expiresAt),
+            referralFeePct,
+            referralFeeRecipient,
+            requirementSignature: legacySignature,
+          },
+        });
         const redemption = transactions.at(-1)!;
         expect(redemption).toMatchObject(expected);
         expect(redemption.to).toBe(spender);

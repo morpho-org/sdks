@@ -19,6 +19,7 @@ import {
   MidnightZeroOnBehalfError,
   type Transaction,
 } from "../../types/index.js";
+import { snapshotMidnightMetadata } from "./parse.js";
 
 /** Parameters for a direct Midnight cancellation of one or more offer groups. */
 export interface MidnightCancelOffersParams {
@@ -74,8 +75,22 @@ export interface MidnightCancelOffersParams {
  */
 export const midnightCancelOffers = (
   params: MidnightCancelOffersParams,
-): Readonly<Transaction<MidnightCancelOffersAction>> => {
-  const { chainId, onBehalf, metadata } = params;
+): Readonly<Transaction<MidnightCancelOffersAction>> =>
+  encodeMidnightCancelOffers(parseMidnightCancelOffers(params));
+
+const parsedCancelOffers = Symbol();
+
+/** Complete owned direct-cancellation constraints; no chain state or authorization proof. @internal */
+export interface ParsedMidnightCancelOffers extends MidnightCancelOffersParams {
+  readonly midnight: Address;
+  readonly [parsedCancelOffers]: true;
+}
+
+/** Constructs the complete direct cancellation in the standalone builder's established order. @internal */
+export const parseMidnightCancelOffers = (
+  params: MidnightCancelOffersParams,
+): ParsedMidnightCancelOffers => {
+  const { chainId, onBehalf } = params;
   // Copy the list so validation and encoding read one snapshot and the caller's array stays unfrozen.
   const groups = [...params.groups];
 
@@ -98,7 +113,21 @@ export const midnightCancelOffers = (
     seen.add(key);
   }
   const midnight = getChainAddress(chainId, "midnight");
+  return deepFreeze({
+    chainId,
+    onBehalf,
+    groups,
+    midnight,
+    metadata: snapshotMidnightMetadata(params.metadata),
+    [parsedCancelOffers]: true as const,
+  });
+};
 
+/** Encodes a complete direct cancellation without re-entering a public builder. @internal */
+export const encodeMidnightCancelOffers = (
+  params: ParsedMidnightCancelOffers,
+): Readonly<Transaction<MidnightCancelOffersAction>> => {
+  const { groups, onBehalf, metadata, midnight } = params;
   const calls = groups.map((group) =>
     encodeMidnightCalldata({
       abi: midnightAbi,

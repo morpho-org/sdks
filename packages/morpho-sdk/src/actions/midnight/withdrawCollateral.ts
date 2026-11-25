@@ -1,26 +1,22 @@
+import type { MarketInput } from "@morpho-org/midnight-sdk";
+import { deepFreeze } from "@morpho-org/morpho-ts";
+import type { Address } from "viem";
 import {
-  type MarketInput,
-  MarketUtils,
-  midnightAbi,
-} from "@morpho-org/midnight-sdk";
-import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
-import { type Address, isAddressEqual, zeroAddress } from "viem";
-import {
-  encodeMidnightCalldata,
-  encodeMidnightMarketId,
-} from "../../helpers/encodeMidnightCalldata.js";
-import { addTransactionMetadata } from "../../helpers/index.js";
-import { validateMidnightAddress } from "../../helpers/validateMidnightAccount.js";
-import { validateMidnightUint128Field } from "../../helpers/validateMidnightBounds.js";
-import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
+  type MidnightMarket,
+  parseMidnightAddress,
+  parseMidnightCollateral,
+  parseMidnightMarket,
+  parseMidnightOwner,
+  parseMidnightPositiveAmount,
+} from "../../helpers/parseMidnight.js";
 import { validateMidnightReceiver } from "../../helpers/validateMidnightReceiver.js";
-import {
-  type Metadata,
-  type MidnightWithdrawCollateralAction,
-  MidnightZeroOnBehalfError,
-  NonPositiveInputError,
-  type Transaction,
+import type {
+  Metadata,
+  MidnightWithdrawCollateralAction,
+  Transaction,
 } from "../../types/index.js";
+import { encodeMidnightWithdrawCollateral } from "./encode.js";
+import { snapshotMidnightMetadata } from "./parse.js";
 
 /** Parameters for encoding a direct Midnight collateral withdrawal. */
 export interface MidnightWithdrawCollateralParams {
@@ -71,63 +67,52 @@ export interface MidnightWithdrawCollateralParams {
  */
 export const midnightWithdrawCollateral = (
   params: MidnightWithdrawCollateralParams,
-): Readonly<Transaction<MidnightWithdrawCollateralAction>> => {
-  // Reject a malformed account before comparing it with the zero address.
-  validateMidnightAddress("onBehalf", params.onBehalf);
-  if (params.assets <= 0n) {
-    throw new NonPositiveInputError("assets", params.assets);
-  }
-  validateMidnightUint128Field("assets", params.assets);
-  if (isAddressEqual(params.onBehalf, zeroAddress)) {
-    throw new MidnightZeroOnBehalfError("onBehalf");
-  }
+): Readonly<Transaction<MidnightWithdrawCollateralAction>> =>
+  encodeMidnightWithdrawCollateral(parseMidnightWithdrawCollateral(params));
+
+const parsedWithdrawCollateral = Symbol();
+
+/** Owned inputs for the withdrawCollateral encoder. @internal */
+export interface ParsedMidnightWithdrawCollateral
+  extends Omit<MidnightWithdrawCollateralParams, "market"> {
+  readonly market: MidnightMarket;
+  readonly assets: bigint;
+  readonly onBehalf: Address;
+  readonly collateralIndex: bigint;
+  readonly [parsedWithdrawCollateral]: true;
+}
+
+/** Parses static withdrawCollateral constraints using the existing error order. @internal */
+export const parseMidnightWithdrawCollateral = (
+  params: MidnightWithdrawCollateralParams,
+): ParsedMidnightWithdrawCollateral => {
+  const address = parseMidnightAddress("onBehalf", params.onBehalf);
+  const assets = parseMidnightPositiveAmount("assets", params.assets);
+  const onBehalf = parseMidnightOwner(address);
 
   // Reject markets from another chain deployment before encoding the call.
-  validateMidnightMarket({ market: params.market, chainId: params.chainId });
-  const marketId = encodeMidnightMarketId(params.market);
-  const midnight = getChainAddress(params.chainId, "midnight");
-  const collateralIndex = params.collateralIndex ?? 0n;
-  // Validate that the supplied collateral index is configured before encoding.
-  MarketUtils.getCollateralByIndex(params.market, collateralIndex);
+  const market = parseMidnightMarket(params.market, params.chainId);
+  const collateral = parseMidnightCollateral(
+    market,
+    params.collateralIndex ?? 0n,
+  );
+  const collateralIndex = collateral.index;
 
   validateMidnightReceiver({
     chainId: params.chainId,
-    market: params.market,
+    market: market.struct,
     field: "receiver",
     receiver: params.receiver,
   });
 
-  let tx = {
-    to: midnight,
-    value: 0n,
-    data: encodeMidnightCalldata({
-      abi: midnightAbi,
-      functionName: "withdrawCollateral",
-      args: [
-        MarketUtils.toStruct(params.market),
-        collateralIndex,
-        params.assets,
-        params.onBehalf,
-        params.receiver,
-      ],
-    }),
-  };
-
-  if (params.metadata) {
-    tx = addTransactionMetadata(tx, params.metadata);
-  }
-
   return deepFreeze({
-    ...tx,
-    action: {
-      type: "midnightWithdrawCollateral",
-      args: {
-        market: marketId,
-        collateralIndex,
-        assets: params.assets,
-        onBehalf: params.onBehalf,
-        receiver: params.receiver,
-      },
-    },
+    chainId: params.chainId,
+    market,
+    onBehalf,
+    assets,
+    collateralIndex,
+    receiver: params.receiver,
+    metadata: snapshotMidnightMetadata(params.metadata),
+    [parsedWithdrawCollateral]: true as const,
   });
 };

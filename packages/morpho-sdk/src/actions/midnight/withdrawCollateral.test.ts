@@ -20,9 +20,26 @@ import {
   MidnightZeroReceiverError,
   NonPositiveInputError,
 } from "../../types/index.js";
-import { midnightWithdrawCollateral } from "./withdrawCollateral.js";
+import {
+  midnightWithdrawCollateral,
+  parseMidnightWithdrawCollateral,
+} from "./withdrawCollateral.js";
 
 describe("midnightWithdrawCollateral", () => {
+  test("parsed input owns and freezes static transaction values", () => {
+    const parsed = parseMidnightWithdrawCollateral({
+      chainId: midnightChainId,
+      market: midnightMarket,
+      assets: 1n,
+      onBehalf: midnightAddresses.taker,
+      receiver: midnightAddresses.taker,
+    });
+    expect(parsed.assets).toBe(1n);
+    expect(parsed.market.id).toBe(midnightMarketId);
+    expect(Object.isFrozen(parsed)).toBe(true);
+    expect(Object.isFrozen(parsed.market.struct.collateralParams)).toBe(true);
+  });
+
   test.each([
     [zeroAddress, MidnightZeroReceiverError],
     [midnightAddresses.midnight, MidnightContractReceiverError],

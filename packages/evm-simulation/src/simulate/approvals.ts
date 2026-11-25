@@ -14,7 +14,6 @@ import {
   toEventSelector,
   zeroAddress,
 } from "viem";
-import type { SimulationAuthorization } from "../authorizations.js";
 import {
   ApprovalCheckUnavailableError,
   UnexpectedMidnightAuthorizationError,
@@ -23,6 +22,7 @@ import {
 } from "../errors.js";
 import type { ApprovalLimit } from "../limits.js";
 import type { RawLog } from "../types.js";
+import type { ParsedRequest } from "./request/parse-request.js";
 
 const ERC20_APPROVAL_TOPIC = toEventSelector(
   getAbiItem({ abi: erc20Abi, name: "Approval" }),
@@ -112,7 +112,7 @@ const decode = <TAbi extends Abi>(params: {
  * @internal
  */
 export function assertPendingApprovals(params: {
-  readonly authorizations: readonly SimulationAuthorization[];
+  readonly authorizations: ParsedRequest["authorizations"];
   readonly allowed: readonly ApprovalLimit[];
   readonly addresses: ApprovalEventAddresses;
 }): void {
@@ -251,7 +251,7 @@ export function assertPendingApprovals(params: {
 
 function assertPendingMidnightAuthorization(
   authorization: Extract<
-    SimulationAuthorization,
+    ParsedRequest["authorizations"][number],
     { type: "midnightAuthorizationSignature" }
   >,
   { allowed, addresses }: Pick<ApprovalEventParams, "allowed" | "addresses">,
@@ -291,6 +291,10 @@ interface ApprovalEventParams {
   readonly logs: readonly RawLog[];
   readonly owner: Address;
   readonly allowed: readonly ApprovalLimit[];
+  readonly directTokenApprovals?: readonly Extract<
+    ApprovalLimit,
+    { type: "token" }
+  >[];
   readonly addresses: ApprovalEventAddresses;
 }
 
@@ -366,7 +370,7 @@ function findApprovalEventFailure(
 
 function checkErc20Approval(
   log: RawLog,
-  { owner, allowed }: ApprovalEventParams,
+  { owner, allowed, directTokenApprovals = [] }: ApprovalEventParams,
 ): ApprovalEventFailure | undefined {
   const decoded = decode({
     abi: erc20Abi,
@@ -386,7 +390,7 @@ function checkErc20Approval(
     isAddressEqual(eventOwner, owner) &&
     value > 0n &&
     !tokenApprovalAllowed({
-      allowed,
+      allowed: [...allowed, ...directTokenApprovals],
       token: log.address,
       owner: eventOwner,
       spender,

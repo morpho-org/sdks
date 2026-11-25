@@ -40,6 +40,7 @@ import type {
 import { parseStandardRatifierTree } from "./standardRatifierInternal.js";
 import type { RatifierTreeInput } from "./TreeUtils.js";
 import { type TreeProof, TreeUtils } from "./TreeUtils.js";
+import { requireTreeItem } from "./treeMathInternal.js";
 
 const treeTypeHashes = [
   "0x270da1ebafc0f24637af3612fb8c3a1d828fcb56d3637c24e86dd006b12ca7f9",
@@ -131,7 +132,9 @@ const typedDataTypes = {
 } as const;
 
 const buildTreeValue = (offers: readonly OfferStruct[]): unknown => {
-  if (offers.length === 1) return offers[0]!;
+  if (offers.length === 1) {
+    return requireTreeItem(offers, 0);
+  }
   const mid = offers.length / 2;
   return [
     buildTreeValue(offers.slice(0, mid)),
@@ -140,8 +143,12 @@ const buildTreeValue = (offers: readonly OfferStruct[]): unknown => {
 };
 
 function toCanonicalYParity(v: number): 0 | 1 {
-  if (v === 27) return 0;
-  if (v === 28) return 1;
+  if (v === 27) {
+    return 0;
+  }
+  if (v === 28) {
+    return 1;
+  }
 
   throw new InvalidEcrecoverSignatureVError(v);
 }
@@ -501,7 +508,9 @@ export namespace EcrecoverRatifierUtils {
    */
   export function treeTypeHash(height: number) {
     const typehash = treeTypeHashes[height];
-    if (typehash == null) throw new InvalidTreeHeightError(height);
+    if (typehash == null) {
+      throw new InvalidTreeHeightError(height);
+    }
 
     return typehash;
   }
@@ -517,8 +526,10 @@ export namespace EcrecoverRatifierUtils {
    * @param params.tree - Ecrecover-ratified offer tree-like input to sign.
    * @param params.chainId - EIP-155 chain id included in the EIP-712 domain.
    * @returns EIP-712 typed-data descriptor.
+   * @throws {InvalidOfferParameterError} when raw tree input contains a sell offer with a zero receiver.
    * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
    * @throws {InvalidTreeHeightError} when the tree height is unsupported.
+   * @throws {InvalidOfferGroupError} when raw standalone offers from one maker repeat an explicit group id.
    * @example
    * ```ts
    * import { EcrecoverRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
@@ -591,8 +602,10 @@ export namespace EcrecoverRatifierUtils {
    * @param params.tree - Ecrecover-ratified offer tree-like input to hash.
    * @param params.chainId - EIP-155 chain id included in the EIP-712 domain.
    * @returns EIP-712 digest.
+   * @throws {InvalidOfferParameterError} when raw tree input contains a sell offer with a zero receiver.
    * @throws {InvalidTreeError} when the tree contains multiple ratifiers.
    * @throws {InvalidTreeHeightError} when height exceeds 20.
+   * @throws {InvalidOfferGroupError} when raw standalone offers from one maker repeat an explicit group id.
    * @example
    * ```ts
    * import { EcrecoverRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
@@ -830,8 +843,10 @@ export namespace EcrecoverRatifierUtils {
    * @param params.client - Viem client whose transport signs the tree typed data.
    * @param params.account - Account used to sign the tree typed data.
    * @returns Signature returned by the client.
+   * @throws {InvalidOfferParameterError} when raw tree input contains a sell offer with a zero receiver.
    * @throws {InvalidTreeError} when the tree is invalid, contains multiple ratifiers, or spans multiple chain ids.
    * @throws {InvalidTreeHeightError} when the tree height is unsupported.
+   * @throws {InvalidOfferGroupError} when raw standalone offers from one maker repeat an explicit group id.
    * @throws {ChainIdMismatchError} when `params.client.chain?.id` does not match the tree offer chain id.
    * @throws {InvalidTypedDataSignatureError} when the returned signature does not recover to `params.account`.
    * @example
@@ -888,7 +903,9 @@ export namespace EcrecoverRatifierUtils {
       tree: params.tree,
       label: "Ecrecover",
     });
-    const expectedChainId = MarketParams.from(tree.offers[0]!.market).chainId;
+    const expectedChainId = MarketParams.from(
+      requireTreeItem(tree.offers, 0).market,
+    ).chainId;
     for (const offer of tree.offers.slice(1)) {
       const offerChainId = MarketParams.from(offer.market).chainId;
       if (offerChainId !== expectedChainId) {
@@ -964,7 +981,7 @@ export namespace EcrecoverRatifierUtils {
   ): Signature<number, number> & { readonly v: number } {
     if (typeof signature !== "string") {
       const v =
-        signature.v != null ? Number(signature.v) : Number(signature.yParity);
+        signature.v == null ? Number(signature.yParity) : Number(signature.v);
       return {
         v: v < 27 ? v + 27 : v,
         r: signature.r,
@@ -1086,7 +1103,9 @@ export namespace EcrecoverRatifierUtils {
    * @param params.leafIndex - Leaf index to prove.
    * @param params.signature - Ecrecover signature for the tree root.
    * @returns ABI-encoded EcrecoverRatifier data.
+   * @throws {InvalidOfferParameterError} when raw tree input contains a sell offer with a zero receiver.
    * @throws {InvalidTreeError} when the leaf index is outside the tree or the tree contains multiple ratifiers.
+   * @throws {InvalidOfferGroupError} when raw standalone offers from one maker repeat an explicit group id.
    * @throws {InvalidEcrecoverSignatureError} when the supplied serialized signature cannot be parsed.
    * @example
    * ```ts
@@ -1153,8 +1172,10 @@ export namespace EcrecoverRatifierUtils {
    * @param params.account - Optional account used to sign typed data built from `params.tree`.
    * @param params.signature - Optional precomputed signature for `params.tree`.
    * @returns Items containing each offer and its ratifier data.
+   * @throws {InvalidOfferParameterError} when raw tree input contains a sell offer with a zero receiver.
    * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
    * @throws {InvalidTreeHeightError} when the tree height is unsupported.
+   * @throws {InvalidOfferGroupError} when raw standalone offers from one maker repeat an explicit group id.
    * @throws {InvalidTypedDataSignatureError} when verification fails after signing or after parsing a precomputed signature, including a signer mismatch.
    * @throws {InvalidEcrecoverSignatureError} when a precomputed serialized signature cannot be parsed.
    * @example
@@ -1210,9 +1231,19 @@ export namespace EcrecoverRatifierUtils {
       label: "Ecrecover",
     });
     let signature: Signature<number, number> & { readonly v: number };
-    if (params.signature != null) {
+    if (params.signature == null) {
+      signature = toSignature(
+        await sign({
+          tree,
+          client: params.client,
+          account: params.account,
+        }),
+      );
+    } else {
       signature = toSignature(params.signature);
-      const expectedChainId = MarketParams.from(tree.offers[0]!.market).chainId;
+      const expectedChainId = MarketParams.from(
+        requireTreeItem(tree.offers, 0).market,
+      ).chainId;
       for (const offer of tree.offers.slice(1)) {
         const offerChainId = MarketParams.from(offer.market).chainId;
         if (offerChainId !== expectedChainId) {
@@ -1244,14 +1275,6 @@ export namespace EcrecoverRatifierUtils {
       if (!isValidSignature) {
         throw new InvalidTypedDataSignatureError(signer);
       }
-    } else {
-      signature = toSignature(
-        await sign({
-          tree,
-          client: params.client,
-          account: params.account,
-        }),
-      );
     }
 
     const proofs = TreeUtils.buildProofs({
@@ -1263,7 +1286,7 @@ export namespace EcrecoverRatifierUtils {
       offer,
       ratifierData: encodeRatifierData({
         signature,
-        ...proofs[leafIndex]!,
+        ...requireTreeItem(proofs, leafIndex),
       }),
     }));
   }

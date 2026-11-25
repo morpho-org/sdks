@@ -72,6 +72,7 @@ describe("chaos: S5 wrong chain", () => {
       });
       expect(proxy.log).toEqual([
         { method: "eth_getCode", outcome: "forwarded" },
+        { method: "eth_getCode", outcome: "forwarded" },
         { method: "eth_chainId", outcome: "forwarded" },
       ]);
     },

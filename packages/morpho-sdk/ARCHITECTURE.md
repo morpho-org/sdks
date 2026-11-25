@@ -119,7 +119,8 @@ at the SDK level. The differences are at the protocol layer:
 - **Taker routing**: Fixed-rate takes, including `takeRepayWithdrawCollateral`, call the
   `MidnightBundlesV2` buy/sell entrypoints with an assets or units target;
   `repayWithdrawCollateral` encodes a reduce-only V2 buy with no offer fills; collateral supply and
-  credit redemption call Midnight directly.
+  credit redemption call Midnight directly. Collateral supply and withdrawal batches encode
+  one Midnight core `multicall`, including single-entry batches.
 - **Cancel routing**: `cancelOffers` calls Midnight directly through the `midnightCancelOffers`
   builder on every chain with a Midnight deployment, never `MidnightBundlesV2`. One group encodes a
   bare `setConsumed(group, maxUint128, account)`; two or more encode one Midnight `multicall` of
@@ -128,7 +129,7 @@ at the SDK level. The differences are at the protocol layer:
 - **Maker routing**: `makeLend`, `makeBorrow`, and
   `supplyCollateralMakeBorrow` validate a PriceRatifierV1 or RateRatifierV1 offer tree, then encode
   one `midnightBundlesV2CancelAndMake` call that cancels replaced groups, activates the root and
-  publishes the payload. Each method builds `midnightCancelAndMake` directly. `makeBorrow` takes no
+  publishes the payload. Each method shares the internal `midnightCancelAndMake` encoder. `makeBorrow` takes no
   collateral; `supplyCollateralMakeBorrow` requires and supplies it.
   `supplyBlueMakeLend` uses the same call to park loan assets in a Morpho Blue market for the
   maker's `BlueBuyCallback`, which funds the lend offers when they are taken. The entity derives the
@@ -140,6 +141,11 @@ at the SDK level. The differences are at the protocol layer:
   `supplyBlueMakeLend` reject reduce-only offers.
 - **SDK data**: `MorphoMidnight` fetches hydrated market and position snapshots and exposes
   the same lazy `{ getRequirements, buildTx }` contract as the other entities.
+- **Complete inputs**: Standalone actions and entity preparation each construct complete readonly
+  operation inputs once, preserving their validation order and owning plain calldata snapshots
+  without freezing caller-owned classes. Entity handles retain these inputs and call shared
+  internal encoders rather than reparsing public params. RPC-backed publication and take feasibility
+  checks remain at the entity layer; fresh signatures and encoder overrides are checked when used.
 
 
 ### Force Deallocation (V2 only)

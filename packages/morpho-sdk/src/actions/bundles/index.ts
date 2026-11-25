@@ -10,4 +10,7 @@ export {
   getBundlesTokenPermit,
   resolveBundlesFunding,
 } from "./common.js";
-export * from "./resolveBundlesTokenRequirements.js";
+export {
+  type BundlesTokenRequirementsState,
+  resolveBundlesTokenRequirements,
+} from "./resolveBundlesTokenRequirements.js";

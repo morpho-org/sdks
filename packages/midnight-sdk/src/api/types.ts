@@ -169,7 +169,7 @@ export interface MidnightApiQuoteUnitsTarget {
  * Quote price guard specified directly as a WAD-scaled average worst price.
  */
 export interface MidnightApiQuoteAverageWorstPriceGuard {
-  /** Average worst price guard. */
+  /** Fee-adjusted guard: asks use buyer price including settlement fee, bids use seller price net of fee. */
   readonly averageWorstPrice: BigIntish;
   /** Mutually exclusive with `averageWorstPrice`. */
   readonly slippage?: never;
@@ -179,7 +179,7 @@ export interface MidnightApiQuoteAverageWorstPriceGuard {
  * Quote price guard specified as a slippage percentage.
  */
 export interface MidnightApiQuoteSlippageGuard {
-  /** Slippage percentage used to derive the guard. */
+  /** Slippage percentage deriving a raw tick-price (fee-excluded) guard from the API. */
   readonly slippage: MidnightApiSlippage;
   /** Mutually exclusive with `slippage`. */
   readonly averageWorstPrice?: never;
@@ -213,7 +213,7 @@ export type FetchBookQuoteParams = MidnightApiConfig & {
    * defaults to 10,000. Set it to cap the offers a quote can return, e.g. to fit one bundle.
    */
   readonly limit?: number;
-  /** Current WAD-scaled settlement fee used for local guard validation. Defaults to zero. */
+  /** Current WAD-scaled settlement fee for absolute guard pricing and bid fee validation in both modes. Excluded from slippage guard pricing. Defaults to zero. */
   readonly settlementFee?: BigIntish;
 } & (MidnightApiQuoteAssetsTarget | MidnightApiQuoteUnitsTarget) &
   (
@@ -470,9 +470,9 @@ export interface MidnightApiBookPriceLevelsResult {
  * Quote returned by Midnight API book quote routes.
  */
 export interface MidnightApiQuote {
-  /** Weighted average price for the requested size before any guard. */
+  /** Raw tick-price (fee-excluded) weighted average for the requested size from the API, before any guard. */
   readonly averageBestPrice: string;
-  /** Equals the caller's `averageWorstPrice` when provided, otherwise the API's guard. */
+  /** Caller's fee-adjusted absolute guard (asks including fee, bids net of fee), or the API's raw tick-price (fee-excluded) guard in slippage mode or without a guard. */
   readonly averageWorstPrice: string;
   /** Maximum assets available from the returned take caps. */
   readonly availableAssets: string;

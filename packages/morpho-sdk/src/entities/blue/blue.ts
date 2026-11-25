@@ -1,7 +1,7 @@
 import {
   type AccrualPosition,
   type Market,
-  type MarketParams,
+  MarketParams,
   MathLib,
 } from "@morpho-org/blue-sdk";
 import {
@@ -12,6 +12,7 @@ import {
 } from "@morpho-org/blue-sdk-viem";
 import {
   type AddressLabel,
+  deepFreeze,
   getChainAddress,
   getChainAddresses,
   Time,
@@ -23,32 +24,58 @@ import {
   midnightBlueBuyCallbackAbi,
   midnightBlueBuyCallbackFactoryAbi,
 } from "../../abis.js";
+import type { BlueBorrowInput } from "../../actions/blue/borrow.internal.js";
 import {
-  getBlueBundlesV1PenaltyAssets,
-  getBlueBundlesV1PublicAllocations,
   getBlueBundlesV1ReferralFeeAssets,
-  normalizeBlueBundlesV1CommonParams,
+  parseBlueAllocations,
+  parseBlueBundlesV1Common,
   selectBlueBundlesV1RequirementSignatures,
-  validateBlueBundlesV1NativeFunding,
 } from "../../actions/blue/common.js";
+
 import {
-  validateBlueRefinanceQuote,
-  validateBlueRefinanceSource,
-} from "../../actions/blue/refinanceValidation.js";
+  type BlueRefinanceInput,
+  buildBlueRefinance,
+  parseBlueRefinanceMarkets,
+} from "../../actions/blue/refinance.internal.js";
+import { validateBlueRefinanceQuote } from "../../actions/blue/refinanceValidation.js";
+import type { BlueRepayOnlyInput } from "../../actions/blue/repay.internal.js";
 import {
-  blueBorrow,
-  blueRefinance,
-  blueRepay,
-  blueRepayWithdrawCollateral,
-  blueSupply,
-  blueSupplyCollateral,
-  blueSupplyCollateralBorrow,
-  blueWithdraw,
-  blueWithdrawBuyCallback,
-  blueWithdrawCollateral,
-  getBlueAuthorizationRequirement,
-} from "../../actions/index.js";
-import { validateClientChainId } from "../../actions/requirements/validateClientChainId.js";
+  type BlueRepayInput,
+  buildBlueRepayWithdrawCollateral,
+  parseBlueRepayCap,
+  parseBlueRepayCoverage,
+  parseBlueRepayMode,
+} from "../../actions/blue/repayWithdrawCollateral.internal.js";
+import {
+  type BlueSupplyInput,
+  buildBlueSupply,
+} from "../../actions/blue/supply.internal.js";
+import type { BlueSupplyCollateralInput } from "../../actions/blue/supplyCollateral.internal.js";
+import {
+  type BlueSupplyCollateralBorrowInput,
+  buildBlueSupplyCollateralBorrow,
+  parseBlueSupplyCollateralBorrowAllocations,
+  parseBlueSupplyCollateralBorrowMode,
+} from "../../actions/blue/supplyCollateralBorrow.internal.js";
+import {
+  type BlueWithdrawInput,
+  buildBlueWithdraw,
+  parseBlueWithdrawMode,
+  parseBlueWithdrawPenalty,
+} from "../../actions/blue/withdraw.internal.js";
+import {
+  type BlueWithdrawBuyCallbackInput,
+  buildBlueWithdrawBuyCallback,
+} from "../../actions/blue/withdrawBuyCallback.internal.js";
+import type { BlueWithdrawCollateralInput } from "../../actions/blue/withdrawCollateral.internal.js";
+import {
+  getParsedBlueAuthorizationRequirement,
+  parseBlueAuthorizationRequirement,
+} from "../../actions/requirements/blue/getBlueAuthorizationRequirement.js";
+import {
+  type ChainCheck,
+  createChainCheck,
+} from "../../actions/requirements/chainCheck.js";
 import {
   DEFAULT_LLTV_BUFFER,
   validateAccrualPosition,
@@ -59,8 +86,14 @@ import {
   validateWithdrawShares,
 } from "../../helpers/index.js";
 import { resolveTransactionMetadata } from "../../helpers/metadata.js";
+import {
+  parseBlueMarket,
+  parseNativeFunding,
+  parseNonnegative,
+  parseUint256,
+  parseUint256Max,
+} from "../../helpers/parse.js";
 import { quoteBlueRepay } from "../../helpers/quoteBlueRepay.js";
-import { validateMarketParamsId } from "../../helpers/validate.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
   type ActionOutput,
@@ -83,22 +116,21 @@ import {
   InputExceedsMaxError,
   InsufficientBlueLiquidityError,
   MarketIdMismatchError,
-  MaxRepayAssetsBelowRepayAssetsError,
   MissingAccrualPositionError,
   type MorphoClientType,
-  MutuallyExclusiveRepayAmountsError,
-  MutuallyExclusiveWithdrawAmountsError,
-  NegativeInputError,
   NonPositiveInputError,
   NotBlueBuyCallbackError,
-  ReallocationsRequireBorrowError,
   type ReferenceTimestampParams,
   type RequirementSignature,
   type VaultV2BluePublicAllocatorOptions,
   type VaultV2BlueReallocation,
 } from "../../types/index.js";
 import { assertRegistryTargetsHaveCode } from "../requirements/assertContractCode.js";
-import { getBundlesTokenRequirements } from "../requirements/index.js";
+import {
+  getParsedBundlesTokenRequirements,
+  parseGetBundlesTokenRequirements,
+} from "../requirements/getBundlesTokenRequirements.js";
+import { validateNativeRequirements } from "../requirements/validateNativeRequirements.js";
 import { VaultV2BlueReallocationData } from "../vaultV2BlueReallocationData.js";
 
 type VaultV2BlueReallocationsParams = {
@@ -380,7 +412,8 @@ export interface BlueActions {
    *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
    * @throws {ExpiredDeadlineError} when the deadline is stale.
    * @throws {MissingAccrualPositionError} when no position snapshot is provided at runtime.
-   * @throws {MarketIdMismatchError} when `positionData` belongs to another market.
+   * @throws {MarketIdMismatchError} when `positionData` belongs to another market, or a
+   *   reallocation source market's `id` does not hash from its tuple fields.
    * @throws {AccrualPositionUserMismatchError} when `positionData` belongs to another user.
    * @throws {NegativeInputError} when an amount, referral fee, or reallocation penalty is negative.
    * @throws {NonPositiveInputError} when no withdrawal mode or positive reallocation amount is provided.
@@ -542,7 +575,8 @@ export interface BlueActions {
    * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @throws {ExpiredDeadlineError} when the deadline is stale.
    * @throws {MissingAccrualPositionError} when no position snapshot is provided.
-   * @throws {MarketIdMismatchError} when `positionData` belongs to another market.
+   * @throws {MarketIdMismatchError} when `positionData` belongs to another market, or a
+   *   reallocation source market's `id` does not hash from its tuple fields.
    * @throws {AccrualPositionUserMismatchError} when `positionData` belongs to another user.
    * @throws {MissingMarketPriceError} when the health check has no oracle price.
    * @throws {BorrowExceedsSafeLtvError} when the resulting position exceeds buffered LLTV.
@@ -917,7 +951,8 @@ export interface BlueActions {
    *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
    * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @throws {MissingAccrualPositionError} when a borrow has no position snapshot.
-   * @throws {MarketIdMismatchError} when `positionData` belongs to another market.
+   * @throws {MarketIdMismatchError} when `positionData` belongs to another market, or a
+   *   reallocation source market's `id` does not hash from its tuple fields.
    * @throws {AccrualPositionUserMismatchError} when `positionData` belongs to another user.
    * @throws {MissingMarketPriceError} when a borrow cannot be validated without an oracle price.
    * @throws {BorrowExceedsSafeLtvError} when the resulting debt exceeds buffered LLTV.
@@ -1020,7 +1055,8 @@ export interface BlueActions {
    *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
    * @throws {UnsupportedBlueMarketIrmError} when positive source or destination debt requires an unsupported IRM projection.
    * @throws {MissingAccrualPositionError} when either position snapshot is absent at runtime.
-   * @throws {MarketIdMismatchError} when `destination.marketParams.id` does not hash from its tuple fields, or a position snapshot belongs to another market.
+   * @throws {MarketIdMismatchError} when a destination or reallocation source market's `id`
+   *   does not hash from its tuple fields, or a position snapshot belongs to another market.
    * @throws {AccrualPositionUserMismatchError} when a position snapshot belongs to another user.
    * @throws {RefinanceSameMarketError} when source and destination IDs match.
    * @throws {RefinanceTokenMismatchError} when their loan or collateral tokens differ.
@@ -1202,6 +1238,7 @@ export interface BlueActions {
 
 /** Binds a viem client to a Morpho Blue market's action builders. */
 export class MorphoBlue implements BlueActions {
+  private readonly parsedMarket: ReturnType<typeof parseBlueMarket>;
   /**
    * Binds `client` to the market described by `marketParams` on `chainId`.
    *
@@ -1216,7 +1253,7 @@ export class MorphoBlue implements BlueActions {
     public readonly marketParams: MarketParams,
     private readonly chainId: number,
   ) {
-    validateMarketParamsId(marketParams);
+    this.parsedMarket = parseBlueMarket(marketParams);
   }
 
   private validateDeadline(deadline: bigint, now = Time.timestamp()): void {
@@ -1233,14 +1270,14 @@ export class MorphoBlue implements BlueActions {
       referralFeeRecipient?: Address;
     },
     now: bigint,
-  ): void {
+  ) {
+    // Reject cross-chain inputs before continuing.
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    // Reject expiry before continuing this call.
     this.validateDeadline(params.deadline, now);
     // Resolve at handle creation so unsupported deployments fail before any RPC prerequisite work.
     getChainAddress(this.chainId, "bundles.blueBundlesV1");
-    // Validate the referral inputs eagerly; the normalized result is intentionally discarded here
-    // because the pure action re-normalizes it at encode time.
-    normalizeBlueBundlesV1CommonParams({
+    return parseBlueBundlesV1Common({
       chainId: this.chainId,
       userAddress: params.userAddress,
       deadline: params.deadline,
@@ -1252,10 +1289,16 @@ export class MorphoBlue implements BlueActions {
   /**
    * Asserts that every registry contract this flow's transaction targets or names as
    * spender/authorized operator holds code, with one `eth_getCode` per distinct address
-   * before any other requirement read. Blue write flows probe `eth_chainId` only after a target
-   * has no code and report a chain mismatch when the RPC serves another chain.
+   * before any other requirement read. Native-only funding validates the served chain
+   * concurrently; other flows probe it here only when a target has no code.
+   *
+   * @param chainCheck - Chain validation shared within this operation.
+   * @param nativeFundingOnly - Whether no token or authorization resolver checks the chain.
    */
-  private async assertWriteTargets(): Promise<void> {
+  private async assertWriteTargets(
+    chainCheck: ChainCheck,
+    nativeFundingOnly = false,
+  ): Promise<void> {
     const targets: { role: AddressLabel; address: Address }[] = [
       {
         role: "bundles.blueBundlesV1",
@@ -1263,14 +1306,27 @@ export class MorphoBlue implements BlueActions {
       },
       { role: "blue", address: getChainAddress(this.chainId, "blue") },
     ];
-    await assertRegistryTargetsHaveCode(
-      this.client.viemClient,
-      this.chainId,
-      targets,
-    );
+    const assertTargets = () =>
+      assertRegistryTargetsHaveCode(
+        this.client.viemClient,
+        this.chainId,
+        targets,
+        chainCheck,
+      );
+    if (nativeFundingOnly) {
+      await validateNativeRequirements(this.client.viemClient, {
+        chainId: this.chainId,
+        chainCheck,
+        assertWriteTargets: assertTargets,
+      });
+    } else {
+      await assertTargets();
+    }
   }
 
-  private getMaxLtv(marketParams: MarketParams = this.marketParams): bigint {
+  private getMaxLtv(
+    marketParams: Pick<MarketParams, "lltv"> = this.parsedMarket,
+  ): bigint {
     return MathLib.zeroFloorSub(marketParams.lltv, DEFAULT_LLTV_BUFFER);
   }
 
@@ -1281,76 +1337,66 @@ export class MorphoBlue implements BlueActions {
     return MathLib.max(now, lastUpdate) + Time.s.from.h(2n);
   }
 
-  private quoteRepay({
-    positionData,
-    repayAssets,
-    repayShares,
-    deadline,
-    now,
-  }: {
-    readonly positionData: AccrualPosition;
-    readonly repayAssets: bigint;
-    readonly repayShares: bigint;
-    readonly deadline: bigint;
-    readonly now: bigint;
-  }) {
-    return quoteBlueRepay({
-      positionData,
-      marketId: this.marketParams.id,
-      repayAssets,
-      repayShares,
-      deadline,
-      now,
-    });
-  }
-
   private async getTokenRequirements(
+    chainCheck: ChainCheck,
     params: {
       token: Address;
       amount: bigint;
       userAddress: Address;
       deadline: bigint;
       useSimplePermit?: boolean;
-    } & ReferenceTimestampParams,
+      now?: bigint;
+    },
   ): Promise<readonly ActionRequirement[]> {
+    // Reject expiry before continuing this call.
     this.validateDeadline(params.deadline, params.now);
-    return getBundlesTokenRequirements(this.client.viemClient, {
-      token: params.token,
-      spender: getChainAddress(this.chainId, "bundles.blueBundlesV1"),
-      amount: params.amount,
-      owner: params.userAddress,
-      chainId: this.chainId,
-      deadline: params.deadline,
-      supportSignature: this.client.options.supportSignature,
-      supportDeployless: this.client.options.supportDeployless,
-      useSimplePermit: params.useSimplePermit,
-      now: params.now,
-    });
+    return getParsedBundlesTokenRequirements(
+      { viemClient: this.client.viemClient, chainCheck },
+      parseGetBundlesTokenRequirements(this.client.viemClient, {
+        token: params.token,
+        spender: getChainAddress(this.chainId, "bundles.blueBundlesV1"),
+        amount: params.amount,
+        owner: params.userAddress,
+        chainId: this.chainId,
+        deadline: params.deadline,
+        supportSignature: this.client.options.supportSignature,
+        supportDeployless: this.client.options.supportDeployless,
+        useSimplePermit: params.useSimplePermit,
+        now: params.now,
+      }),
+    );
   }
 
   private async getAuthorizationRequirements(
+    chainCheck: ChainCheck,
     params: {
       userAddress: Address;
       deadline: bigint;
-    } & ReferenceTimestampParams,
+      now?: bigint;
+    },
   ): Promise<readonly ActionRequirement[]> {
+    // Reject expiry before continuing this call.
     this.validateDeadline(params.deadline, params.now);
-    const requirement = await getBlueAuthorizationRequirement({
-      viemClient: this.client.viemClient,
-      chainId: this.chainId,
-      userAddress: params.userAddress,
-      supportSignature: this.client.options.supportSignature,
-      authorized: getChainAddress(this.chainId, "bundles.blueBundlesV1"),
-      deadline: params.deadline,
-      now: params.now,
-    });
+    const requirement = await getParsedBlueAuthorizationRequirement(
+      parseBlueAuthorizationRequirement({
+        viemClient: this.client.viemClient,
+        chainId: this.chainId,
+        userAddress: params.userAddress,
+        supportSignature: this.client.options.supportSignature,
+        authorized: getChainAddress(this.chainId, "bundles.blueBundlesV1"),
+        deadline: params.deadline,
+        now: params.now,
+      }),
+      chainCheck,
+    );
     return requirement == null ? [] : [requirement];
   }
 
   async getMarketData(parameters?: FetchParameters): Promise<Market> {
-    await validateClientChainId(this.client.viemClient, this.chainId);
+    // Confirm the RPC chain before contract reads.
+    await createChainCheck(this.client.viemClient, this.chainId)();
 
-    return fetchMarket(this.marketParams.id, this.client.viemClient, {
+    return fetchMarket(this.parsedMarket.id, this.client.viemClient, {
       ...parameters,
       deployless: this.client.options.supportDeployless,
     });
@@ -1360,11 +1406,12 @@ export class MorphoBlue implements BlueActions {
     userAddress: Address,
     parameters?: FetchParameters,
   ): Promise<AccrualPosition> {
-    await validateClientChainId(this.client.viemClient, this.chainId);
+    // Confirm the RPC chain before contract reads.
+    await createChainCheck(this.client.viemClient, this.chainId)();
 
     return fetchAccrualPosition(
       userAddress,
-      this.marketParams.id,
+      this.parsedMarket.id,
       this.client.viemClient,
       {
         ...parameters,
@@ -1417,77 +1464,92 @@ export class MorphoBlue implements BlueActions {
       readonly referralFeeRecipient?: Address;
     } & ReferenceTimestampParams,
   ) {
-    const suppliedNow = params.now;
+    return this.supplyPrepared(this.parseSupplyParams(params));
+  }
+
+  private parseSupplyParams(
+    params: Parameters<BlueActions["supply"]>[0] & {
+      readonly marketData?: Market;
+    },
+  ): BlueSupplyInput & ReferenceTimestampParams {
+    const { assets } = params;
     const metadata = resolveTransactionMetadata(
       this.client.options.metadata,
-      suppliedNow,
+      params.now,
     );
-    const {
-      userAddress,
-      assets,
-      nativeAmount,
-      deadline,
-      referralFeePct,
-      referralFeeRecipient,
-    } = params;
-    const createdAt = suppliedNow ?? Time.timestamp();
-    this.validateWriteCommon(params, createdAt);
+    const createdAt = params.now ?? Time.timestamp();
+    const normalized = this.validateWriteCommon(params, createdAt);
     if (assets <= 0n) {
       throw new NonPositiveInputError("assets", assets);
     }
-    const nativeValue = validateBlueBundlesV1NativeFunding({
+    const nativeValue = parseNativeFunding({
       chainId: this.chainId,
-      token: this.marketParams.loanToken,
+      token: this.parsedMarket.loanToken,
       fundedAmount: assets,
-      nativeAmount,
+      nativeAmount: params.nativeAmount,
     });
-
-    if (params.marketData != null) {
-      if (params.marketData.id !== this.marketParams.id) {
-        throw new MarketIdMismatchError(
-          params.marketData.id,
-          this.marketParams.id,
-        );
-      }
+    if (
+      params.marketData != null &&
+      params.marketData.id !== this.parsedMarket.id
+    ) {
+      throw new MarketIdMismatchError(
+        params.marketData.id,
+        this.parsedMarket.id,
+      );
     }
 
+    const input: Omit<BlueSupplyInput & ReferenceTimestampParams, symbol> = {
+      ...normalized,
+      chainId: this.chainId,
+      userAddress: params.userAddress,
+      marketParams: this.parsedMarket,
+      now: params.now,
+      metadata,
+      assets: parseUint256Max("assets", assets),
+      value: nativeValue,
+    };
+    return input as BlueSupplyInput & ReferenceTimestampParams;
+  }
+
+  private supplyPrepared(parsed: BlueSupplyInput & ReferenceTimestampParams) {
+    const {
+      userAddress,
+      assets,
+      deadline,
+      value: nativeValue,
+      marketParams,
+    } = parsed;
     return {
       getRequirements: (
         requirementsParams?: BlueTokenRequirementsParams,
       ): Promise<readonly ActionRequirement[]> => {
-        const now = suppliedNow ?? Time.timestamp();
+        const chainCheck = createChainCheck(
+          this.client.viemClient,
+          this.chainId,
+        );
+        const now = parsed.now ?? Time.timestamp();
+        // Reject expiry before continuing this call.
         this.validateDeadline(deadline, now);
-        return this.assertWriteTargets().then(() => {
-          if (nativeValue > 0n) {
-            return [];
-          }
-          return this.getTokenRequirements({
-            token: this.marketParams.loanToken,
+        if (nativeValue > 0n) {
+          // Neither token requirements nor authorization will validate the chain.
+          return this.assertWriteTargets(chainCheck, true).then(() => []);
+        }
+        return this.assertWriteTargets(chainCheck).then(() =>
+          this.getTokenRequirements(chainCheck, {
+            token: marketParams.loanToken,
             amount: assets,
             userAddress,
             deadline,
             now,
             useSimplePermit: requirementsParams?.useSimplePermit,
-          });
-        });
+          }),
+        );
       },
       buildTx: (signatures?: readonly RequirementSignature[]) => {
         const { token } = selectBlueBundlesV1RequirementSignatures(signatures, {
           token: nativeValue === 0n,
         });
-        return blueSupply({
-          market: { chainId: this.chainId, marketParams: this.marketParams },
-          args: {
-            userAddress,
-            assets,
-            nativeAmount: nativeValue > 0n ? nativeValue : undefined,
-            deadline,
-            referralFeePct,
-            referralFeeRecipient,
-            requirementSignature: token,
-          },
-          metadata,
-        });
+        return buildBlueSupply(parsed, { requirementSignature: token });
       },
     };
   }
@@ -1504,61 +1566,63 @@ export class MorphoBlue implements BlueActions {
     } & ReferenceTimestampParams &
       AssetsOrSharesArgs,
   ) {
-    const suppliedNow = params.now;
+    return this.withdrawPrepared(this.parseWithdrawParams(params));
+  }
+
+  private parseWithdrawParams(
+    params: Parameters<BlueActions["withdraw"]>[0],
+  ): BlueWithdrawInput & ReferenceTimestampParams {
+    const { userAddress, positionData } = params;
     const metadata = resolveTransactionMetadata(
       this.client.options.metadata,
-      suppliedNow,
+      params.now,
     );
-    const {
-      userAddress,
-      positionData,
-      deadline,
-      referralFeePct,
-      referralFeeRecipient,
-    } = params;
-    const createdAt = suppliedNow ?? Time.timestamp();
-    this.validateWriteCommon(params, createdAt);
+    const createdAt = params.now ?? Time.timestamp();
+    const normalized = this.validateWriteCommon(params, createdAt);
     const assets = ("assets" in params ? params.assets : undefined) ?? 0n;
     const shares = ("shares" in params ? params.shares : undefined) ?? 0n;
-    if (assets < 0n) {
-      throw new NegativeInputError("assets", assets);
-    }
-    if (shares < 0n) {
-      throw new NegativeInputError("shares", shares);
-    }
-    if (assets > 0n && shares > 0n) {
-      throw new MutuallyExclusiveWithdrawAmountsError(this.marketParams.id);
-    }
-    if (assets === 0n && shares === 0n) {
-      throw new NonPositiveInputError("assets or shares", 0n);
-    }
+    const lowerAssets = parseNonnegative("assets", assets);
+    const lowerShares = parseNonnegative("shares", shares);
+    const mode = parseBlueWithdrawMode(this.parsedMarket, {
+      withdrawAssets: assets,
+      withdrawShares: shares,
+      field: "assets or shares",
+    });
     if (positionData == null) {
-      throw new MissingAccrualPositionError(this.marketParams.id);
+      throw new MissingAccrualPositionError(this.parsedMarket.id);
     }
+    // Reject a snapshot for another user or market.
     validateAccrualPosition({
       positionData,
-      expectedMarketId: this.marketParams.id,
+      expectedMarketId: this.parsedMarket.id,
       expectedUser: userAddress,
     });
-    const validateWithdrawal =
-      shares > 0n ? validateWithdrawShares : validateWithdrawAmount;
-    validateWithdrawal({
-      positionData,
-      withdrawShares: shares,
-      withdrawAssets: assets,
-      marketId: this.marketParams.id,
-    });
-    const reallocations = [...(params.reallocations ?? [])];
-    // Validate the exact PublicAllocations mapping before requirement reads.
-    const publicAllocations = getBlueBundlesV1PublicAllocations(
-      reallocations,
-      this.marketParams,
+    if (shares > 0n) {
+      // Reject a withdrawal larger than the supplied share balance.
+      validateWithdrawShares({
+        positionData,
+        withdrawShares: shares,
+        marketId: this.parsedMarket.id,
+      });
+    } else {
+      // Reject a withdrawal larger than the supplied asset balance.
+      validateWithdrawAmount({
+        positionData,
+        withdrawAssets: assets,
+        marketId: this.parsedMarket.id,
+      });
+    }
+    const allocations = parseBlueWithdrawPenalty(
+      parseBlueAllocations(
+        [...(params.reallocations ?? [])],
+        this.parsedMarket,
+      ),
+      mode,
     );
-    const reallocationPenaltyAssets =
-      getBlueBundlesV1PenaltyAssets(publicAllocations);
+    const reallocationPenaltyAssets = allocations.penaltyAssets;
     const expectedWithdrawAssets =
       assets > 0n ? assets : positionData.market.toSupplyAssets(shares, "Down");
-    if (reallocationPenaltyAssets > expectedWithdrawAssets) {
+    if (shares > 0n && reallocationPenaltyAssets > expectedWithdrawAssets) {
       throw new InputExceedsMaxError({
         field: "reallocationPenaltyAssets",
         value: reallocationPenaltyAssets,
@@ -1566,12 +1630,37 @@ export class MorphoBlue implements BlueActions {
       });
     }
 
+    const input: Omit<BlueWithdrawInput & ReferenceTimestampParams, symbol> = {
+      ...normalized,
+      chainId: this.chainId,
+      userAddress,
+      marketParams: this.parsedMarket,
+      now: params.now,
+      metadata,
+      publicAllocations: allocations.publicAllocations,
+      reallocationPenaltyAssets,
+      withdrawAssets: parseUint256Max("withdrawAssets", lowerAssets),
+      withdrawShares: parseUint256Max("withdrawShares", lowerShares),
+    };
+    return input as BlueWithdrawInput & ReferenceTimestampParams;
+  }
+
+  private withdrawPrepared(
+    parsed: BlueWithdrawInput & ReferenceTimestampParams,
+  ) {
+    const { userAddress, deadline } = parsed;
     return {
       getRequirements: async () => {
-        const now = suppliedNow ?? Time.timestamp();
+        const chainCheck = createChainCheck(
+          this.client.viemClient,
+          this.chainId,
+        );
+        const now = parsed.now ?? Time.timestamp();
+        // Reject expiry before continuing this call.
         this.validateDeadline(deadline, now);
-        await this.assertWriteTargets();
-        return this.getAuthorizationRequirements({
+        // Reject missing write targets before resolving requirements.
+        await this.assertWriteTargets(chainCheck);
+        return this.getAuthorizationRequirements(chainCheck, {
           userAddress,
           deadline,
           now,
@@ -1584,19 +1673,8 @@ export class MorphoBlue implements BlueActions {
             authorization: true,
           },
         );
-        return blueWithdraw({
-          market: { chainId: this.chainId, marketParams: this.marketParams },
-          args: {
-            userAddress,
-            withdrawAssets: assets,
-            withdrawShares: shares,
-            reallocations,
-            deadline,
-            referralFeePct,
-            referralFeeRecipient,
-            authorizationSignature: authorization,
-          },
-          metadata,
+        return buildBlueWithdraw(parsed, {
+          authorizationSignature: authorization,
         });
       },
     };
@@ -1610,55 +1688,92 @@ export class MorphoBlue implements BlueActions {
       readonly positionData: AccrualPosition;
     } & ReferenceTimestampParams,
   ): ActionOutput<BlueWithdrawBuyCallbackAction, undefined, undefined> {
+    return this.withdrawBuyCallbackPrepared(
+      this.parseWithdrawBuyCallbackParams(params),
+    );
+  }
+
+  private parseWithdrawBuyCallbackParams(
+    params: Parameters<BlueActions["withdrawBuyCallback"]>[0],
+  ): BlueWithdrawBuyCallbackInput & { readonly factory: Address } {
     const metadata = resolveTransactionMetadata(
       this.client.options.metadata,
       params.now,
     );
     const { userAddress, callbackAddress, positionData } = params;
+    // Reject cross-chain inputs before continuing.
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     if (positionData == null) {
-      throw new MissingAccrualPositionError(this.marketParams.id);
+      throw new MissingAccrualPositionError(this.parsedMarket.id);
     }
+    // Reject a snapshot for another user or market.
     validateAccrualPosition({
       positionData,
-      expectedMarketId: this.marketParams.id,
+      expectedMarketId: this.parsedMarket.id,
       expectedUser: callbackAddress,
     });
     const shares = positionData.supplyShares;
     if (shares === 0n) {
       throw new EmptyBlueSupplyPositionError({
-        market: this.marketParams.id,
+        market: this.parsedMarket.id,
         user: callbackAddress,
       });
     }
+
     const assets = positionData.supplyAssets;
     const liquidity = positionData.market.liquidity;
     if (assets > liquidity) {
       throw new InsufficientBlueLiquidityError({
-        market: this.marketParams.id,
+        market: this.parsedMarket.id,
         assets,
         liquidity,
       });
     }
+
     const blue = getChainAddress(this.chainId, "blue");
     const factory = getChainAddress(
       this.chainId,
       "midnightBlueBuyCallbackFactory",
     );
-    const tx = blueWithdrawBuyCallback({
-      market: { chainId: this.chainId, marketParams: this.marketParams },
-      args: { callbackAddress, userAddress, shares },
+    const boundedShares = parseUint256("shares", shares);
+    if (boundedShares === 0n) {
+      throw new NonPositiveInputError("shares", boundedShares);
+    }
+    return {
+      marketParams: this.parsedMarket,
+      callbackAddress,
+      userAddress,
+      shares: boundedShares,
       metadata,
-    });
+      to: blue,
+      factory,
+    } as BlueWithdrawBuyCallbackInput & { readonly factory: Address };
+  }
 
+  private withdrawBuyCallbackPrepared(
+    parsed: BlueWithdrawBuyCallbackInput & { readonly factory: Address },
+  ) {
+    const { userAddress, callbackAddress, factory, to: blue } = parsed;
+    const tx = buildBlueWithdrawBuyCallback(parsed);
     return {
       getRequirements: async () => {
+        const chainCheck = createChainCheck(
+          this.client.viemClient,
+          this.chainId,
+        );
         const viemClient = this.client.viemClient;
-        await validateClientChainId(viemClient, this.chainId);
-        await assertRegistryTargetsHaveCode(viemClient, this.chainId, [
-          { role: "blue", address: blue },
-          { role: "midnightBlueBuyCallbackFactory", address: factory },
-        ]);
+        // Confirm the RPC chain before prerequisite reads.
+        await chainCheck();
+        // Reject missing registry contracts before prerequisite reads.
+        await assertRegistryTargetsHaveCode(
+          viemClient,
+          this.chainId,
+          [
+            { role: "blue", address: blue },
+            { role: "midnightBlueBuyCallbackFactory", address: factory },
+          ],
+          chainCheck,
+        );
         // Check the factory first: OWNER() on an arbitrary address can revert or lie.
         const isBlueBuyCallback = await readContract(viemClient, {
           address: factory,
@@ -1716,10 +1831,14 @@ export class MorphoBlue implements BlueActions {
     readonly RequirementSignature[],
     BlueTokenRequirementsParams
   > {
-    const metadata = resolveTransactionMetadata(
-      this.client.options.metadata,
-      params.now,
+    return this.supplyCollateralPrepared(
+      this.parseSupplyCollateralParams(params),
     );
+  }
+
+  private parseSupplyCollateralParams(
+    params: Parameters<BlueActions["supplyCollateral"]>[0],
+  ): BlueSupplyCollateralInput & ReferenceTimestampParams {
     const {
       userAddress,
       collateralAssets,
@@ -1728,34 +1847,35 @@ export class MorphoBlue implements BlueActions {
       referralFeePct,
       referralFeeRecipient,
     } = params;
-    const combinedAction = this.supplyCollateralBorrow({
-      now: params.now,
-      userAddress,
-      collateralAssets,
+    return {
+      ...this.parseSupplyCollateralBorrowParams({
+        now: params.now,
+        userAddress,
+        collateralAssets,
+        borrowAssets: 0n,
+        nativeAmount,
+        deadline,
+        referralFeePct,
+        referralFeeRecipient,
+      }),
       borrowAssets: 0n,
-      nativeAmount,
-      deadline,
-      referralFeePct,
-      referralFeeRecipient,
-    });
+    };
+  }
+
+  private supplyCollateralPrepared(
+    parsed: BlueSupplyCollateralInput & ReferenceTimestampParams,
+  ) {
+    const combinedAction = this.supplyCollateralBorrowPrepared(parsed);
     return {
       getRequirements: combinedAction.getRequirements,
       buildTx: (signatures?: readonly RequirementSignature[]) => {
-        const { token } = selectBlueBundlesV1RequirementSignatures(signatures, {
-          token: (nativeAmount ?? 0n) === 0n,
-        });
-        return blueSupplyCollateral({
-          market: { chainId: this.chainId, marketParams: this.marketParams },
-          args: {
-            userAddress,
-            collateralAssets,
-            nativeAmount,
-            deadline,
-            referralFeePct,
-            referralFeeRecipient,
-            requirementSignature: token,
+        const transaction = combinedAction.buildTx(signatures);
+        return deepFreeze({
+          ...transaction,
+          action: {
+            ...transaction.action,
+            type: "blueSupplyCollateral" as const,
           },
-          metadata,
         });
       },
     };
@@ -1777,10 +1897,12 @@ export class MorphoBlue implements BlueActions {
     readonly RequirementSignature[],
     undefined
   > {
-    const metadata = resolveTransactionMetadata(
-      this.client.options.metadata,
-      params.now,
-    );
+    return this.borrowPrepared(this.parseBorrowParams(params));
+  }
+
+  private parseBorrowParams(
+    params: Parameters<BlueActions["borrow"]>[0],
+  ): BlueBorrowInput & ReferenceTimestampParams {
     const {
       userAddress,
       borrowAssets,
@@ -1791,37 +1913,31 @@ export class MorphoBlue implements BlueActions {
       referralFeeRecipient,
     } = params;
     const normalizedReallocations = [...(reallocations ?? [])];
-    const combinedAction = this.supplyCollateralBorrow({
-      now: params.now,
-      userAddress,
+    return {
+      ...this.parseSupplyCollateralBorrowParams({
+        now: params.now,
+        userAddress,
+        collateralAssets: 0n,
+        borrowAssets,
+        positionData,
+        reallocations: normalizedReallocations,
+        deadline,
+        referralFeePct,
+        referralFeeRecipient,
+      }),
       collateralAssets: 0n,
-      borrowAssets,
-      positionData,
-      reallocations: normalizedReallocations,
-      deadline,
-      referralFeePct,
-      referralFeeRecipient,
-    });
+    };
+  }
+
+  private borrowPrepared(parsed: BlueBorrowInput & ReferenceTimestampParams) {
+    const combinedAction = this.supplyCollateralBorrowPrepared(parsed);
     return {
       getRequirements: () => combinedAction.getRequirements(),
       buildTx: (signatures?: readonly RequirementSignature[]) => {
-        const { authorization } = selectBlueBundlesV1RequirementSignatures(
-          signatures,
-          { authorization: true },
-        );
-        return blueBorrow({
-          market: { chainId: this.chainId, marketParams: this.marketParams },
-          args: {
-            userAddress,
-            borrowAssets,
-            maxLtv: this.getMaxLtv(),
-            reallocations: normalizedReallocations,
-            deadline,
-            referralFeePct,
-            referralFeeRecipient,
-            authorizationSignature: authorization,
-          },
-          metadata,
+        const transaction = combinedAction.buildTx(signatures);
+        return deepFreeze({
+          ...transaction,
+          action: { ...transaction.action, type: "blueBorrow" as const },
         });
       },
     };
@@ -1846,44 +1962,31 @@ export class MorphoBlue implements BlueActions {
     readonly RequirementSignature[],
     BlueTokenRequirementsParams
   > {
-    const metadata = resolveTransactionMetadata(
-      this.client.options.metadata,
-      params.now,
-    );
-    const combinedAction = this.repayWithdrawCollateral({
-      ...params,
+    return this.repayPrepared(this.parseRepayParams(params));
+  }
+
+  private parseRepayParams(
+    params: Parameters<BlueActions["repay"]>[0],
+  ): BlueRepayOnlyInput & ReferenceTimestampParams {
+    return {
+      ...this.parseRepayWithdrawCollateralParams({
+        now: params.now,
+        ...params,
+        collateralAssets: 0n,
+      }),
       collateralAssets: 0n,
-    });
+    };
+  }
+
+  private repayPrepared(parsed: BlueRepayOnlyInput & ReferenceTimestampParams) {
+    const combinedAction = this.repayWithdrawCollateralPrepared(parsed);
     return {
       getRequirements: combinedAction.getRequirements,
       buildTx: (signatures?: readonly RequirementSignature[]) => {
-        const combinedTransaction = combinedAction.buildTx(signatures);
-        const { token } = selectBlueBundlesV1RequirementSignatures(signatures, {
-          token: combinedTransaction.value === 0n,
-        });
-        const {
-          repayAssets,
-          repayShares,
-          maxRepayAssets,
-          nativeAmount,
-          referralFeePct,
-          referralFeeRecipient,
-          deadline,
-        } = combinedTransaction.action.args;
-        return blueRepay({
-          market: { chainId: this.chainId, marketParams: this.marketParams },
-          args: {
-            userAddress: params.userAddress,
-            repayAssets,
-            repayShares,
-            maxRepayAssets,
-            nativeAmount,
-            deadline,
-            referralFeePct,
-            referralFeeRecipient,
-            requirementSignature: token,
-          },
-          metadata,
+        const transaction = combinedAction.buildTx(signatures);
+        return deepFreeze({
+          ...transaction,
+          action: { ...transaction.action, type: "blueRepay" as const },
         });
       },
     };
@@ -1904,10 +2007,14 @@ export class MorphoBlue implements BlueActions {
     readonly RequirementSignature[],
     undefined
   > {
-    const metadata = resolveTransactionMetadata(
-      this.client.options.metadata,
-      params.now,
+    return this.withdrawCollateralPrepared(
+      this.parseWithdrawCollateralParams(params),
     );
+  }
+
+  private parseWithdrawCollateralParams(
+    params: Parameters<BlueActions["withdrawCollateral"]>[0],
+  ): BlueWithdrawCollateralInput & ReferenceTimestampParams {
     const {
       userAddress,
       positionData,
@@ -1916,37 +2023,38 @@ export class MorphoBlue implements BlueActions {
       referralFeePct,
       referralFeeRecipient,
     } = params;
-    const combinedAction = this.repayWithdrawCollateral({
-      now: params.now,
-      userAddress,
-      positionData,
+    return {
+      ...this.parseRepayWithdrawCollateralParams({
+        now: params.now,
+        userAddress,
+        positionData,
+        repayAssets: 0n,
+        collateralAssets,
+        deadline,
+        referralFeePct,
+        referralFeeRecipient,
+      }),
       repayAssets: 0n,
-      collateralAssets,
-      deadline,
-      referralFeePct,
-      referralFeeRecipient,
-    });
+      repayShares: 0n,
+      maxRepayAssets: 0n,
+      hasRepay: false,
+    };
+  }
+
+  private withdrawCollateralPrepared(
+    parsed: BlueWithdrawCollateralInput & ReferenceTimestampParams,
+  ) {
+    const combinedAction = this.repayWithdrawCollateralPrepared(parsed);
     return {
       getRequirements: () => combinedAction.getRequirements(),
       buildTx: (signatures?: readonly RequirementSignature[]) => {
-        const combinedTransaction = combinedAction.buildTx(signatures);
-        const { authorization } = selectBlueBundlesV1RequirementSignatures(
-          signatures,
-          { authorization: true },
-        );
-        const combinedArgs = combinedTransaction.action.args;
-        return blueWithdrawCollateral({
-          market: { chainId: this.chainId, marketParams: this.marketParams },
-          args: {
-            userAddress,
-            collateralAssets: combinedArgs.collateralAssets,
-            maxLtv: combinedArgs.maxLtv,
-            deadline: combinedArgs.deadline,
-            referralFeePct: combinedArgs.referralFeePct,
-            referralFeeRecipient: combinedArgs.referralFeeRecipient,
-            authorizationSignature: authorization,
+        const transaction = combinedAction.buildTx(signatures);
+        return deepFreeze({
+          ...transaction,
+          action: {
+            ...transaction.action,
+            type: "blueWithdrawCollateral" as const,
           },
-          metadata,
         });
       },
     };
@@ -1969,56 +2077,55 @@ export class MorphoBlue implements BlueActions {
         | { readonly repayAssets?: undefined; readonly repayShares?: undefined }
       ),
   ) {
-    const suppliedNow = params.now;
-    const metadata = resolveTransactionMetadata(
-      this.client.options.metadata,
-      suppliedNow,
+    return this.repayWithdrawCollateralPrepared(
+      this.parseRepayWithdrawCollateralParams(params),
     );
+  }
+
+  private parseRepayWithdrawCollateralParams(
+    params: Parameters<BlueActions["repayWithdrawCollateral"]>[0],
+  ): BlueRepayInput & ReferenceTimestampParams {
     const {
       userAddress,
       positionData,
       collateralAssets,
       nativeAmount,
       deadline,
-      referralFeeRecipient,
     } = params;
-    const createdAt = suppliedNow ?? Time.timestamp();
-    this.validateWriteCommon(params, createdAt);
-    // `validateWriteCommon` returns void, so default an omitted `referralFeePct` to `0n`
-    // here, matching the pure action's normalization.
-    const referralFeePct = params.referralFeePct ?? 0n;
+    const metadata = resolveTransactionMetadata(
+      this.client.options.metadata,
+      params.now,
+    );
+    const createdAt = params.now ?? Time.timestamp();
+    const normalized = this.validateWriteCommon(params, createdAt);
     const repayAssets = params.repayAssets ?? 0n;
     const repayShares = params.repayShares ?? 0n;
-    if (repayAssets < 0n) {
-      throw new NegativeInputError("repayAssets", repayAssets);
-    }
-    if (repayShares < 0n) {
-      throw new NegativeInputError("repayShares", repayShares);
-    }
-    if (collateralAssets < 0n) {
-      throw new NegativeInputError("collateralAssets", collateralAssets);
-    }
-    if (repayAssets > 0n && repayShares > 0n) {
-      throw new MutuallyExclusiveRepayAmountsError(this.marketParams.id);
-    }
+    const lowerRepayAssets = parseNonnegative("repayAssets", repayAssets);
+    const lowerRepayShares = parseNonnegative("repayShares", repayShares);
+    const lowerCollateralAssets = parseNonnegative(
+      "collateralAssets",
+      collateralAssets,
+    );
+    const mode = parseBlueRepayMode(this.parsedMarket, {
+      repayAssets,
+      repayShares,
+      collateralAssets,
+    });
+    const referralFeePct = normalized.referralFeePct;
     const hasRepay = repayAssets > 0n || repayShares > 0n;
-    if (!hasRepay && collateralAssets === 0n) {
-      throw new NonPositiveInputError(
-        "repayAssets, repayShares, or collateralAssets",
-        0n,
-      );
-    }
     if (positionData == null) {
-      throw new MissingAccrualPositionError(this.marketParams.id);
+      throw new MissingAccrualPositionError(this.parsedMarket.id);
     }
+    // Reject a snapshot for another user or market.
     validateAccrualPosition({
       positionData,
-      expectedMarketId: this.marketParams.id,
+      expectedMarketId: this.parsedMarket.id,
       expectedUser: userAddress,
     });
 
     const { simulatedRepayShares, accruedPosition, expectedRepayAssets } =
-      this.quoteRepay({
+      quoteBlueRepay({
+        marketId: this.parsedMarket.id,
         positionData,
         repayAssets,
         repayShares,
@@ -2030,9 +2137,9 @@ export class MorphoBlue implements BlueActions {
       referralFeePct,
     );
     const maxRepayAssets = expectedRepayAssets + referralFeeAssets;
-    const nativeValue = validateBlueBundlesV1NativeFunding({
+    const nativeValue = parseNativeFunding({
       chainId: this.chainId,
-      token: this.marketParams.loanToken,
+      token: this.parsedMarket.loanToken,
       fundedAmount: maxRepayAssets,
       nativeAmount,
     });
@@ -2041,26 +2148,80 @@ export class MorphoBlue implements BlueActions {
       const postRepayPosition = hasRepay
         ? accruedPosition.repay(repayAssets, simulatedRepayShares).position
         : accruedPosition;
+      // Reject collateral withdrawal that would leave unsafe debt.
       validatePositionHealthAfterWithdraw({
         positionData: postRepayPosition,
         withdrawAmount: collateralAssets,
-        lltv: this.marketParams.lltv,
-        marketId: this.marketParams.id,
+        lltv: this.parsedMarket.lltv,
+        marketId: this.parsedMarket.id,
       });
     }
 
+    const legs = {
+      ...normalized,
+      chainId: this.chainId,
+      userAddress,
+      marketParams: this.parsedMarket,
+      now: params.now,
+      metadata,
+      repayAssets: parseUint256Max("repayAssets", lowerRepayAssets),
+      repayShares: parseUint256Max("repayShares", lowerRepayShares),
+      collateralAssets: parseUint256Max(
+        "collateralAssets",
+        lowerCollateralAssets,
+      ),
+      maxLtv: parseUint256(
+        "maxLtv",
+        collateralAssets > 0n ? this.getMaxLtv() : maxUint256,
+      ),
+      hasRepay,
+      minimumRepayAssets:
+        repayAssets +
+        getBlueBundlesV1ReferralFeeAssets(repayAssets, referralFeePct),
+    };
+    const cap = parseBlueRepayCap(
+      mode,
+      parseUint256("maxRepayAssets", maxRepayAssets),
+    );
+    const coveredCap = parseBlueRepayCoverage(legs, cap);
+    const input: Omit<BlueRepayInput & ReferenceTimestampParams, symbol> = {
+      ...legs,
+      maxRepayAssets: coveredCap,
+      value: nativeValue,
+    };
+    return input as BlueRepayInput & ReferenceTimestampParams;
+  }
+
+  private repayWithdrawCollateralPrepared(
+    parsed: BlueRepayInput & ReferenceTimestampParams,
+  ) {
+    const {
+      userAddress,
+      collateralAssets,
+      deadline,
+      hasRepay,
+      maxRepayAssets,
+      value: nativeValue,
+      marketParams,
+    } = parsed;
     return {
       getRequirements: async (
         requirementsParams?: BlueTokenRequirementsParams,
       ): Promise<readonly ActionRequirement[]> => {
-        const now = suppliedNow ?? Time.timestamp();
+        const chainCheck = createChainCheck(
+          this.client.viemClient,
+          this.chainId,
+        );
+        const now = parsed.now ?? Time.timestamp();
+        // Reject expiry before continuing this call.
         this.validateDeadline(deadline, now);
-        await this.assertWriteTargets();
+        const nativeOnly = nativeValue > 0n && collateralAssets === 0n;
+        await this.assertWriteTargets(chainCheck, nativeOnly);
         const [tokenRequirements, authorizationRequirements] =
           await Promise.all([
             hasRepay && nativeValue === 0n
-              ? this.getTokenRequirements({
-                  token: this.marketParams.loanToken,
+              ? this.getTokenRequirements(chainCheck, {
+                  token: marketParams.loanToken,
                   amount: maxRepayAssets,
                   userAddress,
                   deadline,
@@ -2069,7 +2230,7 @@ export class MorphoBlue implements BlueActions {
                 })
               : Promise.resolve([]),
             collateralAssets > 0n
-              ? this.getAuthorizationRequirements({
+              ? this.getAuthorizationRequirements(chainCheck, {
                   userAddress,
                   deadline,
                   now,
@@ -2084,33 +2245,10 @@ export class MorphoBlue implements BlueActions {
             token: hasRepay && nativeValue === 0n,
             authorization: collateralAssets > 0n,
           });
-        const selectedMaxRepayAssets =
-          repayShares > 0n && token != null
-            ? token.args.amount
-            : maxRepayAssets;
-        if (selectedMaxRepayAssets < maxRepayAssets) {
-          throw new MaxRepayAssetsBelowRepayAssetsError(
-            selectedMaxRepayAssets,
-            maxRepayAssets,
-          );
-        }
-        return blueRepayWithdrawCollateral({
-          market: { chainId: this.chainId, marketParams: this.marketParams },
-          args: {
-            userAddress,
-            repayAssets,
-            repayShares,
-            maxRepayAssets: selectedMaxRepayAssets,
-            collateralAssets,
-            maxLtv: collateralAssets > 0n ? this.getMaxLtv() : maxUint256,
-            nativeAmount: nativeValue > 0n ? nativeValue : undefined,
-            deadline,
-            referralFeePct,
-            referralFeeRecipient,
-            requirementSignature: token,
-            authorizationSignature: authorization,
-          },
-          metadata,
+        return buildBlueRepayWithdrawCollateral(parsed, {
+          requirementSignature: token,
+          authorizationSignature: authorization,
+          signatureFunding: true,
         });
       },
     };
@@ -2130,59 +2268,50 @@ export class MorphoBlue implements BlueActions {
       readonly referralFeeRecipient?: Address;
     } & ReferenceTimestampParams,
   ) {
-    const suppliedNow = params.now;
+    return this.supplyCollateralBorrowPrepared(
+      this.parseSupplyCollateralBorrowParams(params),
+    );
+  }
+
+  private parseSupplyCollateralBorrowParams(
+    params: Parameters<BlueActions["supplyCollateralBorrow"]>[0],
+  ): BlueSupplyCollateralBorrowInput & ReferenceTimestampParams {
+    const { userAddress, collateralAssets, borrowAssets, positionData } =
+      params;
     const metadata = resolveTransactionMetadata(
       this.client.options.metadata,
-      suppliedNow,
+      params.now,
     );
-    const {
-      userAddress,
+    const createdAt = params.now ?? Time.timestamp();
+    const normalized = this.validateWriteCommon(params, createdAt);
+    const lowerCollateralAssets = parseNonnegative(
+      "collateralAssets",
       collateralAssets,
-      borrowAssets,
-      positionData,
-      nativeAmount,
-      deadline,
-      referralFeePct,
-      referralFeeRecipient,
-    } = params;
-    const createdAt = suppliedNow ?? Time.timestamp();
-    this.validateWriteCommon(params, createdAt);
-    if (collateralAssets < 0n) {
-      throw new NegativeInputError("collateralAssets", collateralAssets);
-    }
-    if (borrowAssets < 0n) {
-      throw new NegativeInputError("borrowAssets", borrowAssets);
-    }
+    );
+    const lowerBorrowAssets = parseNonnegative("borrowAssets", borrowAssets);
     if (collateralAssets === 0n && borrowAssets === 0n) {
       throw new NonPositiveInputError("collateralAssets or borrowAssets", 0n);
     }
-    const reallocations = [...(params.reallocations ?? [])];
-    if (borrowAssets === 0n && reallocations.length > 0) {
-      throw new ReallocationsRequireBorrowError();
-    }
-    // Validate the exact PublicAllocations mapping before requirement reads.
-    const publicAllocations = getBlueBundlesV1PublicAllocations(
-      reallocations,
-      this.marketParams,
+    const mode = parseBlueSupplyCollateralBorrowMode({
+      collateralAssets,
+      borrowAssets,
+      reallocations: [...(params.reallocations ?? [])],
+    });
+    const allocations = parseBlueSupplyCollateralBorrowAllocations(
+      this.parsedMarket,
+      mode,
     );
-    const reallocationPenaltyAssets =
-      getBlueBundlesV1PenaltyAssets(publicAllocations);
-    if (reallocationPenaltyAssets > borrowAssets) {
-      throw new InputExceedsMaxError({
-        field: "reallocationPenaltyAssets",
-        value: reallocationPenaltyAssets,
-        max: borrowAssets,
-      });
-    }
     if (borrowAssets > 0n) {
       if (positionData == null) {
-        throw new MissingAccrualPositionError(this.marketParams.id);
+        throw new MissingAccrualPositionError(this.parsedMarket.id);
       }
+      // Reject a snapshot for another user or market.
       validateAccrualPosition({
         positionData,
-        expectedMarketId: this.marketParams.id,
+        expectedMarketId: this.parsedMarket.id,
         expectedUser: userAddress,
       });
+      // Reject resulting debt above the buffered LLTV.
       validatePositionHealth({
         positionData: positionData.accrueInterest(
           this.getBlueBundlesV1QuoteTimestamp(
@@ -2192,29 +2321,74 @@ export class MorphoBlue implements BlueActions {
         ),
         additionalCollateral: collateralAssets,
         borrowAmount: borrowAssets,
-        marketId: this.marketParams.id,
-        lltv: this.marketParams.lltv,
+        marketId: this.parsedMarket.id,
+        lltv: this.parsedMarket.lltv,
       });
     }
-    const nativeValue = validateBlueBundlesV1NativeFunding({
+    const nativeValue = parseNativeFunding({
       chainId: this.chainId,
-      token: this.marketParams.collateralToken,
+      token: this.parsedMarket.collateralToken,
       fundedAmount: collateralAssets,
-      nativeAmount,
+      nativeAmount: params.nativeAmount,
     });
+    const input: Omit<
+      BlueSupplyCollateralBorrowInput & ReferenceTimestampParams,
+      symbol
+    > = {
+      ...normalized,
+      chainId: this.chainId,
+      userAddress,
+      marketParams: this.parsedMarket,
+      now: params.now,
+      metadata,
+      publicAllocations: allocations.publicAllocations,
+      reallocationPenaltyAssets: allocations.penaltyAssets,
+      value: nativeValue,
+      collateralAssets: parseUint256Max(
+        "collateralAssets",
+        lowerCollateralAssets,
+      ),
+      borrowAssets: parseUint256Max("borrowAssets", lowerBorrowAssets),
+      maxLtv: parseUint256(
+        "maxLtv",
+        borrowAssets > 0n ? this.getMaxLtv() : maxUint256,
+      ),
+    };
+    return input as BlueSupplyCollateralBorrowInput & ReferenceTimestampParams;
+  }
 
+  private supplyCollateralBorrowPrepared(
+    parsed: BlueSupplyCollateralBorrowInput & ReferenceTimestampParams,
+  ) {
+    const {
+      userAddress,
+      collateralAssets,
+      borrowAssets,
+      deadline,
+      value: nativeValue,
+      marketParams,
+    } = parsed;
     return {
       getRequirements: async (
         requirementsParams?: BlueTokenRequirementsParams,
       ): Promise<readonly ActionRequirement[]> => {
-        const now = suppliedNow ?? Time.timestamp();
+        const chainCheck = createChainCheck(
+          this.client.viemClient,
+          this.chainId,
+        );
+        const now = parsed.now ?? Time.timestamp();
+        // Reject expiry before continuing this call.
         this.validateDeadline(deadline, now);
-        await this.assertWriteTargets();
+        // Native-only funding has no token or authorization chain check.
+        await this.assertWriteTargets(
+          chainCheck,
+          nativeValue > 0n && borrowAssets === 0n,
+        );
         const [tokenRequirements, authorizationRequirements] =
           await Promise.all([
             collateralAssets > 0n && nativeValue === 0n
-              ? this.getTokenRequirements({
-                  token: this.marketParams.collateralToken,
+              ? this.getTokenRequirements(chainCheck, {
+                  token: marketParams.collateralToken,
                   amount: collateralAssets,
                   userAddress,
                   deadline,
@@ -2223,7 +2397,7 @@ export class MorphoBlue implements BlueActions {
                 })
               : Promise.resolve([]),
             borrowAssets > 0n
-              ? this.getAuthorizationRequirements({
+              ? this.getAuthorizationRequirements(chainCheck, {
                   userAddress,
                   deadline,
                   now,
@@ -2238,22 +2412,9 @@ export class MorphoBlue implements BlueActions {
             token: collateralAssets > 0n && nativeValue === 0n,
             authorization: borrowAssets > 0n,
           });
-        return blueSupplyCollateralBorrow({
-          market: { chainId: this.chainId, marketParams: this.marketParams },
-          args: {
-            userAddress,
-            collateralAssets,
-            borrowAssets,
-            maxLtv: borrowAssets > 0n ? this.getMaxLtv() : maxUint256,
-            nativeAmount: nativeValue > 0n ? nativeValue : undefined,
-            reallocations,
-            deadline,
-            referralFeePct,
-            referralFeeRecipient,
-            requirementSignature: token,
-            authorizationSignature: authorization,
-          },
-          metadata,
+        return buildBlueSupplyCollateralBorrow(parsed, {
+          requirementSignature: token,
+          authorizationSignature: authorization,
         });
       },
     };
@@ -2274,64 +2435,93 @@ export class MorphoBlue implements BlueActions {
       readonly referralFeeRecipient?: Address;
     } & ReferenceTimestampParams,
   ) {
-    const suppliedNow = params.now;
+    return this.refinancePrepared(this.parseRefinanceParams(params));
+  }
+
+  private parseRefinanceParams(
+    params: Parameters<BlueActions["refinance"]>[0],
+  ): BlueRefinanceInput & ReferenceTimestampParams {
+    const { userAddress, positionData, destination } = params;
     const metadata = resolveTransactionMetadata(
       this.client.options.metadata,
-      suppliedNow,
+      params.now,
     );
-    const {
-      userAddress,
-      positionData,
-      destination,
-      deadline,
-      referralFeeRecipient,
-    } = params;
-    const createdAt = suppliedNow ?? Time.timestamp();
-    this.validateWriteCommon(params, createdAt);
-    validateMarketParamsId(destination.marketParams);
-    // `validateWriteCommon` returns void, so default an omitted `referralFeePct` to `0n`
-    // here, matching the pure action's normalization.
-    const referralFeePct = params.referralFeePct ?? 0n;
+    const createdAt = params.now ?? Time.timestamp();
+    const normalized = this.validateWriteCommon(params, createdAt);
+    const destinationMarketParams = parseBlueMarket(destination.marketParams);
+    const referralFeePct = normalized.referralFeePct;
     if (positionData == null) {
-      throw new MissingAccrualPositionError(this.marketParams.id);
+      throw new MissingAccrualPositionError(this.parsedMarket.id);
     }
+    // Reject a snapshot for another user or market.
     validateAccrualPosition({
       positionData,
-      expectedMarketId: this.marketParams.id,
+      expectedMarketId: this.parsedMarket.id,
       expectedUser: userAddress,
     });
-    // Reject an empty source debt or incompatible markets before quoting.
-    validateBlueRefinanceSource({
-      sourceMarketParams: this.marketParams,
-      destinationMarketParams: destination.marketParams,
-      borrowShares: positionData.borrowShares,
+    if (positionData.borrowShares <= 0n) {
+      throw new NonPositiveInputError(
+        "positionData.borrowShares",
+        positionData.borrowShares,
+      );
+    }
+    const markets = parseBlueRefinanceMarkets({
+      sourceMarketParams: this.parsedMarket,
+      destinationMarketParams,
     });
     if (destination.positionData == null) {
-      throw new MissingAccrualPositionError(destination.marketParams.id);
+      throw new MissingAccrualPositionError(destinationMarketParams.id);
     }
+    // Reject a snapshot for another user or market.
     validateAccrualPosition({
       positionData: destination.positionData,
-      expectedMarketId: destination.marketParams.id,
+      expectedMarketId: destinationMarketParams.id,
       expectedUser: userAddress,
     });
 
-    const reallocations = [...(params.reallocations ?? [])];
-    // Reject migrations that cannot meet the buffered destination LLTV.
+    const allocations = parseBlueAllocations(
+      [...(params.reallocations ?? [])],
+      markets.destinationMarketParams,
+    );
     validateBlueRefinanceQuote({
-      destinationMarketParams: destination.marketParams,
+      destinationMarketParams,
       sourcePosition: positionData,
       destinationPosition: destination.positionData,
-      reallocations,
+      penaltyAssets: allocations.penaltyAssets,
       referralFeePct,
       now: createdAt,
     });
 
+    const input: Omit<BlueRefinanceInput & ReferenceTimestampParams, symbol> = {
+      ...markets,
+      ...normalized,
+      chainId: this.chainId,
+      userAddress,
+      now: params.now,
+      metadata,
+      publicAllocations: allocations.publicAllocations,
+      reallocationPenaltyAssets: allocations.penaltyAssets,
+      maxLtv: parseUint256("maxLtv", this.getMaxLtv(destinationMarketParams)),
+    };
+    return input as BlueRefinanceInput & ReferenceTimestampParams;
+  }
+
+  private refinancePrepared(
+    parsed: BlueRefinanceInput & ReferenceTimestampParams,
+  ) {
+    const { userAddress, deadline } = parsed;
     return {
       getRequirements: async () => {
-        const now = suppliedNow ?? Time.timestamp();
+        const chainCheck = createChainCheck(
+          this.client.viemClient,
+          this.chainId,
+        );
+        const now = parsed.now ?? Time.timestamp();
+        // Reject expiry before continuing this call.
         this.validateDeadline(deadline, now);
-        await this.assertWriteTargets();
-        return this.getAuthorizationRequirements({
+        // Reject missing write targets before resolving requirements.
+        await this.assertWriteTargets(chainCheck);
+        return this.getAuthorizationRequirements(chainCheck, {
           userAddress,
           deadline,
           now,
@@ -2344,22 +2534,8 @@ export class MorphoBlue implements BlueActions {
             authorization: true,
           },
         );
-        return blueRefinance({
-          market: {
-            chainId: this.chainId,
-            sourceMarketParams: this.marketParams,
-            destinationMarketParams: destination.marketParams,
-          },
-          args: {
-            userAddress,
-            maxLtv: this.getMaxLtv(destination.marketParams),
-            reallocations,
-            deadline,
-            referralFeePct,
-            referralFeeRecipient,
-            authorizationSignature: authorization,
-          },
-          metadata,
+        return buildBlueRefinance(parsed, {
+          authorizationSignature: authorization,
         });
       },
     };
@@ -2428,7 +2604,8 @@ export class MorphoBlue implements BlueActions {
       readonly timestamp: bigint;
     };
   }): Promise<VaultV2BlueReallocationData> {
-    await validateClientChainId(this.client.viemClient, this.chainId);
+    // Confirm the RPC chain before prerequisite reads.
+    await createChainCheck(this.client.viemClient, this.chainId)();
 
     const client = this.client.viemClient;
     const fetchParams = {
@@ -2437,7 +2614,7 @@ export class MorphoBlue implements BlueActions {
       deployless: this.client.options.supportDeployless,
     };
     const [targetMarket, vaultEntries, blueBalance] = await Promise.all([
-      fetchMarket(this.marketParams.id, client, fetchParams),
+      fetchMarket(this.parsedMarket.id, client, fetchParams),
       Promise.all(
         vaultAddresses.map(async (address) => {
           const vault = await fetchAccrualVaultV2(address, client, fetchParams);
@@ -2446,14 +2623,14 @@ export class MorphoBlue implements BlueActions {
             client,
             {
               ...fetchParams,
-              targetMarketParams: this.marketParams,
+              targetMarketParams: new MarketParams(this.parsedMarket),
             },
           );
           return { publicAllocatorData, vault };
         }),
       ),
       readContract(client, {
-        address: this.marketParams.loanToken,
+        address: this.parsedMarket.loanToken,
         abi: erc20Abi,
         functionName: "balanceOf",
         args: [getChainAddresses(this.chainId).blue],
@@ -2464,7 +2641,7 @@ export class MorphoBlue implements BlueActions {
     return new VaultV2BlueReallocationData({
       chainId: this.chainId,
       timestamp: block.timestamp,
-      blueBalances: { [this.marketParams.loanToken]: blueBalance },
+      blueBalances: { [this.parsedMarket.loanToken]: blueBalance },
       markets: { [targetMarket.id]: targetMarket },
       vaults: Object.fromEntries(
         vaultEntries.map(({ vault }) => [vault.address, vault]),
@@ -2554,10 +2731,11 @@ export class MorphoBlue implements BlueActions {
     readonly reallocations: readonly VaultV2BlueReallocation[];
     readonly data: VaultV2BlueReallocationData;
   } {
+    // Reject cross-chain inputs before continuing.
     validateChainId(reallocationData.chainId, this.chainId);
 
     return reallocationData.computeVaultV2BlueReallocations(
-      this.marketParams.id,
+      this.parsedMarket.id,
       options,
     );
   }

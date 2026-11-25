@@ -32,9 +32,16 @@ export interface SimulationOptions {
   };
   /**
    * Gas limit sent as `gas` on every simulated call (state reads, preparations,
-   * `assertBefore`/`assertAfter` assertions and user transactions). Omitted: no
-   * per-call `gas` is sent and the node applies its default (150M per call on
-   * Monad, regardless of `blockOverrides.gasLimit`).
+   * `assertBefore`/`assertAfter` assertions and user transactions). Omitted:
+   * user transactions, preparations and assertions carry no `gas` and the node
+   * applies its default (150M per call on Monad, regardless of
+   * `blockOverrides.gasLimit`); SDK-inserted balance and position reads carry at
+   * most 1,000,000 gas each and, together, 15,000,000 or half the pinned block's gas
+   * limit (15,000,000 if the node omits it), whichever is less (none when that
+   * gives a read under 100,000) unless
+   * `blockOverrides.gasLimit` is set. When set, it is sent on every call,
+   * including retention reads, so calls × `callGasLimit` must fit the node's
+   * total (on Monad, its 1.6B simulation cap).
    *
    * A call that needs more gas than this runs out of gas and is reported as a
    * revert or a read/assertion failure, not as a configuration error, so set it
@@ -52,7 +59,11 @@ export interface SimulationOptions {
   readonly parentHashCheck?: boolean;
 }
 
-/** @deprecated Ignored by the SDK. Read `report.warnings` instead; will be removed in a future major after the coexistence minor. */
+/**
+ * Legacy logger interface for simulation callers.
+ *
+ * @deprecated Ignored by the SDK. Read `report.warnings` instead; will be removed in a future major after the coexistence minor.
+ */
 export interface SimulationLogger {
   info(message: string, data?: Record<string, unknown>): void;
   warn(message: string, data?: Record<string, unknown>): void;

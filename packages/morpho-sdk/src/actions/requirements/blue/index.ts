@@ -1,1 +1,1 @@
-export * from "./getBlueAuthorizationRequirement.js";
+export { getBlueAuthorizationRequirement } from "./getBlueAuthorizationRequirement.js";

@@ -1,31 +1,14 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
-import { type Address, encodeFunctionData } from "viem";
-import { blueBundlesV1Abi } from "../../abis.js";
-import {
-  validateMarketParamsId,
-  validateUint256Field,
-} from "../../helpers/validate.js";
-import {
-  type AuthorizationRequirementSignature,
-  type BlueRepayWithdrawCollateralAction,
-  type BundlesTokenRequirementSignature,
-  InputExceedsMaxError,
-  MaxRepayAssetsBelowRepayAssetsError,
-  type Metadata,
-  MutuallyExclusiveRepayAmountsError,
-  NonPositiveInputError,
-  type Transaction,
-  UnexpectedRequirementSignatureError,
+import type { Address } from "viem";
+import type {
+  AuthorizationRequirementSignature,
+  BlueRepayWithdrawCollateralAction,
+  BundlesTokenRequirementSignature,
+  Metadata,
+  Transaction,
 } from "../../types/index.js";
-import {
-  type BlueBundlesV1CommonParams,
-  finalizeBlueBundlesV1Transaction,
-  getBlueBundlesV1ReferralFeeAssets,
-  getBlueBundlesV1SignedAuthorization,
-  getBlueBundlesV1TokenPermit,
-  normalizeBlueBundlesV1CommonParams,
-  validateBlueBundlesV1NativeFunding,
-} from "./common.js";
+import { encodeBlueRepayWithdrawCollateral } from "./encode.js";
+import { parseBlueRepayWithdrawCollateral } from "./repayWithdrawCollateral.internal.js";
 
 /** Parameters for {@link blueRepayWithdrawCollateral}. */
 export interface BlueRepayWithdrawCollateralParams {
@@ -131,138 +114,8 @@ export interface BlueRepayWithdrawCollateralParams {
  * // tx satisfies Readonly<Transaction<BlueRepayWithdrawCollateralAction>>
  * ```
  */
+
 export const blueRepayWithdrawCollateral = (
   params: BlueRepayWithdrawCollateralParams,
-): Readonly<Transaction<BlueRepayWithdrawCollateralAction>> => {
-  const { chainId, marketParams } = params.market;
-  validateMarketParamsId(marketParams);
-  const {
-    userAddress,
-    repayAssets,
-    repayShares,
-    maxRepayAssets,
-    collateralAssets,
-    maxLtv,
-    requirementSignature,
-    authorizationSignature,
-  } = params.args;
-  for (const [field, value] of [
-    ["repayAssets", repayAssets],
-    ["repayShares", repayShares],
-    ["maxRepayAssets", maxRepayAssets],
-    ["collateralAssets", collateralAssets],
-    ["maxLtv", maxLtv],
-  ] as const) {
-    validateUint256Field(field, value);
-  }
-  if (repayAssets > 0n && repayShares > 0n) {
-    throw new MutuallyExclusiveRepayAmountsError(marketParams.id);
-  }
-  const hasRepay = repayAssets + repayShares > 0n;
-  if (repayAssets + repayShares + collateralAssets === 0n) {
-    throw new NonPositiveInputError(
-      "repayAssets, repayShares, or collateralAssets",
-      0n,
-    );
-  }
-  if (hasRepay && maxRepayAssets === 0n) {
-    throw new NonPositiveInputError("maxRepayAssets", maxRepayAssets);
-  }
-  if (!hasRepay && maxRepayAssets > 0n) {
-    // Withdrawal-only has no repay leg to fund: reject stray funding that would encode a phantom
-    // repay. Native funding is transitively rejected — `validateBlueBundlesV1NativeFunding`
-    // requires `nativeAmount === maxRepayAssets` (= 0).
-    throw new InputExceedsMaxError({
-      field: "maxRepayAssets",
-      value: maxRepayAssets,
-      max: 0n,
-    });
-  }
-  if (!hasRepay && requirementSignature != null) {
-    throw new UnexpectedRequirementSignatureError(
-      requirementSignature.action.type,
-    );
-  }
-  if (collateralAssets === 0n && authorizationSignature != null) {
-    throw new UnexpectedRequirementSignatureError("authorization");
-  }
-
-  const common: BlueBundlesV1CommonParams = {
-    chainId,
-    userAddress,
-    deadline: params.args.deadline,
-    referralFeePct: params.args.referralFeePct,
-    referralFeeRecipient: params.args.referralFeeRecipient,
-    metadata: params.metadata,
-  };
-  const { referralFeePct, referralFeeRecipient } =
-    normalizeBlueBundlesV1CommonParams(common);
-  const minimumRepayAssets =
-    repayAssets +
-    getBlueBundlesV1ReferralFeeAssets(repayAssets, referralFeePct);
-  if (minimumRepayAssets > maxRepayAssets) {
-    throw new MaxRepayAssetsBelowRepayAssetsError(
-      maxRepayAssets,
-      minimumRepayAssets,
-    );
-  }
-  const value = validateBlueBundlesV1NativeFunding({
-    chainId,
-    token: marketParams.loanToken,
-    fundedAmount: maxRepayAssets,
-    nativeAmount: params.args.nativeAmount,
-    requirementSignature,
-  });
-  const loanTokenPermit = getBlueBundlesV1TokenPermit({
-    chainId,
-    userAddress,
-    token: marketParams.loanToken,
-    amount: maxRepayAssets,
-    requirementSignature,
-  });
-  const signedAuthorization = getBlueBundlesV1SignedAuthorization({
-    chainId,
-    userAddress,
-    authorizationSignature,
-  });
-
-  return finalizeBlueBundlesV1Transaction({
-    common,
-    value,
-    data: encodeFunctionData({
-      abi: blueBundlesV1Abi,
-      functionName: "blueBundlesV1RepayAndWithdrawCollateral",
-      args: [
-        marketParams,
-        repayAssets,
-        repayShares,
-        maxRepayAssets,
-        collateralAssets,
-        maxLtv,
-        loanTokenPermit,
-        signedAuthorization,
-        referralFeePct,
-        referralFeeRecipient,
-        params.args.deadline,
-      ],
-    }),
-    action: {
-      type: "blueRepayWithdrawCollateral",
-      args: {
-        market: marketParams.id,
-        repayAssets,
-        repayShares,
-        maxRepayAssets,
-        collateralAssets,
-        maxLtv,
-        onBehalf: userAddress,
-        nativeAmount: value > 0n ? value : undefined,
-        referralFeePct,
-        referralFeeRecipient,
-        referralFeeAssets:
-          repayAssets > 0n ? minimumRepayAssets - repayAssets : undefined,
-        deadline: params.args.deadline,
-      },
-    },
-  });
-};
+): Readonly<Transaction<BlueRepayWithdrawCollateralAction>> =>
+  encodeBlueRepayWithdrawCollateral(parseBlueRepayWithdrawCollateral(params));

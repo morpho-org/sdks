@@ -6,6 +6,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { mainnet } from "viem/chains";
 import { assert, describe, expect, test } from "vitest";
 import {
+  IN_KIND_ADAPTER,
   IN_KIND_ASSET,
   IN_KIND_VAULT,
   inKindMarketParams,
@@ -13,7 +14,7 @@ import {
   secondInKindMarketParams,
 } from "../../../test/fixtures/inKindRedeem.js";
 import { withChainTimestamp } from "../../../test/helpers/time.js";
-import { morphoViemExtension } from "../../client/index.js";
+import { vaultV2InKindRedeem } from "../../actions/vaultV2/inKindRedeem.js";
 import {
   ExpiredDeadlineError,
   InKindRedeemCoverageError,
@@ -161,26 +162,24 @@ describe("prepareVaultV2InKindRedeem", () => {
       const transactions = buildTransactions(restored);
       expect(transactions).toEqual(buildTransactions(signed));
       expect(first.request).not.toHaveBeenCalled();
-      const second = mockClient();
-      const handle = morphoViemExtension({
-        supportSignature,
-        metadata: { origin: input.calldataOrigin },
-      })(second.client)
-        .morpho.vaultV2(input.vault.address, input.chainId)
-        .inKindRedeem({
-          ...input,
-          vaultData: input.vault,
-          amount: input.assets,
-          userAddress: input.account,
-          deadline: BigInt(input.expiresAt),
-        });
       const permit = getVaultPermit(restored.signatureRequests, {
         id: supportSignature ? "vaultV2InKindRedeem:tokenPermit" : undefined,
         asset: input.vault.address,
         owner: input.account,
       });
-      const signatures = permit ? [permit] : [];
-      expect(transactions.at(-1)?.data).toBe(handle.buildTx(signatures).data);
+      const expected = vaultV2InKindRedeem({
+        vault: { address: input.vault.address, chainId: input.chainId },
+        metadata: { origin: input.calldataOrigin },
+        args: {
+          adapter: IN_KIND_ADAPTER,
+          amount: input.assets,
+          marketParamsList: input.marketParamsList,
+          userAddress: input.account,
+          deadline: BigInt(input.expiresAt),
+          requirementSignature: permit,
+        },
+      });
+      expect(transactions.at(-1)?.data).toBe(expected.data);
       expect(Object.isFrozen(transactions.at(-1))).toBe(true);
     },
   );

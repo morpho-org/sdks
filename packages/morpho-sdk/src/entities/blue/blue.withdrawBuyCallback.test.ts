@@ -8,12 +8,13 @@ import { getChainAddress } from "@morpho-org/morpho-ts";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import type { Address } from "viem";
 import { mainnet } from "viem/chains";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import {
   blueAbi,
   midnightBlueBuyCallbackAbi,
   midnightBlueBuyCallbackFactoryAbi,
 } from "../../abis.js";
+import { blueWithdrawBuyCallback } from "../../actions/blue/withdrawBuyCallback.js";
 import { morphoViemExtension } from "../../client/index.js";
 import {
   AccrualPositionUserMismatchError,
@@ -121,6 +122,47 @@ describe("MorphoBlue.withdrawBuyCallback", () => {
         receiver: userAddress,
       },
     });
+  });
+
+  test("behavior: buildTx reuses the frozen transaction with creation-time timestamp metadata", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+      const metadata = { origin: "deadbeef", timestamp: true };
+      const { client, request } = createMockClient(mainnet);
+      const market = client
+        .extend(morphoViemExtension({ metadata }))
+        .morpho.blue(marketParams, mainnet.id);
+      const positionData = makePosition();
+      const action = market.withdrawBuyCallback({
+        userAddress,
+        callbackAddress,
+        positionData,
+      });
+      const expected = blueWithdrawBuyCallback({
+        market: { chainId: mainnet.id, marketParams },
+        args: {
+          userAddress,
+          callbackAddress,
+          shares: positionData.supplyShares,
+        },
+        metadata,
+      });
+
+      vi.advanceTimersByTime(1_000);
+      const first = action.buildTx();
+      vi.advanceTimersByTime(2_000);
+      const second = action.buildTx();
+
+      expect(first).toEqual(expected);
+      expect(second).toBe(first);
+      expect(Object.isFrozen(first)).toBe(true);
+      expect(Object.isFrozen(first.action)).toBe(true);
+      expect(Object.isFrozen(first.action.args)).toBe(true);
+      expect(request).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test("error: rejects an address the factory did not create", async () => {

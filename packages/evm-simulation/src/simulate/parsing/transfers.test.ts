@@ -973,3 +973,157 @@ describe("parseTransfers", () => {
     expect(warnings).toEqual([]);
   });
 });
+
+describe("parseTransfers — Transfer-only wrapped native (Arbitrum aeWETH)", () => {
+  const AEWETH: Address = "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1";
+  const BLUE_BUNDLES: Address = "0x30a388A64b99192702a83D2CA9B95D79702afbf2";
+  const BLUE: Address = "0x6c247b1F6182318877311737BaC0844bAa518F5e";
+  const UNWRAPPER: Address = "0xe6eeDa550918638529c6CF2EA14f9eA0572d6F88";
+  const ZERO_TOPIC = `0x${"0".repeat(64)}` as Hex;
+  const WRAP_AMOUNT = 0x14401eab384000n;
+  const UNWRAP_AMOUNT = 0x856b93facca84n;
+  const parseArbitrum = (logs: RawLog[], wNativeEmitsWrapEvents?: boolean) =>
+    parseRawTransfers([makeCall(logs)], {
+      chainId: 42161,
+      wNative: AEWETH,
+      ...(wNativeEmitsWrapEvents === undefined
+        ? {}
+        : { wNativeEmitsWrapEvents }),
+    });
+  // aeWETH logs of Arbitrum tx 0xf857571628503ac52388e5fe6316befe0e3f6a0a7af2495f110fef789ae5e625,
+  // a native-funded BlueBundlesV1 collateral supply.
+  const wrapLogs: RawLog[] = [
+    {
+      address: AEWETH,
+      topics: [TRANSFER_TOPIC, ZERO_TOPIC, padAddress(BLUE_BUNDLES)],
+      data: encodeUint256(WRAP_AMOUNT),
+    },
+    {
+      address: AEWETH,
+      topics: [TRANSFER_TOPIC, padAddress(BLUE_BUNDLES), padAddress(BLUE)],
+      data: encodeUint256(WRAP_AMOUNT),
+    },
+  ];
+  // aeWETH burn log of Arbitrum tx 0xdd81c80dc5a7d9d5284e6d508d1da6b8c98fd0af85b0e79cd9cc602d11390a29.
+  const unwrapLogs: RawLog[] = [
+    {
+      address: AEWETH,
+      topics: [TRANSFER_TOPIC, padAddress(UNWRAPPER), ZERO_TOPIC],
+      data: encodeUint256(UNWRAP_AMOUNT),
+    },
+  ];
+
+  it("keeps the real wrap mint and supply transfer without warnings", () => {
+    const { transfers, warnings } = parseArbitrum(wrapLogs, false);
+
+    expect(transfers).toEqual([
+      {
+        token: AEWETH,
+        from: zeroAddress,
+        to: BLUE_BUNDLES,
+        amount: WRAP_AMOUNT,
+        txIdx: 0,
+      },
+      {
+        token: AEWETH,
+        from: BLUE_BUNDLES,
+        to: BLUE,
+        amount: WRAP_AMOUNT,
+        txIdx: 0,
+      },
+    ]);
+    expect(warnings).toEqual([]);
+  });
+
+  it("keeps the real unwrap burn without warnings", () => {
+    const { transfers, warnings } = parseArbitrum(unwrapLogs, false);
+
+    expect(transfers).toEqual([
+      {
+        token: AEWETH,
+        from: getAddress(UNWRAPPER),
+        to: zeroAddress,
+        amount: UNWRAP_AMOUNT,
+        txIdx: 0,
+      },
+    ]);
+    expect(warnings).toEqual([]);
+  });
+
+  it.each([
+    { name: "wrap", logs: wrapLogs, kind: "mint" },
+    { name: "unwrap", logs: unwrapLogs, kind: "burn" },
+  ])(
+    "warns WRAPPED_NATIVE_DEDUP_MISS on the real $name logs by default",
+    ({ logs, kind }) => {
+      const { transfers, warnings } = parseArbitrum(logs);
+
+      expect(transfers).toEqual(parseArbitrum(logs, false).transfers);
+      expect(warnings).toMatchObject([
+        { code: "WRAPPED_NATIVE_DEDUP_MISS", token: AEWETH, kind, txIdx: 0 },
+      ]);
+    },
+  );
+
+  it("still pairs a Deposit with its mirror Transfer once", () => {
+    const amount = parseEther("1");
+    const { transfers, warnings } = parseArbitrum(
+      [
+        {
+          address: AEWETH,
+          topics: [DEPOSIT_TOPIC, padAddress(USER)],
+          data: encodeUint256(amount),
+        },
+        {
+          address: AEWETH,
+          topics: [TRANSFER_TOPIC, ZERO_TOPIC, padAddress(USER)],
+          data: encodeUint256(amount),
+        },
+      ],
+      false,
+    );
+
+    expect(transfers).toEqual([
+      {
+        token: AEWETH,
+        from: zeroAddress,
+        to: getAddress(USER),
+        amount,
+        txIdx: 0,
+      },
+    ]);
+    expect(warnings).toEqual([]);
+  });
+
+  it("still warns on unregistered wNative-shaped tokens", () => {
+    const amount = parseEther("1");
+    const { warnings } = parseRawTransfers(
+      [
+        makeCall([
+          {
+            address: WETH,
+            topics: [DEPOSIT_TOPIC, padAddress(USER)],
+            data: encodeUint256(amount),
+          },
+        ]),
+        makeCall([
+          {
+            address: WETH,
+            topics: [TRANSFER_TOPIC, ZERO_TOPIC, padAddress(USER)],
+            data: encodeUint256(amount),
+          },
+        ]),
+      ],
+      { chainId: 42161, wNativeEmitsWrapEvents: false },
+    );
+
+    expect(warnings).toMatchObject([
+      {
+        code: "WRAPPED_NATIVE_DEDUP_MISS",
+        token: WETH,
+        kind: "mint",
+        txIdx: 1,
+      },
+    ]);
+  });
+});

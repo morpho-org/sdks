@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // JSDoc coverage burndown for Tier 1–4 packages.
-// Approximate and regex-driven.
+// Export discovery and JSDoc tag checks are approximate.
 //
 // Flags:
 //   --verbose       — list every undocumented export under each package.
@@ -10,12 +10,12 @@
 //                     the future Phase 5 CI gate.
 //   --self-check    — run export analysis and syntax helper
 //                     test cases, print pass/fail, exit 1 on any failure. Cheap
-//                     guard against TypeScript syntax drift breaking the regex
-//                     silently.
+//                     guard against regressions in export analysis.
 
 import { type Dirent, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { type ESTree, parseSync } from "vite";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PACKAGES_DIR = join(REPO_ROOT, "packages");
@@ -91,28 +91,80 @@ function isInternal(jsdocBlock: string): boolean {
   return /@internal\b/.test(jsdocBlock);
 }
 
-function hasParams(signature: string): boolean {
-  // Arrow function: `= (...)`, `= async (...)`, or `= <T>(...)` (generic arrow).
-  // Known limitation: nested generic constraints like `<T extends Foo<Bar>>`
-  // break the `[^>]+` consume — no occurrences in Tier 1 today.
-  const arrow = signature.match(/=\s*(?:async\s+)?(?:<[^>]+>\s*)?\(([^)]*)\)/);
-  if (arrow) return (arrow[1] ?? "").trim().length > 0;
-  // Function declaration: `function name(...)` or `function name<T>(...)`.
-  const fn = signature.match(/function\s+\w+\s*(?:<[^>]+>\s*)?\(([^)]*)\)/);
-  if (fn) return (fn[1] ?? "").trim().length > 0;
-  return false;
+function declaredFunctionParamCount(
+  declaredType: ESTree.TSType | undefined,
+): number | undefined {
+  let annotation = declaredType;
+  while (annotation?.type === "TSParenthesizedType")
+    annotation = annotation.typeAnnotation;
+  if (annotation?.type === "TSFunctionType") return annotation.params.length;
+  if (annotation?.type !== "TSTypeLiteral") return undefined;
+
+  let count: number | undefined;
+  for (const member of annotation.members) {
+    if (member.type === "TSCallSignatureDeclaration")
+      count = Math.max(count ?? 0, member.params.length);
+  }
+  return count;
 }
 
-function isFunctionLike(kind: string, signature: string): boolean {
-  if (kind === "function") return true;
-  if (kind !== "const" && kind !== "let" && kind !== "var") return false;
-  // const X = (...) => ... | const X = async (...) => ...
-  // const X = <T>(...) => ... (generic arrow — symmetric with hasParams)
-  // const X = function ...
-  return (
-    /=\s*(?:async\s+)?(?:<[^>]+>\s*)?\(/.test(signature) ||
-    /=\s*(?:async\s+)?function\b/.test(signature)
-  );
+function collectFunctionParams(
+  statements: ESTree.Program["body"],
+  paramsByStart: Map<number, number>,
+): void {
+  for (const statement of statements) {
+    const declaration =
+      statement.type === "ExportNamedDeclaration" ||
+      statement.type === "ExportDefaultDeclaration"
+        ? statement.declaration
+        : statement;
+    if (declaration?.type === "TSModuleDeclaration") {
+      if (declaration.body?.type === "TSModuleBlock")
+        collectFunctionParams(declaration.body.body, paramsByStart);
+      continue;
+    }
+    if (declaration === statement) continue;
+    if (
+      declaration?.type === "FunctionDeclaration" ||
+      declaration?.type === "TSDeclareFunction"
+    ) {
+      paramsByStart.set(statement.start, declaration.params.length);
+    } else if (declaration?.type === "VariableDeclaration") {
+      const variable = declaration.declarations[0];
+      const declaredCount = declaredFunctionParamCount(
+        variable?.id.typeAnnotation?.typeAnnotation,
+      );
+      if (declaredCount !== undefined) {
+        paramsByStart.set(statement.start, declaredCount);
+        continue;
+      }
+      let initializer = variable?.init;
+      while (
+        initializer?.type === "ParenthesizedExpression" ||
+        initializer?.type === "TSAsExpression" ||
+        initializer?.type === "TSSatisfiesExpression" ||
+        initializer?.type === "TSTypeAssertion" ||
+        initializer?.type === "TSNonNullExpression"
+      )
+        initializer = initializer.expression;
+      if (
+        initializer?.type === "ArrowFunctionExpression" ||
+        initializer?.type === "FunctionExpression"
+      )
+        paramsByStart.set(statement.start, initializer.params.length);
+    }
+  }
+}
+
+function functionParamsByStart(text: string, filePath: string) {
+  const { program, errors } = parseSync(filePath, text);
+  if (errors.length > 0)
+    throw new Error(
+      `Cannot check JSDoc coverage in ${filePath}: ${errors[0]?.message}`,
+    );
+  const paramsByStart = new Map<number, number>();
+  collectFunctionParams(program.body, paramsByStart);
+  return paramsByStart;
 }
 
 interface UndocumentedEntry {
@@ -144,6 +196,7 @@ function findJSDoc(lines: string[], index: number): string | undefined {
 
 interface ExportEntry {
   index: number;
+  start: number;
   kind: string;
   name: string;
   indent: string;
@@ -152,11 +205,15 @@ interface ExportEntry {
 function groupExports(lines: string[]): ExportEntry[][] {
   const groups: ExportEntry[][] = [];
   let previous: ExportEntry | undefined;
+  let lineStart = 0;
   for (const [index, line] of lines.entries()) {
+    const offset = lineStart;
+    lineStart += line.length + 1;
     const match = line.match(EXPORT_RE);
     if (!match) continue;
     const [, kind = "", name = ""] = match;
-    const entry = { index, kind, name, indent: line.match(/^\s*/)?.[0] ?? "" };
+    const indent = line.match(/^\s*/)?.[0] ?? "";
+    const entry = { index, start: offset + indent.length, kind, name, indent };
     const group = groups.at(-1);
     if (
       group &&
@@ -177,14 +234,18 @@ function analyzeFile(
   { collectUndocumented }: { collectUndocumented: boolean },
 ): FileAnalysis {
   const text = readFileSync(filePath, "utf-8");
-  return analyzeSource(text, { collectUndocumented });
+  return analyzeSource(text, { collectUndocumented, filePath });
 }
 
 function analyzeSource(
   text: string,
-  { collectUndocumented }: { collectUndocumented: boolean },
+  {
+    collectUndocumented,
+    filePath = "self-check.ts",
+  }: { collectUndocumented: boolean; filePath?: string },
 ): FileAnalysis {
   const lines = text.split("\n");
+  const paramsByStart = functionParamsByStart(text, filePath);
   const undocumented: UndocumentedEntry[] = [];
   let total = 0;
   let documented = 0;
@@ -218,10 +279,8 @@ function analyzeSource(
     let reason: string | undefined;
     for (const entry of members) {
       if (entry.block === undefined || isInternal(entry.block)) continue;
-      const signature = lines.slice(entry.index, entry.index + 8).join(" ");
       reason = documentationIssue({
-        kind: entry.kind,
-        signature,
+        parameterCount: paramsByStart.get(entry.start),
         block: entry.block,
       });
       if (reason) break;
@@ -234,20 +293,18 @@ function analyzeSource(
 }
 
 function documentationIssue({
-  kind,
-  signature,
+  parameterCount,
   block,
 }: {
-  kind: string;
-  signature: string;
+  parameterCount: number | undefined;
   block: string;
 }): string | undefined {
   if (block === "") return "malformed JSDoc";
   if (!/\n\s*\*\s+[^@\s*]/.test(block) && !/\/\*\*\s+[^@\s*]/.test(block))
     return "no description";
-  if (!isFunctionLike(kind, signature)) return undefined;
+  if (parameterCount === undefined) return undefined;
   const missing: string[] = [];
-  if (hasParams(signature) && !block.includes("@param")) missing.push("@param");
+  if (parameterCount > 0 && !block.includes("@param")) missing.push("@param");
   if (!block.includes("@returns")) missing.push("@returns");
   if (!block.includes("@example")) missing.push("@example");
   return missing.length > 0 ? `missing ${missing.join(", ")}` : undefined;
@@ -331,7 +388,7 @@ function selfCheck(): never {
     }
   }
 
-  // hasParams — verifies @param requirement detection across signature shapes.
+  // Verify @param requirement detection across signature shapes.
   const hasParamsCases: { expected: boolean; sig: string }[] = [
     { sig: "export const foo = (x: number) => x;", expected: true },
     { sig: "export const foo = () => x;", expected: false },
@@ -344,7 +401,7 @@ function selfCheck(): never {
     { sig: "export const FOO = 100n;", expected: false }, // not a function
   ];
   for (const c of hasParamsCases) {
-    const got = hasParams(c.sig);
+    const got = (functionParamsByStart(c.sig, "self-check.ts").get(0) ?? 0) > 0;
     if (got === c.expected) pass++;
     else {
       fail++;
@@ -354,8 +411,7 @@ function selfCheck(): never {
     }
   }
 
-  // isFunctionLike — verifies function vs constant classification.
-  // Generic arrows are now recognized symmetrically with hasParams.
+  // Verify function vs constant classification.
   const isFunctionLikeCases: {
     expected: boolean;
     kind: string;
@@ -383,7 +439,7 @@ function selfCheck(): never {
     { kind: "class", sig: "export class Foo {}", expected: false },
   ];
   for (const c of isFunctionLikeCases) {
-    const got = isFunctionLike(c.kind, c.sig);
+    const got = functionParamsByStart(c.sig, "self-check.ts").has(0);
     if (got === c.expected) pass++;
     else {
       fail++;
@@ -448,6 +504,37 @@ export function identity(value: string | number) { return value; }`;
       total: 1,
       documented: 1,
       missing: 0,
+    },
+    {
+      name: "constant next to a parenthesized type alias and an arrow function",
+      source: `/** Supported modes. */
+export const MODES = ["preview", "final"] as const;
+/** Supported mode. */
+export type Mode = (typeof MODES)[number];
+const normalize = (mode: Mode) => mode;
+`,
+      total: 2,
+      documented: 2,
+      missing: 0,
+    },
+    {
+      name: "constant with a parenthesized initializer",
+      source: `/** Maximum count. */\nexport const MAX_COUNT = (1 + 2) as number;`,
+      total: 1,
+      documented: 1,
+      missing: 0,
+    },
+    {
+      name: "declared signature requires @param even if the implementation ignores it",
+      source: `// Unicode before the export 🙂.
+/** Helper functions. */
+export namespace Helpers {
+  ${documentedFunction.replace(" * @param value - The input.\n", "")}
+  export const identity: (value: number) => number = () => 1;
+}`,
+      total: 2,
+      documented: 1,
+      missing: 1,
     },
     { name: "empty source", source: "", total: 0, documented: 0, missing: 0 },
     {

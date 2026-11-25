@@ -501,6 +501,8 @@ export type CheckedInputOperationLimit = InputOperationLimit &
  * but not reported here.
  */
 export interface CheckedSimulationInputLimits {
+  /** Verified control effects with resolved zero-based caller transaction indices. */
+  readonly effects?: readonly (SimulationEffect & { readonly txIdx: number })[];
   readonly operations: readonly (
     | CheckedOperationLimit
     | CheckedInputOperationLimit
@@ -513,6 +515,8 @@ export interface CheckedSimulationInputLimits {
  * but not reported here.
  */
 export interface CheckedSimulationLimits {
+  /** Verified control effects with resolved zero-based caller transaction indices. */
+  readonly effects?: readonly (SimulationEffect & { readonly txIdx: number })[];
   readonly operations: readonly CheckedOperationLimit[];
 }
 
@@ -600,6 +604,15 @@ export type OperationLimit = SlippageLimits & {
    * `midnightTakeRepayWithdrawCollateral`, and `midnightSupplyBlueMakeLend`
    * reject `assetPaid` because they measure the market's loan token; on
    * wNative loan markets, payment counts ETH sent plus the net wNative change.
+   * Native-sentinel Blue collateral quotes add only the sender's net wNative
+   * debit when collateral is the chain's registered wNative. Wrapped credits
+   * never reduce the ETH payment.
+   * When another operation already checks that wallet balance, its funding
+   * bound applies instead; existing native wallet overlap restrictions remain.
+   * If any operation's proceeds measure that wNative balance, payment stays
+   * ETH-only and the proceeds minimum catches extra wNative debits. Native
+   * quotes' combined payment reads do not cover one another. Typed same-token
+   * net measurements are unchanged.
    */
   readonly assetPaid?: Address;
   /**
@@ -891,8 +904,8 @@ export type InputOperationLimit = {
 /**
  * Caller-selected quote-only checks; use {@link SimulationInputLimits} for
  * typed-input or mixed operations.
- * `operations` must be non-empty. Each operation requires its applicable
- * position and quote sides. `midnightSupplyBlueMakeLend` requires callback-
+ * `operations` must be non-empty unless `effects` is non-empty and validated.
+ * Each operation requires its applicable position and quote sides. `midnightSupplyBlueMakeLend` requires callback-
  * position `sharesMinted` and exact `assetsPaid`; payout operations require
  * `assetsReceived`, pay-in operations require `assetsPaid`, and combined
  * collateral operations require their active-leg sides. The package README's
@@ -903,6 +916,8 @@ export type InputOperationLimit = {
  */
 export interface SimulationLimits {
   readonly operations: readonly OperationLimit[];
+  /** Exact transaction effects. Empty operations require at least one validated effect. */
+  readonly effects?: readonly SimulationEffect[];
   /**
    * Additional sender approvals, Morpho authorizations and Midnight authorizations allowed by the
    * simulation. These are unioned with the entries derived from `operations`.
@@ -913,9 +928,42 @@ export interface SimulationLimits {
 /** Caller-selected quoted or input-based operations; input sides derive at the pinned block. */
 export interface SimulationInputLimits {
   readonly operations: readonly (OperationLimit | InputOperationLimit)[];
+  /** Exact transaction effects. Empty operations require at least one validated effect. */
+  readonly effects?: readonly SimulationEffect[];
   /**
    * Additional sender approvals, Morpho authorizations and Midnight authorizations allowed by the
    * simulation. These are unioned with the entries derived from `operations`.
    */
   readonly approvals?: readonly ApprovalLimit[];
 }
+
+/** Exact control-call evidence and no positive sender outflow. Without operation limits, every caller transaction (not preparations) requires an effect and its calldata is restricted to the declared control calls. */
+export type SimulationEffect = {
+  /** Caller transaction index; omitted binds to the last caller transaction, excluding preparations. */
+  readonly txIdx?: number;
+} & (
+  | {
+      readonly type: "erc20Approval";
+      readonly token: Address;
+      readonly owner: Address;
+      readonly spender: Address;
+      readonly amount: bigint;
+    }
+  | {
+      readonly type: "blueAuthorization";
+      readonly authorizer: Address;
+      readonly authorized: Address;
+      readonly isAuthorized: boolean;
+    }
+  | {
+      readonly type: "midnightAuthorization";
+      readonly onBehalf: Address;
+      readonly authorized: Address;
+      readonly isAuthorized: boolean;
+    }
+  | {
+      readonly type: "midnightCancelOffers";
+      readonly onBehalf: Address;
+      readonly groups: readonly Hex[];
+    }
+);

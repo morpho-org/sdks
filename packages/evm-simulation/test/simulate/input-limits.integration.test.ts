@@ -38,6 +38,7 @@ import { expect } from "vitest";
 import {
   ConsumerLimitViolationError,
   type InputOperationLimit,
+  type SimulationInputReport,
   SimulationValidationError,
   SlippageCheckUnavailableError,
   simulate,
@@ -59,6 +60,18 @@ const test = createViemTest(mainnet, {
     await use(client);
   },
 });
+
+const expectPositionWarningAndLimitViolation = (
+  report: SimulationInputReport,
+) => {
+  expect(report.ok).toBe(false);
+  expect(!report.ok && report.failures).toContainEqual(
+    expect.any(ConsumerLimitViolationError),
+  );
+  expect(report.warnings.map(({ code }) => code)).toContain(
+    "UNEXPECTED_POSITION_CHANGE",
+  );
+};
 const USDC: Address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const CBBTC: Address = "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf";
 const V1: Address = "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB";
@@ -699,14 +712,19 @@ test("all Blue input-derived operations round-trip; amount and subject mismatche
     ],
   };
   const config = simulationClientFor(client.transport.url, mainnet);
-  await expect(
-    simulateOrThrowFirst(config, {
-      ...params,
-      limits: { operations: [cases[3]![1]] },
-    }),
-  ).rejects.toBeInstanceOf(ConsumerLimitViolationError);
-  await expect(
-    simulateOrThrowFirst(config, {
+  expectPositionWarningAndLimitViolation(
+    await simulate(
+      config,
+      {
+        ...params,
+        limits: { operations: [cases[3]![1]] },
+      },
+      { timeoutMs: 30_000 },
+    ),
+  );
+  const quoteOnly = await simulate(
+    config,
+    {
       ...params,
       limits: {
         operations: [
@@ -717,61 +735,74 @@ test("all Blue input-derived operations round-trip; amount and subject mismatche
           },
         ],
       },
-    }),
-  ).resolves.toBeDefined();
+    },
+    { timeoutMs: 30_000 },
+  );
+  expect(quoteOnly.ok).toBe(true);
+  expect(quoteOnly.warnings.map(({ code }) => code)).toContain(
+    "UNEXPECTED_POSITION_CHANGE",
+  );
   const supplyWithdrawal = cases[1]![0];
   const supplyWithdrawalTx = supplyWithdrawal.buildTx();
-  await expect(
-    simulateOrThrowFirst(config, {
-      ...params,
-      authorizations: toSimulationAuthorizations({
-        owner: userAddress,
-        requirements: await supplyWithdrawal.getRequirements(),
-      }),
-      transactions: [
-        {
-          from: userAddress,
-          to: supplyWithdrawalTx.to,
-          data: supplyWithdrawalTx.data,
-          value: supplyWithdrawalTx.value,
-        },
-        {
-          from: userAddress,
-          to: getChainAddresses(1).blue,
-          data: encodeFunctionData({
-            abi: blueAbi,
-            functionName: "withdrawCollateral",
-            args: [marketParams, 1n, userAddress, V1],
-          }),
-        },
-      ],
-      limits: { operations: [cases[1]![1]] },
-    }),
-  ).rejects.toBeInstanceOf(ConsumerLimitViolationError);
-  for (const [action, limit] of cases.slice(6)) {
-    const tx = action.buildTx();
-    await expect(
-      simulateOrThrowFirst(config, {
+  expectPositionWarningAndLimitViolation(
+    await simulate(
+      config,
+      {
         ...params,
         authorizations: toSimulationAuthorizations({
           owner: userAddress,
-          requirements: await action.getRequirements(),
+          requirements: await supplyWithdrawal.getRequirements(),
         }),
         transactions: [
-          { from: userAddress, to: tx.to, data: tx.data, value: tx.value },
+          {
+            from: userAddress,
+            to: supplyWithdrawalTx.to,
+            data: supplyWithdrawalTx.data,
+            value: supplyWithdrawalTx.value,
+          },
           {
             from: userAddress,
             to: getChainAddresses(1).blue,
             data: encodeFunctionData({
               abi: blueAbi,
-              functionName: "withdraw",
-              args: [marketParams, 1n, 0n, userAddress, V1],
+              functionName: "withdrawCollateral",
+              args: [marketParams, 1n, userAddress, V1],
             }),
           },
         ],
-        limits: { operations: [limit] },
-      }),
-    ).rejects.toBeInstanceOf(ConsumerLimitViolationError);
+        limits: { operations: [cases[1]![1]] },
+      },
+      { timeoutMs: 30_000 },
+    ),
+  );
+  for (const [action, limit] of cases.slice(6)) {
+    const tx = action.buildTx();
+    expectPositionWarningAndLimitViolation(
+      await simulate(
+        config,
+        {
+          ...params,
+          authorizations: toSimulationAuthorizations({
+            owner: userAddress,
+            requirements: await action.getRequirements(),
+          }),
+          transactions: [
+            { from: userAddress, to: tx.to, data: tx.data, value: tx.value },
+            {
+              from: userAddress,
+              to: getChainAddresses(1).blue,
+              data: encodeFunctionData({
+                abi: blueAbi,
+                functionName: "withdraw",
+                args: [marketParams, 1n, 0n, userAddress, V1],
+              }),
+            },
+          ],
+          limits: { operations: [limit] },
+        },
+        { timeoutMs: 30_000 },
+      ),
+    );
   }
 }, 180_000);
 
@@ -969,7 +1000,7 @@ test("borrows and withdrawals split across same-token markets fail while honest 
       const requirements = (
         await Promise.all(actions.map((action) => action.getRequirements()))
       ).flat();
-      const result = simulateOrThrowFirst(
+      const report = await simulate(
         simulationClientFor(client.transport.url, mainnet),
         {
           mode: "preview",
@@ -988,12 +1019,14 @@ test("borrows and withdrawals split across same-token markets fail while honest 
           }),
           limits: { operations: [operation] },
         },
+        { timeoutMs: 30_000 },
       );
-      if (actions.length === 1) await expect(result).resolves.toBeDefined();
-      else
-        await expect(result).rejects.toBeInstanceOf(
-          ConsumerLimitViolationError,
+      if (actions.length === 1) {
+        expect(report.ok).toBe(true);
+        expect(report.warnings.map(({ code }) => code)).not.toContain(
+          "UNEXPECTED_POSITION_CHANGE",
         );
+      } else expectPositionWarningAndLimitViolation(report);
     }
   }
 }, 180_000);

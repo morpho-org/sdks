@@ -8,8 +8,14 @@ import {
   maxUint256,
 } from "viem";
 import { readContract } from "viem/actions";
-import { resolveBundlesTokenRequirements } from "../../actions/bundles/index.js";
-import { validateClientChainId } from "../../actions/requirements/validateClientChainId.js";
+import {
+  type ChainCheck,
+  createChainCheck,
+} from "../../actions/requirements/chainCheck.js";
+import {
+  getParsedRequirementsApproval,
+  parseRequirementsApproval,
+} from "../../actions/requirements/getRequirementsApproval.js";
 import {
   validateChainId,
   validateRequirementSpender,
@@ -25,7 +31,7 @@ import {
   type Transaction,
 } from "../../types/index.js";
 
-import { getErc2612Permit } from "./getErc2612Permit.js";
+import { getBundlesErc2612Permit } from "./getErc2612Permit.js";
 
 /** Parameters for {@link getBundlesTokenRequirements}. */
 export interface GetBundlesTokenRequirementsParams
@@ -51,6 +57,55 @@ export interface GetBundlesTokenRequirementsParams
   /** @deprecated Ignored. The SDK no longer requests Permit2 funding; use ERC-2612 permits or ERC-20 approvals. */
   readonly permit2Nonce?: bigint;
 }
+
+declare const bundlesTokenRequirementsInput: unique symbol;
+/** Complete checked token resolver invocation. @internal */
+export type GetBundlesTokenRequirementsInput =
+  Readonly<GetBundlesTokenRequirementsParams> & {
+    readonly useSimplePermit: boolean;
+    readonly [bundlesTokenRequirementsInput]: true;
+  };
+
+/** Owns static checks and defaults without reading state. @internal */
+export const parseGetBundlesTokenRequirements = (
+  viemClient: Client,
+  params: GetBundlesTokenRequirementsParams,
+): GetBundlesTokenRequirementsInput => {
+  const input = {
+    token: params.token,
+    spender: params.spender,
+    amount: params.amount,
+    owner: params.owner,
+    chainId: params.chainId,
+    deadline: params.deadline,
+    supportSignature: params.supportSignature,
+    supportDeployless: params.supportDeployless,
+    useSimplePermit: params.useSimplePermit,
+    permit2Nonce: params.permit2Nonce,
+    now: params.now,
+  };
+  validateChainId(viemClient.chain?.id, input.chainId);
+  validateRequirementSpender({
+    chainId: input.chainId,
+    spender: input.spender,
+    allowed: ["blueBundlesV1", "vaultBundlesV1"],
+  });
+  if (input.amount < 0n) {
+    throw new NegativeInputError("amount", input.amount);
+  }
+  if (input.amount > maxUint256) {
+    throw new InputExceedsMaxError({
+      field: "amount",
+      value: input.amount,
+      max: maxUint256,
+    });
+  }
+  validateDeadline(input.deadline);
+  return {
+    ...input,
+    useSimplePermit: input.useSimplePermit ?? true,
+  } as GetBundlesTokenRequirementsInput;
+};
 
 /**
  * Resolves direct approval or ERC-2612 prerequisites for a registered fixed bundles contract.
@@ -128,26 +183,22 @@ export const getBundlesTokenRequirements = async (
     | BundlesTokenSignatureRequirement
   )[]
 > => {
-  validateChainId(viemClient.chain?.id, params.chainId);
-  validateRequirementSpender({
-    chainId: params.chainId,
-    spender: params.spender,
-    allowed: ["blueBundlesV1", "vaultBundlesV1"],
-  });
-  if (params.amount < 0n) {
-    throw new NegativeInputError("amount", params.amount);
-  }
-  // Reject oversized inputs before any RPC read so this resolver never asks the user to sign or
-  // submit an approval/permit that the eventual BlueBundlesV1 call (uint256 ABI) would reject.
-  if (params.amount > maxUint256) {
-    throw new InputExceedsMaxError({
-      field: "amount",
-      value: params.amount,
-      max: maxUint256,
-    });
-  }
-  // Reject deadlines outside the positive uint256 range before reading state.
-  validateDeadline(params.deadline);
+  return getParsedBundlesTokenRequirements(
+    { viemClient },
+    parseGetBundlesTokenRequirements(viemClient, params),
+  );
+};
+
+/** Consumes a complete invocation while retaining dynamic freshness and RPC order. @internal */
+export const getParsedBundlesTokenRequirements = async (
+  {
+    viemClient,
+    chainCheck: providedChainCheck,
+  }: { readonly viemClient: Client; readonly chainCheck?: ChainCheck },
+  params: GetBundlesTokenRequirementsInput,
+): ReturnType<typeof getBundlesTokenRequirements> => {
+  const chainCheck =
+    providedChainCheck ?? createChainCheck(viemClient, params.chainId);
   // Reject an already-expired deadline before the RPC reads so a direct caller of this resolver
   // never signs a permit for a supply the BlueBundlesV1 call would revert. The entity validates
   // this too, but the exported resolver must guard its own callers.
@@ -158,7 +209,7 @@ export const getBundlesTokenRequirements = async (
   if (params.amount === 0n) {
     return [];
   }
-  await validateClientChainId(viemClient, params.chainId);
+  await chainCheck();
 
   const allowance = await readContract(viemClient, {
     abi: erc20Abi,
@@ -176,33 +227,22 @@ export const getBundlesTokenRequirements = async (
     params.supportSignature &&
     isDefined(dai) &&
     isAddressEqual(params.token, dai);
-  if (params.supportSignature && (params.useSimplePermit ?? true) && !isDai) {
-    const permit = await getErc2612Permit(viemClient, {
-      token: params.token,
-      owner: params.owner,
-      spender: params.spender,
-      amount: params.amount,
-      chainId: params.chainId,
-      deadline: params.deadline,
-      now: timestamp,
-      supportDeployless: params.supportDeployless,
-    });
+  if (params.supportSignature && params.useSimplePermit && !isDai) {
+    const permit = await getBundlesErc2612Permit(
+      { viemClient, chainCheck },
+      { ...params, now: timestamp },
+    );
     if (isDefined(permit)) {
       return [permit];
     }
   }
 
-  return resolveBundlesTokenRequirements({
-    token: params.token,
-    spender: params.spender,
-    owner: params.owner,
-    chainId: params.chainId,
-    amount: params.amount,
-    deadline: params.deadline,
-    now: timestamp,
-    state: {
-      type: "approval",
-      allowance,
-    },
-  });
+  return getParsedRequirementsApproval(
+    parseRequirementsApproval({
+      address: params.token,
+      chainId: params.chainId,
+      args: { spender: params.spender, spendAmount: params.amount },
+      allowances: allowance,
+    }),
+  );
 };

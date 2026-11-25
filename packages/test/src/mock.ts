@@ -128,14 +128,20 @@ export function createMockClient<chain extends Chain>(
 ): MockClientHandle<chain> {
   const dispatch = new Map<string, Hex>();
   const request = vi.fn<RpcHandler>(async ({ method, params }) => {
-    if (method === "eth_chainId") return `0x${chain.id.toString(16)}`;
-    if (method === "eth_getCode") return "0x01";
+    if (method === "eth_chainId") {
+      return `0x${chain.id.toString(16)}`;
+    }
+    if (method === "eth_getCode") {
+      return "0x01";
+    }
     if (method === "eth_call") {
       const [tx] = (params ?? []) as [{ to?: Address; data?: Hex }];
       if (typeof tx?.to === "string" && typeof tx.data === "string") {
         const key = `${tx.to.toLowerCase()}|${tx.data.slice(0, 10).toLowerCase()}`;
         const encoded = dispatch.get(key);
-        if (encoded != null) return encoded;
+        if (encoded != null) {
+          return encoded;
+        }
       }
     }
     throw new Error(
@@ -228,10 +234,11 @@ export function mockRead<
     (item): item is Extract<typeof item, { type: "function" }> =>
       item.type === "function" && item.name === options.functionName,
   );
-  if (fnAbiItems.length === 0)
+  if (fnAbiItems.length === 0) {
     throw new Error(
       `[mockRead] function ${String(options.functionName)} not found in abi`,
     );
+  }
 
   // Encode the result **per overload** using a single-item ABI containing
   // only that overload. If we encoded once against the full ABI under the
@@ -266,10 +273,11 @@ export function mockRead<
       // its return shape. Skip; another overload may still accept it.
     }
   }
-  if (registered === 0)
+  if (registered === 0) {
     throw new Error(
       `[mockRead] options.result does not match any return-type shape of overloads of ${String(options.functionName)} (${fnAbiItems.length} overload(s) tried)`,
     );
+  }
 }
 
 /**
@@ -365,11 +373,19 @@ export function expectReadCall<
       ),
   );
   return handle.request.mock.calls.flatMap(([call]) => {
-    if (call.method !== "eth_call") return [];
+    if (call.method !== "eth_call") {
+      return [];
+    }
     const [tx] = (call.params ?? []) as [{ to?: Address; data?: Hex }];
-    if (tx?.to?.toLowerCase() !== targetAddress) return [];
-    if (typeof tx.data !== "string") return [];
-    if (!selectors.has(tx.data.slice(0, 10).toLowerCase())) return [];
+    if (tx?.to?.toLowerCase() !== targetAddress) {
+      return [];
+    }
+    if (typeof tx.data !== "string") {
+      return [];
+    }
+    if (!selectors.has(tx.data.slice(0, 10).toLowerCase())) {
+      return [];
+    }
     // Selector matches `match.functionName`, so decode is expected to
     // succeed. If it doesn't, the caller passed a mismatched abi —
     // bubble the decode error rather than swallowing it.

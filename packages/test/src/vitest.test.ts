@@ -20,6 +20,7 @@ vi.mock("./client.js", async (importOriginal) => {
   };
 });
 
+import { getErpcForkUrl } from "./erpc.js";
 import { AnvilProcessError } from "./errors.js";
 import { createViemTest } from "./vitest.js";
 
@@ -88,10 +89,12 @@ const viemTest = createViemTest(mainnet, {
 const extendedViemTest = viemTest.extend<{ readonly label: string }>({
   label: "extended",
 });
+vi.stubEnv("ERPC_SECRET", "test-key");
 const retryViemTest = createViemTest(mainnet, {
   forkBlockNumber: retryForkBlockNumber,
-  forkUrl: "https://rpc.example",
+  forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
 });
+vi.unstubAllEnvs();
 const timeoutViemTest = createViemTest(mainnet, {
   forkBlockNumber: timeoutForkBlockNumber,
   forkUrl: "https://rpc.example",
@@ -160,6 +163,16 @@ describe("createViemTest", () => {
     expect(spawnedProcesses).toBe(4);
     expect(retryProcesses).toBe(2);
     expect(retryBodies).toBe(2);
+    const retryOptions = spawnAnvilMock.mock.calls
+      .filter(([args]) => args.forkBlockNumber === retryForkBlockNumber)
+      .map(([, options]) => options.bootstrapBlock);
+    expect(retryOptions[0]).toBeTypeOf("function");
+    expect(retryOptions[1]).toBe(retryOptions[0]);
+    expect(
+      spawnAnvilMock.mock.calls.find(
+        ([args]) => args.forkBlockNumber === timeoutForkBlockNumber,
+      )?.[1].bootstrapBlock,
+    ).toBeUndefined();
     expect(timeoutProcesses).toBe(1);
     expect(peakActiveProcesses).toBe(4);
     expect(activeProcesses).toBe(0);

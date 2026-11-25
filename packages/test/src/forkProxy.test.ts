@@ -1,21 +1,27 @@
 import { createServer, type IncomingHttpHeaders } from "node:http";
 import type { AddressInfo } from "node:net";
 import { describe, expect, onTestFinished, test } from "vitest";
-import { startForkProxy } from "./forkProxy.js";
+import { createForkBootstrapBlock, startForkProxy } from "./forkProxy.js";
 
-type JsonRpcRequest = { id: number; method: string };
+type JsonRpcRequest = { id: number; method: string; params?: unknown[] };
 
-const startUpstream = async () => {
+const startUpstream = async (
+  resultFor: (request: JsonRpcRequest) => unknown = ({ method }) => method,
+) => {
   const requests: { body: unknown; headers: IncomingHttpHeaders }[] = [];
   const server = createServer(async (req, res) => {
     let raw = "";
     for await (const chunk of req) raw += chunk;
     const body: JsonRpcRequest | JsonRpcRequest[] = JSON.parse(raw);
     requests.push({ body, headers: req.headers });
-    const answer = ({ id, method }: JsonRpcRequest) =>
-      method === "eth_fail"
-        ? { jsonrpc: "2.0", id, error: { code: -32000, message: "boom" } }
-        : { jsonrpc: "2.0", id, result: method };
+    const answer = (request: JsonRpcRequest) =>
+      request.method === "eth_fail"
+        ? {
+            jsonrpc: "2.0",
+            id: request.id,
+            error: { code: -32000, message: "boom" },
+          }
+        : { jsonrpc: "2.0", id: request.id, result: resultFor(request) };
     res
       .writeHead(
         !Array.isArray(body) && body.method === "http_error" ? 503 : 200,
@@ -40,20 +46,72 @@ const startUpstream = async () => {
   };
 };
 
-const startProxy = async (upstreamUrl: string) => {
-  const proxy = await startForkProxy(upstreamUrl);
-  onTestFinished(proxy.close);
-
-  return (body: unknown, headers: Record<string, string> = {}) =>
-    fetch(proxy.url, {
+const postRpc =
+  (url: string) =>
+  (body: unknown, headers: Record<string, string> = {}) =>
+    fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json", ...headers },
       body: JSON.stringify(body),
     });
+
+const startProxy = async (upstreamUrl: string) => {
+  const proxy = await startForkProxy(upstreamUrl);
+  onTestFinished(proxy.close);
+  return postRpc(proxy.url);
 };
 
 // onTestFinished binds to the running test only outside concurrent mode.
 describe.sequential("startForkProxy", () => {
+  test("behavior: caches only a valid pinned block during startup", async () => {
+    const result = { number: "0x2a", hash: `0x${"ab".repeat(32)}` };
+    const upstream = await startUpstream(({ id }) =>
+      id === 1 ? null : result,
+    );
+    const bootstrapBlock = createForkBootstrapBlock(42n);
+    const first = await startForkProxy(upstream.url, bootstrapBlock);
+    onTestFinished(first.close);
+    const second = await startForkProxy(upstream.url, bootstrapBlock);
+    onTestFinished(second.close);
+
+    const request = {
+      jsonrpc: "2.0",
+      method: "eth_getBlockByNumber",
+      params: ["0x2a", false],
+    };
+    const read =
+      (url: string) =>
+      async (id: number, params = request.params) =>
+        (await postRpc(url)({ ...request, id, params })).json();
+    const readFirst = read(first.url);
+    const readSecond = read(second.url);
+
+    await expect(readFirst(1)).resolves.toEqual({
+      jsonrpc: "2.0",
+      id: 1,
+      result: null,
+    });
+    await expect(readFirst(2)).resolves.toEqual({
+      jsonrpc: "2.0",
+      id: 2,
+      result,
+    });
+    first.finishStartup();
+    await expect(readSecond(3)).resolves.toEqual({
+      jsonrpc: "2.0",
+      id: 3,
+      result,
+    });
+    expect(upstream.requests).toHaveLength(2);
+
+    await readSecond(4, ["latest", false]);
+    await readSecond(5, ["0x2a", true]);
+    await (await postRpc(second.url)([{ ...request, id: 6 }])).json();
+    second.finishStartup();
+    await readSecond(7);
+    expect(upstream.requests).toHaveLength(6);
+  });
+
   test("default: forwards requests, headers, status and errors unchanged", async () => {
     const upstream = await startUpstream();
     const send = await startProxy(upstream.url);

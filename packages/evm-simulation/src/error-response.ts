@@ -12,7 +12,7 @@ export interface SimulationErrorResponse {
   readonly message: string;
   /** Original revert bytes when available. */
   readonly revertData?: Hex;
-  /** Zero-based caller transaction index for a transaction revert or assertion failure; omitted when unknown. */
+  /** Zero-based caller transaction index for a transaction revert, assertion or effect failure; omitted when unknown. */
   readonly transactionIndex?: number;
 }
 
@@ -57,7 +57,8 @@ export function toSimulationErrorResponse(
       ? { revertData: error.revertData }
       : {}),
     ...((error.code === "SIMULATION_REVERTED" ||
-      error.code === "SIMULATION_ASSERT_FAILED") &&
+      error.code === "SIMULATION_ASSERT_FAILED" ||
+      error.code === "SIMULATION_EFFECT_FAILED") &&
     "transactionIndex" in error &&
     typeof error.transactionIndex === "number" &&
     Number.isSafeInteger(error.transactionIndex) &&

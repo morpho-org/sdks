@@ -245,8 +245,11 @@ export function buildBlueWithdrawCollateral(
     chainId,
     account,
     marketParams,
-    authorizationNonce: _authorizationNonce,
-    ...args
+    collateralAssets,
+    maxLtv,
+    deadline,
+    referralFeePct,
+    referralFeeRecipient,
   } = action.inputs;
   const id = action.signatureRequestIds.morphoAuthorization;
   const request =
@@ -265,7 +268,11 @@ export function buildBlueWithdrawCollateral(
   return blueWithdrawCollateral({
     market: { chainId, marketParams: new MarketParams(marketParams) },
     args: {
-      ...args,
+      collateralAssets,
+      maxLtv,
+      deadline,
+      referralFeePct,
+      referralFeeRecipient,
       userAddress: account,
       authorizationSignature:
         request?.kind === "morphoAuthorization" &&

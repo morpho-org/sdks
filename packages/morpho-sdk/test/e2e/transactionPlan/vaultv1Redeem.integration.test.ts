@@ -7,10 +7,10 @@ import {
   applySignatures,
   buildTransactions,
   getPendingSignatureRequests,
-  morphoViemExtension,
   parseTransactionPlan,
   prepareVaultV1Redeem,
   serializeTransactionPlan,
+  vaultV1Redeem,
 } from "../../../src/index.js";
 import { getVaultPermit } from "../../../src/transactionPlan/permit.js";
 import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
@@ -108,15 +108,15 @@ describe("Vault V1 redeem plans at mainnet block 25,730,000", () => {
           asset: vault,
           owner: account,
         });
-        const legacy = client
-          .extend(morphoViemExtension())
-          .morpho.vaultV1(vault, client.chain.id)
-          .redeem({
+        const legacy = vaultV1Redeem({
+          vault: { address: vault, chainId: client.chain.id },
+          args: {
             shares: amount,
             userAddress: account,
             deadline: BigInt(expiresAt),
-          })
-          .buildTx(signature ? [signature] : []);
+            requirementSignature: signature,
+          },
+        });
         const redemption = transactions.at(-1)!;
         expect(redemption).toMatchObject({
           to: legacy.to,

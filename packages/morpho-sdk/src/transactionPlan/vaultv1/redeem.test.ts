@@ -27,7 +27,6 @@ import {
   IncompleteTransactionPlanError,
   InputExceedsMaxError,
   InvalidTransactionPlanError,
-  morphoViemExtension,
   NonPositiveInputError,
   parseTransactionPlan,
   prepareVaultV1Redeem,
@@ -39,6 +38,7 @@ import {
   UnsupportedTransactionPlanVersionError,
   type VaultV1RedeemAction,
   type VaultV1RedeemPlanParams,
+  vaultV1Redeem,
 } from "../../index.js";
 import { getVaultPermit } from "../permit.js";
 
@@ -308,17 +308,18 @@ describe("Vault V1 redeem TransactionPlan", () => {
       asset: IN_KIND_VAULT,
       owner: signerAddress,
     });
-    const legacy = handleB.client
-      .extend(morphoViemExtension({ metadata: { origin: "0xcafe" } }))
-      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id)
-      .redeem({
+    const legacy = vaultV1Redeem({
+      vault: { address: IN_KIND_VAULT, chainId: mainnet.id },
+      metadata: { origin: "0xcafe" },
+      args: {
         shares: params.shares,
         userAddress: signerAddress,
         deadline: BigInt(params.expiresAt!),
         referralFeePct: 25n * 10n ** 14n,
         referralFeeRecipient: IN_KIND_USER,
-      })
-      .buildTx(permit ? [permit] : []);
+        requirementSignature: permit,
+      },
+    });
     expect(buildTransactions(restored)).toEqual(expected);
     expect(expected[0]).not.toHaveProperty("id");
     expect(expected[0]).not.toHaveProperty("kind");
@@ -376,15 +377,14 @@ describe("Vault V1 redeem TransactionPlan", () => {
         ...params,
         shares,
       });
-      const legacy = handle.client
-        .extend(morphoViemExtension())
-        .morpho.vaultV1(IN_KIND_VAULT, mainnet.id)
-        .redeem({
+      const legacy = vaultV1Redeem({
+        vault: { address: IN_KIND_VAULT, chainId: mainnet.id },
+        args: {
           shares,
           userAddress: signerAddress,
           deadline: BigInt(params.expiresAt!),
-        })
-        .buildTx();
+        },
+      });
       expect(buildTransactions(plan)[0]).toMatchObject(legacy);
     },
   );

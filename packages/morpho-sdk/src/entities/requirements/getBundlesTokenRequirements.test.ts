@@ -354,6 +354,85 @@ describe("getBundlesTokenRequirements", () => {
     handle.dispatch.set(`${usdc.toLowerCase()}|0x84b0196e`, "0x");
   };
 
+  test("nested ERC-2612 fallback shares the SDK preflight but retains fetchToken's chain lookup", async () => {
+    const handle = createMockClient(mainnet);
+    mockMissingPermitDomain(handle);
+
+    const requirements = await getBundlesTokenRequirements(handle.client, {
+      token: usdc,
+      spender: blueBundlesV1,
+      amount: 1n,
+      owner: account.address,
+      chainId: mainnet.id,
+      deadline: maxUint256,
+      supportSignature: true,
+      useSimplePermit: true,
+      supportDeployless: false,
+    });
+    expect(requirements.map(({ action }) => action.type)).toEqual([
+      "erc20Approval",
+    ]);
+    const methods = handle.request.mock.calls.map(([{ method }]) => method);
+    // One validateClientChainId preflight, plus fetchToken's independent getChainId.
+    expect(methods.filter((method) => method === "eth_chainId")).toHaveLength(
+      2,
+    );
+    expect(methods.slice(0, 3)).toEqual([
+      "eth_chainId",
+      "eth_call",
+      "eth_call",
+    ]);
+  });
+
+  test("a concurrent public invocation validates its own chain while the first allowance read is pending", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: usdc,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const base = handle.request.getMockImplementation()!;
+    const enteredRead = Promise.withResolvers<void>();
+    const releaseRead = Promise.withResolvers<void>();
+    let servedChain = "0x1";
+    handle.request.mockImplementation(async (call) => {
+      if (call.method === "eth_chainId") return servedChain;
+      if (call.method === "eth_call") {
+        enteredRead.resolve();
+        await releaseRead.promise;
+      }
+      return base(call);
+    });
+    const params = {
+      token: usdc,
+      spender: blueBundlesV1,
+      amount: 1n,
+      owner: account.address,
+      chainId: mainnet.id,
+      deadline: maxUint256,
+      supportSignature: false,
+    } as const;
+    const first = getBundlesTokenRequirements(handle.client, params);
+    await enteredRead.promise;
+    servedChain = "0x2105";
+    try {
+      await expect(
+        getBundlesTokenRequirements(handle.client, params),
+      ).rejects.toBeInstanceOf(ChainIdMismatchError);
+      expect(handle.request.mock.calls.map(([{ method }]) => method)).toEqual([
+        "eth_chainId",
+        "eth_call",
+        "eth_chainId",
+      ]);
+    } finally {
+      releaseRead.resolve();
+    }
+    expect((await first).map(({ action }) => action.type)).toEqual([
+      "erc20Approval",
+    ]);
+  });
+
   test("error: a 429 on nonces() propagates", async () => {
     const handle = createMockClient(mainnet);
     mockMissingPermitDomain(handle);

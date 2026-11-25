@@ -5,7 +5,7 @@ import { type IOffer, OfferUtils } from "../offers/index.js";
 import { isEmptyOfferStruct } from "./offerStructInternal.js";
 import type { RatifierTreeInput, TreeLike } from "./TreeUtils.js";
 import { TreeUtils } from "./TreeUtils.js";
-import { nextPowerOfTwo } from "./treeMathInternal.js";
+import { nextPowerOfTwo, requireTreeItem } from "./treeMathInternal.js";
 
 function isTreeLike(tree: RatifierTreeInput): tree is TreeLike {
   return (
@@ -43,7 +43,7 @@ function normalizeTree(tree: RatifierTreeInput): TreeLike {
     const seen = new Set<string>();
     for (const [index, offer] of tree.offers.entries()) {
       if (
-        isEmptyOfferStruct(tree.paddedOffers[index]!, {
+        isEmptyOfferStruct(requireTreeItem(tree.paddedOffers, index), {
           allowDefaultGroup: true,
         })
       ) {
@@ -53,7 +53,7 @@ function normalizeTree(tree: RatifierTreeInput): TreeLike {
       }
       const hash = OfferUtils.hashStruct(OfferUtils.toStruct({ offer }));
       if (
-        hash.toLowerCase() !== computedLeaves[index]!.toLowerCase() ||
+        hash.toLowerCase() !== computedLeaves[index]?.toLowerCase() ||
         seen.has(hash.toLowerCase())
       ) {
         throw new InvalidTreeError(
@@ -76,7 +76,7 @@ function normalizeTree(tree: RatifierTreeInput): TreeLike {
     if (
       computedLeaves.some(
         (leaf, index) =>
-          leaf.toLowerCase() !== tree.leaves[index]!.toLowerCase(),
+          leaf.toLowerCase() !== tree.leaves[index]?.toLowerCase(),
       )
     ) {
       throw new InvalidTreeError("Tree leaves do not match its padded offers.");
@@ -86,7 +86,12 @@ function normalizeTree(tree: RatifierTreeInput): TreeLike {
     while (level.length > 1) {
       const next: typeof computedLeaves = [];
       for (let index = 0; index < level.length; index += 2) {
-        next.push(TreeUtils.hashNode(level[index]!, level[index + 1]!));
+        next.push(
+          TreeUtils.hashNode(
+            requireTreeItem(level, index),
+            requireTreeItem(level, index + 1),
+          ),
+        );
       }
       level = next;
     }
@@ -210,8 +215,10 @@ export namespace Ratifier {
    * @param params.tree - Tree-like object or raw offer/group input.
    * @param params.label - Ratifier label used in validation errors.
    * @returns Normalized tree-like data and its shared ratifier.
+   * @throws {InvalidOfferParameterError} when raw tree input contains a sell offer with a zero receiver.
    * @throws {InvalidTreeError} when the tree fields disagree, the tree is empty, or it contains multiple ratifiers.
    * @throws {InvalidTreeHeightError} when the tree height is unsupported.
+   * @throws {InvalidOfferGroupError} when standalone offers from one maker repeat an explicit group id.
    * @example
    * ```ts
    * import { Offer, Ratifier } from "@morpho-org/midnight-sdk";

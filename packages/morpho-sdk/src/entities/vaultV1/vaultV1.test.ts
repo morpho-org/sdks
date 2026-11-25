@@ -181,6 +181,51 @@ describe("MorphoVaultV1 chain validation", () => {
     expect(expectedAssets).toBeLessThan(sourceVault.toAssets(shares, "Down"));
   });
 
+  test.each(["assets", "shares"] as const)(
+    "migrateToV2 quotes and encodes one read of %s",
+    (mode) => {
+      const vault = createPublicClient({
+        chain: mainnet,
+        transport: http("https://rpc.example"),
+      })
+        .extend(morphoViemExtension())
+        .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+      const now = 1_800_000_000n;
+      const params = {
+        sourceVault: withChainTimestamp(now, () => inKindVaultV1Data()),
+        targetVault: withChainTimestamp(now, () =>
+          inKindVaultV2Data({
+            address: "0x1111111111111111111111111111111111111111",
+          }),
+        ),
+        userAddress: IN_KIND_USER,
+        now,
+        deadline: now + 7_200n,
+      };
+      let reads = 0;
+      const input = Object.defineProperty(
+        {
+          ...params,
+          ...(mode === "assets" ? { assets: 100n } : { shares: 100n }),
+        },
+        mode,
+        {
+          enumerable: false,
+          get: () => (++reads === 1 ? 100n : 1n),
+        },
+      );
+      const tx = vault.migrateToV2(input).buildTx();
+      const expected = vault
+        .migrateToV2({
+          ...params,
+          ...(mode === "assets" ? { assets: 100n } : { shares: 100n }),
+        })
+        .buildTx();
+      expect(reads).toBe(1);
+      expect(tx).toEqual(expected);
+    },
+  );
+
   test("migrateToV2 builds from a target snapshot with no dead shares", () => {
     const client = createPublicClient({
       chain: mainnet,

@@ -10,13 +10,8 @@ import {
   NonPositiveInputError,
   RefinanceSameMarketError,
   RefinanceTokenMismatchError,
-  type VaultV2BlueReallocation,
 } from "../../types/index.js";
-import {
-  getBlueBundlesV1PenaltyAssets,
-  getBlueBundlesV1PublicAllocations,
-  getBlueBundlesV1ReferralFeeAssets,
-} from "./common.js";
+import { getBlueBundlesV1ReferralFeeAssets } from "./common.js";
 
 /** @internal Rejects an empty source debt or incompatible refinance markets. */
 export function validateBlueRefinanceSource({
@@ -37,8 +32,14 @@ export function validateBlueRefinanceSource({
 
 /** @internal Requires distinct markets with identical loan and collateral tokens. */
 export function validateBlueRefinanceMarkets(
-  sourceMarketParams: MarketParams,
-  destinationMarketParams: MarketParams,
+  sourceMarketParams: Pick<
+    MarketParams,
+    "id" | "loanToken" | "collateralToken"
+  >,
+  destinationMarketParams: Pick<
+    MarketParams,
+    "id" | "loanToken" | "collateralToken"
+  >,
 ): void {
   if (sourceMarketParams.id === destinationMarketParams.id) {
     throw new RefinanceSameMarketError(sourceMarketParams.id);
@@ -65,22 +66,17 @@ export function validateBlueRefinanceQuote({
   destinationMarketParams,
   sourcePosition,
   destinationPosition,
-  reallocations,
+  penaltyAssets,
   referralFeePct,
   now,
 }: {
-  readonly destinationMarketParams: MarketParams;
+  readonly destinationMarketParams: Pick<MarketParams, "id" | "lltv">;
   readonly sourcePosition: Readonly<AccrualPosition>;
   readonly destinationPosition: Readonly<AccrualPosition>;
-  readonly reallocations: readonly VaultV2BlueReallocation[];
+  readonly penaltyAssets: bigint;
   readonly referralFeePct: bigint;
   readonly now: bigint;
 }): void {
-  const allocations = getBlueBundlesV1PublicAllocations(
-    reallocations,
-    destinationMarketParams,
-  );
-  const penaltyAssets = getBlueBundlesV1PenaltyAssets(allocations);
   const accrualTimestamp =
     MathLib.max(
       now,

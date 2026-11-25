@@ -79,12 +79,9 @@ describe("PriceRatifierV1.hashLeaf", () => {
   // HashLib vectors generated from Midnight commit 11f3d984b53286fd9137eb89e5d1385e23fe1b30.
   test("behavior: matches HashLib vector", () => {
     const allowed = "0x0000000000000000000000000000000000009999" as const;
-    const restricted = PriceRatifierV1.buildDescriptor([
-      { offer: deterministicOffer, allowedTaker: allowed },
-    ]).entries[0]!;
-    const unrestricted = PriceRatifierV1.buildDescriptor([
-      { offer: deterministicOffer },
-    ]).entries[0]!;
+    const offerStruct = OfferUtils.toStruct({ offer: deterministicOffer });
+    const restricted = { offer: offerStruct, allowedTaker: allowed };
+    const unrestricted = { offer: offerStruct, allowedTaker: zeroAddress };
 
     expect(PriceRatifierV1.hashLeaf(restricted)).toBe(
       "0x3b9d550f526f27f2aa1ab2d2bd01141c673c3c23fedce0b845fc599e7cc3d9d9",
@@ -438,6 +435,32 @@ describe("PriceRatifierV1.buildDescriptor", () => {
           leaves: [zeroHash, ...descriptor.leaves.slice(1)],
         },
       }),
+    ).toThrow(InvalidTreeError);
+  });
+
+  test("error: InvalidTreeError for a missing later snapshot entry", () => {
+    const descriptor = PriceRatifierV1.buildDescriptor([
+      { offer: offer() },
+      { offer: offer({ maxUnits: 7n }) },
+    ]);
+    const entries = [...descriptor.entries];
+    delete entries[1];
+
+    expect(() =>
+      PriceRatifierV1.ratify({ tree: { ...descriptor, entries } }),
+    ).toThrow(InvalidTreeError);
+  });
+
+  test("error: InvalidTreeError for a null snapshot leaf hash", () => {
+    const descriptor = PriceRatifierV1.buildDescriptor([
+      { offer: offer() },
+      { offer: offer({ maxUnits: 7n }) },
+    ]);
+    const leaves = [...descriptor.leaves];
+    leaves[1] = null as unknown as Hex;
+
+    expect(() =>
+      PriceRatifierV1.ratify({ tree: { ...descriptor, leaves } }),
     ).toThrow(InvalidTreeError);
   });
 });

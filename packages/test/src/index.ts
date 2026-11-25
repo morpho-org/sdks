@@ -4,6 +4,7 @@ export { getErpcForkUrl } from "./erpc.js";
 export {
   AnvilCleanupError,
   AnvilFeeTokenFundingError,
+  AnvilLeaseClosedError,
   AnvilProcessError,
   AnvilStartupError,
 } from "./errors.js";

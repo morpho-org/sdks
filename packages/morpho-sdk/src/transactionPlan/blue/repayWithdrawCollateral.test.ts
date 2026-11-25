@@ -22,6 +22,7 @@ import {
   NativeAmountOnNonWNativeAssetError,
   NegativeInputError,
   NonPositiveInputError,
+  WithdrawExceedsCollateralError,
   WithdrawMakesPositionUnhealthyError,
 } from "../../types/index.js";
 import {
@@ -506,6 +507,57 @@ test("error: no permit prompt for a native repayment", async () => {
       signatureRequests: [request],
     }),
   ).toThrow(TransactionPlanSignatureMismatchError);
+});
+
+test("allows debt-free collateral-only plans without projecting an unsupported IRM", async () => {
+  const unsupportedMarket = new Market({
+    ...market,
+    params: new MarketParams({ ...market.params, irm: owner.address }),
+    rateAtTarget: undefined,
+  });
+  const debtFree = new AccrualPosition(
+    { ...position, borrowShares: 0n },
+    unsupportedMarket,
+  );
+  const withdrawal = {
+    ...params,
+    marketId: unsupportedMarket.id,
+    marketData: { chainId: 1, market: unsupportedMarket },
+    positionData: { chainId: 1, position: debtFree },
+    repayAssets: 0n,
+  };
+  const plan = await prepareBlueRepayWithdrawCollateral(client(), withdrawal);
+  expect(buildTransactions(plan)).toHaveLength(1);
+  await expect(
+    prepareBlueRepayWithdrawCollateral(client(), {
+      ...withdrawal,
+      collateralAssets: debtFree.collateral + 1n,
+    }),
+  ).rejects.toBeInstanceOf(WithdrawExceedsCollateralError);
+
+  const { repayAssets: _repayAssets, ...fullRepayment } = withdrawal;
+  await expect(
+    prepareBlueRepayWithdrawCollateral(client(), {
+      ...fullRepayment,
+      collateralAssets: 0n,
+      repayShares: maxUint256,
+    }),
+  ).rejects.toBeInstanceOf(NonPositiveInputError);
+});
+
+test("error: full repayment with collateral withdrawal has no debt left", async () => {
+  const { repayAssets: _repayAssets, ...withdrawal } = params;
+  const debtFree = new AccrualPosition(
+    { ...position, borrowShares: 0n },
+    market,
+  );
+  await expect(
+    prepareBlueRepayWithdrawCollateral(client(), {
+      ...withdrawal,
+      positionData: { chainId: 1, position: debtFree },
+      repayShares: maxUint256,
+    }),
+  ).rejects.toBeInstanceOf(NonPositiveInputError);
 });
 
 test("error: explicit native funding without repayment is rejected before RPC", async () => {

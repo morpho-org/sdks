@@ -5,7 +5,7 @@ import { mainnet } from "viem/chains";
 import { describe, expect, expectTypeOf, test } from "vitest";
 import { IN_KIND_USER } from "../../../test/fixtures/inKindRedeem.js";
 import { withChainTimestamp } from "../../../test/helpers/time.js";
-import { morphoViemExtension } from "../../client/index.js";
+import { vaultV2ForceRedeem } from "../../actions/vaultV2/forceRedeem.js";
 import {
   EmptyDeallocationsError,
   ExpiredDeadlineError,
@@ -153,20 +153,22 @@ describe("Vault V2 force-redeem plan", () => {
     );
     const [built] = buildTransactions(restored);
     expect(buildTransactions(restored)).toEqual(buildTransactions(plan));
-    const handle = b.client
-      .extend(morphoViemExtension())
-      .morpho.vaultV2(params.vaultAddress, 1)
-      .forceRedeem({
+    const expected = vaultV2ForceRedeem({
+      vault: { address: params.vaultAddress },
+      args: {
         deallocations: params.deallocations.map(
-          ({ assets, ...deallocation }) => ({
+          ({ assets, marketParams, ...deallocation }) => ({
             ...deallocation,
+            ...(marketParams && {
+              marketParams: new MarketParams(marketParams),
+            }),
             amount: assets,
           }),
         ),
-        redeem: { shares: params.shares },
-        userAddress: params.account,
-      });
-    const expected = handle.buildTx();
+        redeem: { shares: params.shares, recipient: params.account },
+        onBehalf: params.account,
+      },
+    });
     expectTypeOf(
       expected.action.args.deallocations[0]!.marketParams,
     ).toEqualTypeOf<MarketParams | undefined>();

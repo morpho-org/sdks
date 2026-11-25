@@ -22,16 +22,17 @@ import {
 import { mainnet } from "viem/chains";
 import { assert, describe, expect } from "vitest";
 import { vaultExitBundlesV1Abi } from "../../../src/abis.js";
+import { fetchAccrualVaultV2 } from "../../../src/fetch.js";
 import {
   applySignatures,
   buildTransactions,
   getPendingSignatureRequests,
-  isRequirementSignature,
-  morphoViemExtension,
   parseTransactionPlan,
   prepareVaultV2InKindRedeem,
   serializeTransactionPlan,
+  vaultV2InKindRedeem,
 } from "../../../src/index.js";
+import { getVaultPermit } from "../../../src/transactionPlan/permit.js";
 import { CbbtcUsdcBlue, WbtcUsdcSourceMarket } from "../../fixtures/blue.js";
 import { setUpSingleAdapterVaultV2 } from "../../helpers/vaultV2.js";
 
@@ -82,11 +83,7 @@ describe("Vault V2 in-kind TransactionPlan", () => {
       const owner = client.account.address;
       const spender = getChainAddress(1, "bundles.vaultExitBundlesV1");
       const supportSignature = branch === "permit" || branch === "allowance";
-      const entity = morphoViemExtension({
-        supportSignature,
-        metadata: { origin: "0xcafe" },
-      })(client).morpho.vaultV2(address, 1);
-      const vaultData = await entity.getData();
+      const vaultData = await fetchAccrualVaultV2(address, client);
       assert(
         vaultData.accrualAdapters[0] instanceof
           AccrualVaultV2MorphoMarketV1AdapterV2,
@@ -94,13 +91,6 @@ describe("Vault V2 in-kind TransactionPlan", () => {
       const amount = parseUnits(branch === "idle" ? "100" : "900", 6);
       const marketParamsList = branch === "idle" ? [] : [...markets];
       const expiresAt = Number(Time.timestamp() + 7200n);
-      const handle = entity.inKindRedeem({
-        amount,
-        marketParamsList,
-        vaultData,
-        userAddress: owner,
-        deadline: BigInt(expiresAt),
-      });
       if (branch === "allowance") {
         // Finite but sufficient allowance must not be replaced by an approval or a permit.
         await client.approve({
@@ -162,13 +152,22 @@ describe("Vault V2 in-kind TransactionPlan", () => {
         parseTransactionPlan(serializeTransactionPlan(signed)),
       );
       expect(transactions).toEqual(buildTransactions(signed));
-      const requirements = await handle.getRequirements();
-      const signatures = await Promise.all(
-        requirements
-          .filter(isRequirementSignature)
-          .map((requirement) => requirement.sign(client, owner)),
-      );
-      const expected = handle.buildTx(signatures);
+      const expected = vaultV2InKindRedeem({
+        vault: { address, chainId: 1 },
+        metadata: { origin: "0xcafe" },
+        args: {
+          amount,
+          adapter,
+          marketParamsList,
+          userAddress: owner,
+          deadline: BigInt(expiresAt),
+          requirementSignature: getVaultPermit(signed.signatureRequests, {
+            id: signed.signatureRequests[0]?.id,
+            asset: address,
+            owner,
+          }),
+        },
+      });
       const exit = transactions.at(-1)!;
       expect(exit.to).toBe(spender);
       expect(exit.data).toBe(expected.data);

@@ -302,12 +302,10 @@ describeE2e(scenario, (test, { chainId }) => {
   test("L2-14 full loan: A lends to B, B repays part, then at maturity repays the rest, A redeems and B withdraws collateral", async ({
     client,
   }) => {
-    const latestBlock = await client.getBlock();
-    const now = Time.timestamp();
-    // Offer expiry is checked against wall time, while the fork's block time is pinned.
-    const maturity =
-      (latestBlock.timestamp > now ? latestBlock.timestamp : now) +
-      30n * 24n * 60n * 60n;
+    // Fork time, not wall time, keeps the market id and the storage slots keyed by it identical
+    // across runs, so the fork cache serves them.
+    const { timestamp: now } = await client.getBlock();
+    const maturity = now + 30n * 24n * 60n * 60n;
     const {
       midnight,
       midnightBundlesV2,
@@ -385,7 +383,8 @@ describeE2e(scenario, (test, { chainId }) => {
         },
       ],
       maxContinuousFee: maxUint256,
-      deadline: Time.timestamp() + 600n,
+      now,
+      deadline: now + 600n,
     });
     await executeTake(client, {
       take,

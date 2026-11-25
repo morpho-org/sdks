@@ -16,6 +16,7 @@ import type {
 import { parseStandardRatifierTree } from "./standardRatifierInternal.js";
 import type { RatifierTreeInput } from "./TreeUtils.js";
 import { type TreeProof, TreeUtils } from "./TreeUtils.js";
+import { requireTreeItem } from "./treeMathInternal.js";
 
 const setterRatifierDataAbi = [
   { name: "root", type: "bytes32" },
@@ -244,7 +245,9 @@ export namespace SetterRatifierUtils {
    * @param params.tree - Setter-ratified offer tree-like input that produced the proof.
    * @param params.leafIndex - Leaf index to prove.
    * @returns ABI-encoded SetterRatifier data.
+   * @throws {InvalidOfferParameterError} when raw tree input contains a sell offer with a zero receiver.
    * @throws {InvalidTreeError} when the leaf index is outside the tree or the tree contains multiple ratifiers.
+   * @throws {InvalidOfferGroupError} when raw standalone offers from one maker repeat an explicit group id.
    * @example
    * ```ts
    * import { Offer, SetterRatifier, Tree } from "@morpho-org/midnight-sdk";
@@ -308,7 +311,9 @@ export namespace SetterRatifierUtils {
    *
    * @param params.tree - Setter-ratified offer tree-like input whose root has already been approved onchain.
    * @returns Items containing each offer and its ratifier data.
+   * @throws {InvalidOfferParameterError} when raw tree input contains a sell offer with a zero receiver.
    * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
+   * @throws {InvalidOfferGroupError} when raw standalone offers from one maker repeat an explicit group id.
    * @example
    * ```ts
    * import { SetterRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
@@ -362,7 +367,7 @@ export namespace SetterRatifierUtils {
 
     return tree.offers.map((offer, leafIndex) => ({
       offer,
-      ratifierData: encodeRatifierData(proofs[leafIndex]!),
+      ratifierData: encodeRatifierData(requireTreeItem(proofs, leafIndex)),
     }));
   }
 }

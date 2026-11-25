@@ -8,8 +8,10 @@
  */
 
 import { execFileSync } from "node:child_process";
+import { createReadStream } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
+import { pipeline } from "node:stream/promises";
 
 import { isMain, reportCliError, writeStdout } from "../workflow.ts";
 
@@ -32,14 +34,20 @@ export interface TarStreamEntry extends TarEntry {
   resume(): unknown;
 }
 
+type TarListingStream = NodeJS.WritableStream & {
+  on(
+    event: "ignoredEntry",
+    listener: (entry: TarEntry) => void,
+  ): NodeJS.WritableStream;
+};
+
 /** The minimal node-tar interface needed to list an archive. */
 export interface EntryLister {
-  /** Lists archive entries and invokes the callback for each one. */
+  /** Creates a writable archive listing stream. */
   list(opts: {
-    file: string;
     strict: boolean;
     onReadEntry: (entry: TarStreamEntry) => void;
-  }): Promise<unknown>;
+  }): TarListingStream;
 }
 
 /** The node-tar streaming parser, used to read entry contents. */
@@ -48,12 +56,69 @@ export interface TarParser {
   Parser: new (opts: {
     strict: boolean;
     onReadEntry: (entry: TarStreamEntry) => void;
-  }) => NodeJS.WritableStream & {
-    on(
-      event: "ignoredEntry",
-      listener: (entry: TarEntry) => void,
-    ): NodeJS.WritableStream;
-  };
+  }) => TarListingStream;
+}
+
+/** An archive member skipped by npm's bundled node-tar. */
+export class IgnoredTarballEntryError extends Error {
+  constructor(tgzPath: string, entry: TarEntry) {
+    super(
+      `Tarball "${tgzPath}" contains entry "${entry.path}" of type "${entry.type}" that node-tar skipped.`,
+    );
+    this.name = "IgnoredTarballEntryError";
+  }
+}
+
+interface ForbiddenHeader extends TarEntry {
+  readonly type: "OldGnuLongPath" | "GlobalExtendedHeader";
+  affectedPath?: string;
+}
+
+/** An archive uses path metadata that tar readers interpret differently. */
+export class ForbiddenTarballHeaderError extends Error {
+  constructor(tgzPath: string, header: ForbiddenHeader) {
+    const flag = header.type === "OldGnuLongPath" ? "N" : "g";
+    const affected =
+      header.affectedPath === undefined
+        ? ""
+        : ` (affected path "${header.affectedPath}")`;
+    super(
+      `Tarball "${tgzPath}" contains forbidden "${flag}" ${header.type} header "${header.path}"${affected}.`,
+    );
+    this.name = "ForbiddenTarballHeaderError";
+  }
+}
+
+interface ParsedEntry extends TarEntry {
+  readonly header: TarEntry;
+  readonly meta: boolean;
+  readonly extended?: { readonly path?: string };
+  readonly globalExtended?: { readonly path?: string };
+}
+
+function observeParsedEntries(
+  stream: TarListingStream,
+  observe: (entry: ParsedEntry) => void,
+): void {
+  // In the pinned node-tar, every parsed header sets writeEntry before dispatch.
+  // Public meta events expose only the payload and omit empty headers.
+  const slot = Object.getOwnPropertySymbols(stream).find(
+    (key) => key.description === "writeEntry",
+  );
+  if (
+    slot === undefined ||
+    Object.getOwnPropertyDescriptor(stream, slot)?.writable !== true
+  ) {
+    throw new Error("Bundled node-tar does not expose its writeEntry slot.");
+  }
+  let current: ParsedEntry | undefined;
+  Object.defineProperty(stream, slot, {
+    get: () => current,
+    set: (entry: ParsedEntry | undefined) => {
+      current = entry;
+      if (entry !== undefined) observe(entry);
+    },
+  });
 }
 
 function isBundledTar(value: unknown): value is EntryLister & TarParser {
@@ -235,23 +300,48 @@ export function verifyTarballEntries(entries: readonly TarEntry[]): void {
  * @param tgzPath - The tarball path.
  * @param lister - The node-tar-compatible entry lister.
  * @returns The entries found in the tarball.
+ * @throws {IgnoredTarballEntryError} If node-tar skips a member.
+ * @throws {ForbiddenTarballHeaderError} If a GNU N or global PAX g header appears.
  */
 export async function listTarballEntries(
   tgzPath: string,
   lister: EntryLister,
 ): Promise<TarEntry[]> {
   const entries: TarEntry[] = [];
+  let ignoredEntry: IgnoredTarballEntryError | undefined;
+  let forbiddenHeader: ForbiddenHeader | undefined;
+  let listingError: Error | undefined;
   try {
-    await lister.list({
-      file: tgzPath,
+    const stream = lister.list({
       strict: true,
       onReadEntry: (entry) => {
         entries.push({ path: entry.path, type: entry.type });
       },
     });
+    stream.on("ignoredEntry", (entry) => {
+      ignoredEntry ??= new IgnoredTarballEntryError(tgzPath, entry);
+    });
+    observeParsedEntries(stream, (entry) => {
+      const { path, type } = entry.header;
+      if (type === "OldGnuLongPath" || type === "GlobalExtendedHeader") {
+        forbiddenHeader ??= { type, path };
+      } else if (forbiddenHeader !== undefined && !entry.meta) {
+        const affectedPath =
+          forbiddenHeader.type === "GlobalExtendedHeader"
+            ? entry.globalExtended?.path
+            : entry.extended?.path && entry.path;
+        if (affectedPath) forbiddenHeader.affectedPath ??= affectedPath;
+      }
+    });
+    await pipeline(createReadStream(tgzPath), stream);
   } catch (cause: unknown) {
-    throw new Error(`Unable to list tarball "${tgzPath}".`, { cause });
+    listingError = new Error(`Unable to list tarball "${tgzPath}".`, { cause });
   }
+  if (forbiddenHeader !== undefined) {
+    throw new ForbiddenTarballHeaderError(tgzPath, forbiddenHeader);
+  }
+  if (listingError !== undefined) throw listingError;
+  if (ignoredEntry !== undefined) throw ignoredEntry;
   return entries;
 }
 

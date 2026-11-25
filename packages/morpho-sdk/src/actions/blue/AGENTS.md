@@ -43,7 +43,22 @@ BlueBundlesV1 owns each operation's sequencing:
   destination debt.
 
 Every call carries a contract execution deadline and optional referral-fee configuration. Action
-builders stay synchronous and encode-only.
+public builders parse raw inputs once, then call internal encoders shared with the entity handles.
+Each operation-specific constructor accepts the complete raw public object and owns normalization,
+field/error context, defaults, funding and cross-field constraints in the established error order.
+Its complete readonly result carries one private operation witness, not scalar or stage witnesses.
+Simple wrappers set inactive-leg defaults inside their constructor and refine the complete combined
+contract with literal-zero inactive legs. Their prepared consumers require those refinements so
+combined or sibling inputs cannot be relabelled as another intent.
+Entity constructors additionally own snapshot and health checks and derive repay funding caps.
+Internal handle implementations consume only these completed objects. Build-time signature binders
+validate fresh signatures independently without reparsing static inputs, then include the bound
+signatures in the complete object passed to the shared encode-only functions. None of these types
+proves future clock or RPC state.
+Markets retain owned, frozen plain tuple/id snapshots, including migration destinations and
+reallocation markets; requirements and encoding never depend on later caller mutations.
+Eager entity ABI-bound errors may precede errors from signatures first supplied in a later
+`buildTx()` call; standalone builders preserve input/signature precedence within their single call.
 
 ## Permit, native, and authorization rules
 
@@ -58,7 +73,7 @@ builders stay synchronous and encode-only.
 
 - `supplyCollateralBorrow` and `repayWithdrawCollateral` require at least one non-zero leg.
   The simple `supplyCollateral`, `borrow`, `repay`, and `withdrawCollateral` builders delegate to
-  these combined builders with the inactive leg set to zero.
+  the internal combined encoders with parsed inputs and the inactive leg set to zero.
   Repay accepts assets or shares; full repay uses the contract's saturated shares value. Withdraw
   accepts assets or shares.
 - Borrow, collateral-withdraw, and migration legs enforce the SDK's buffered LLTV cap. Pure

@@ -32,10 +32,10 @@ function withCcipReadDisabled(client: SimulationClient): SimulationClient {
 /**
  * Simulate a bundle of EVM transactions.
  *
- * Parses and normalizes the request → resolves a single pinned block (skipped
- * when `params.block` is supplied) → asserts every calldata target holds
- * contract code at the pinned block → resolves quoted- and input-asset
- * metadata → plans derivation reads, state reads and the execution →
+ * Parses and normalizes the request → resolves a single pinned block (a
+ * supplied `params.block` is verified with one `eth_getBlockByHash`) → asserts
+ * every calldata target holds contract code at the pinned hash → resolves quoted- and input-asset
+ * metadata at that hash (`requireCanonical: true` on both reads) → plans derivation reads, state reads and the execution →
  * executes once through `eth_simulateV1` on the caller's client
  * (in-block state reads and transaction assertions → response parsing) →
  * derives ERC20/WETH9 transfers and net asset changes from the user calls only
@@ -69,12 +69,16 @@ function withCcipReadDisabled(client: SimulationClient): SimulationClient {
  * user-call logs.
  * Preparations emitting asset-transfer logs fail closed; simulate those
  * authorizations as transactions in final mode to check their asset flows.
- * `limits` is required: per-operation quotes, typed `inputs` or both, or the
+ * `limits` is required: per-operation quotes, typed `inputs`, validated control
+ * `effects`, or their combination, or the
  * explicit `"none"` opt-out, which skips limit and approval reads and checks
  * but not final-mode signed-request use checks. Typed inputs derive their
  * sides from pinned-block state in the simulated block and check them with no
  * percentage tolerance; only explicitly quoted sides use `slippageTolerance`.
  * Violations report `ConsumerLimitViolationError`.
+ * Empty `operations` are valid only with non-empty validated `effects`; every
+ * caller transaction (excluding preparations) must then resolve to an effect
+ * and contain only declared control calls.
  *
  * **Funding.** Without caller balance overrides, `value` transfers are funded
  * by the sender's real native balance, so under-funded bundles revert exactly as
@@ -93,8 +97,8 @@ function withCcipReadDisabled(client: SimulationClient): SimulationClient {
  *
  * - `SimulationValidationError`: for invalid input (mixed senders, bad
  *   addresses, empty transactions, malformed assertions or authorizations,
- *   missing or malformed limits, an empty
- *   `limits.operations`, a non-positive or unmeasurable quote field, a
+ *   missing or malformed limits, empty `limits.operations` without non-empty
+ *   validated effects, a non-positive or unmeasurable quote field, a
  *   `slippageTolerance` at or above 1e18, a missing required quote side for an
  *   operation, unknown fields, a `"pending"` block tag,
  *   a malformed `block` or one combined with `blockNumber`, a
@@ -130,6 +134,11 @@ function withCcipReadDisabled(client: SimulationClient): SimulationClient {
  *   violated by the observed effects, including when
  *   `midnightRepayWithdrawCollateral` or `midnightTakeRepayWithdrawCollateral`
  *   without a `debtRepaid` quote increases the sender's debt.
+ * - `SimulationEffectError`: when an exact declared effect is missing or
+ *   mismatched, its bound transaction has positive sender token/native outflow
+ *   or insufficient native trace evidence for its value, transfer evidence is
+ *   malformed, or an effects-only caller transaction is unbound or contains
+ *   undeclared control calls.
  * - `UnusedAuthorizationError`: when a final-mode ERC-2612 permit has no
  *   matching token Approval(owner, spender, value), a Blue signature has no
  *   matching Morpho IncrementNonce event for its authorizer and signed nonce,
@@ -137,8 +146,6 @@ function withCcipReadDisabled(client: SimulationClient): SimulationClient {
  *   the signed `authorizer`, `authorized`, `isAuthorized`, and `nonce`.
  * - `UnexpectedTokenApprovalError`: when a sender-granted token, permit,
  *   Permit2, or NFT approval is outside the derived and explicit allowlist.
- * - `UnexpectedTokenTransferError`: by default, when a sender outflow is outside
- *   the operation-derived spending set and the verified paired-emitter exception.
  * - `UnexpectedMorphoAuthorizationError`: when a sender-granted Morpho
  *   authorization is outside the derived and explicit allowlist.
  * - `UnexpectedMidnightAuthorizationError`: when a sender-granted Midnight
@@ -216,10 +223,14 @@ function withCcipReadDisabled(client: SimulationClient): SimulationClient {
  * even when `ok` is true. The SDK performs no logging. Deprecated `options.logger`
  * is accepted but ignored; read `report.warnings` instead. It will be removed in
  * a future major after the coexistence minor. The error class remains exported.
+ * With operation limits, owner position decreases outside the declared Morpho
+ * operations and undecodable matching logs likewise produce a non-blocking
+ * `UNEXPECTED_POSITION_CHANGE` warning, with protocol, event, owner and optional
+ * market ID context.
  * Success and failure reports include `verification.retention` (`"checked"` or
  * `"skipped-unsupported-chain"`) only after retention ran with complete user logs.
- * Omitted user logs (unlike explicit `logs: []`), early failures, reverts and
- * unusable transfer evidence omit `verification`. Any `MALFORMED_TRANSFER_LOG`
+ * Omitted user logs (unlike explicit `logs: []`), early failures, reverts,
+ * unusable transfer evidence and unreadable retention balances omit `verification`. Any `MALFORMED_TRANSFER_LOG`
  * warning also omits it because the parser discarded transfer evidence, while
  * warnings and failures from the remaining records are preserved.
  * A skip also emits `RETENTION_CHECK_SKIPPED`. Other diagnostics describe malformed
@@ -269,7 +280,9 @@ function withCcipReadDisabled(client: SimulationClient): SimulationClient {
  *   Defaults to `latest` (`finalized` on Monad, whose `latest` block is not
  *   final), resolved exactly once.
  * @param params.block - Optional caller-supplied state block (`number`,
- *   `hash`, `timestamp`). Skips the block lookup, so a simulation without
+ *   `hash`, `timestamp`). Verified by one `eth_getBlockByHash` before reads;
+ *   mismatched fields fail as `InvalidSimulationResponseError`, a missing block
+ *   as `RpcTransportError`. In addition to that lookup, a simulation without
  *   asset metadata reads makes a single `eth_simulateV1` request plus one
  *   `eth_getCode` per distinct calldata target without a code override (and
  *   a delegate lookup for EIP-7702 targets without overridden delegate code). Cannot be combined with

@@ -6,22 +6,30 @@ import {
 import { blueAbi, midnightAbi } from "@morpho-org/morpho-sdk/abis";
 import { MarketUtils as MidnightMarketUtils } from "@morpho-org/morpho-sdk/midnight/utils";
 import {
+  type Abi,
   type Address,
   BaseError,
   type Client,
+  type ContractFunctionArgs,
+  type ContractFunctionName,
   ContractFunctionRevertedError,
   ExecutionRevertedError,
   erc4626Abi,
   ethAddress,
   type Hex,
   HttpRequestError,
+  InternalRpcError,
   isAddressEqual,
   RpcError,
   RpcRequestError,
   TimeoutError,
   zeroAddress,
 } from "viem";
-import { readContract } from "viem/actions";
+import {
+  type ReadContractParameters,
+  readContract as viemReadContract,
+} from "viem/actions";
+import { getCallError } from "viem/utils";
 import {
   ApprovalCheckUnavailableError,
   RpcTransportError,
@@ -61,7 +69,59 @@ export interface ResolvedApprovalOperation extends ResolvedSlippageOperation {
   readonly midnightApprovalTokens?: readonly Address[];
 }
 
+/** Use viem's ABI codec with a canonical selector even on older viem peers. */
+function readContract<
+  const abi extends Abi,
+  functionName extends ContractFunctionName<abi, "pure" | "view">,
+  const args extends ContractFunctionArgs<abi, "pure" | "view", functionName>,
+>(
+  client: Client,
+  parameters: ReadContractParameters<abi, functionName, args> & {
+    blockHash: Hex;
+    requireCanonical: true;
+  },
+) {
+  const { blockHash, requireCanonical } = parameters;
+  const { account } = client;
+  const pinnedClient = {
+    ...client,
+    call: async ({ to, data }: { to: Address; data: Hex }) => {
+      try {
+        const result = await client.request({
+          method: "eth_call",
+          params: [
+            { to, data, ...(account && { from: account.address }) },
+            { blockHash, requireCanonical },
+          ],
+        });
+        return { data: result };
+      } catch (cause) {
+        if (cause instanceof Error) {
+          throw getCallError(cause, { to, data, account, chain: client.chain });
+        }
+        throw cause;
+      }
+    },
+  };
+  return viemReadContract<Client["chain"], abi, functionName, args>(
+    pinnedClient,
+    parameters,
+  );
+}
+
 const isTransportFailure = (cause: unknown): boolean => {
+  if (
+    cause instanceof BaseError &&
+    cause.walk(
+      (error) =>
+        error instanceof RpcRequestError &&
+        error.code === InternalRpcError.code &&
+        error.data == null,
+    ) !== null &&
+    cause.walk((error) => error instanceof ExecutionRevertedError) === null
+  ) {
+    return true;
+  }
   const reverted =
     cause instanceof BaseError &&
     cause.walk(
@@ -153,7 +213,7 @@ export async function resolveAssets(params: {
   readonly midnight?: Address;
   readonly wNative?: Address;
   readonly operations: readonly ParsedOperationLimit[];
-  readonly blockNumber: bigint;
+  readonly blockHash: Hex;
   readonly signal?: AbortSignal;
 }): Promise<readonly ResolvedApprovalOperation[]> {
   const { operations } = params;
@@ -464,7 +524,7 @@ async function resolveSubjectApproval(
   params: ResolutionContext,
   limit: ParsedOperationLimit,
 ) {
-  const { client, blockNumber, signal } = params;
+  const { client, blockHash, signal } = params;
   let approvalToken: Address | undefined;
   switch (limit.type) {
     case "vaultV1Deposit":
@@ -479,7 +539,8 @@ async function resolveSubjectApproval(
             address: limit.vault,
             abi: erc4626Abi,
             functionName: "asset",
-            blockNumber,
+            blockHash,
+            requireCanonical: true,
           });
           return [token];
         },
@@ -678,12 +739,13 @@ async function resolveSourcePair({
     client,
     morpho,
     midnight = zeroAddress,
-    blockNumber,
+    blockHash,
     signal,
     tokens,
     markets,
     blueMarkets,
   } = params;
+  const selector = { blockHash, requireCanonical: true } as const;
   let pair = tokens.get(key);
   if (pair === undefined) {
     try {
@@ -694,7 +756,7 @@ async function resolveSourcePair({
           abi: blueAbi,
           functionName: "idToMarketParams",
           args: [source.marketId],
-          blockNumber,
+          ...selector,
         });
         const marketParams = {
           loanToken: values[0],
@@ -735,7 +797,7 @@ async function resolveSourcePair({
           abi: midnightAbi,
           functionName: "toMarket",
           args: [source.marketId],
-          blockNumber,
+          ...selector,
         });
         const mismatch = midnightMarketMismatch(market, {
           ...source,
@@ -761,7 +823,7 @@ async function resolveSourcePair({
           address: source.vault,
           abi: erc4626Abi,
           functionName: "asset",
-          blockNumber,
+          ...selector,
         });
         pair = [asset, asset];
       }
@@ -1007,7 +1069,7 @@ async function readMarketToken({
   marketId: MarketId;
   asset: "loan" | "collateral";
 }): Promise<Address> {
-  const { client, morpho, blockNumber, signal, blueMarkets } = params;
+  const { client, morpho, blockHash, signal, blueMarkets } = params;
 
   const pair = await readApprovalPair({
     params,
@@ -1020,7 +1082,8 @@ async function readMarketToken({
         abi: blueAbi,
         functionName: "idToMarketParams",
         args: [marketId],
-        blockNumber,
+        blockHash,
+        requireCanonical: true,
       });
       const marketParams = {
         loanToken: values[0],
@@ -1067,7 +1130,7 @@ async function readMidnightApprovalMarket(
   const {
     client,
     midnight = zeroAddress,
-    blockNumber,
+    blockHash,
     signal,
     tokens,
     markets,
@@ -1093,7 +1156,8 @@ async function readMidnightApprovalMarket(
         abi: midnightAbi,
         functionName: "toMarket",
         args: [limit.marketId],
-        blockNumber,
+        blockHash,
+        requireCanonical: true,
       });
       const mismatch = midnightMarketMismatch(market, limit);
       if (mismatch !== undefined) {

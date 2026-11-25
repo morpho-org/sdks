@@ -102,6 +102,9 @@ export function evaluateCalls(
       continue;
     }
     if (!result.status) {
+      if (planned.read.kind === "morpho.marketParams") {
+        continue;
+      }
       // A read planned in both phases is one cause: report it once.
       if (failedReadIds.has(planned.read.id)) {
         continue;

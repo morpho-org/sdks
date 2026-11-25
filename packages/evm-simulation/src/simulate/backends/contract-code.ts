@@ -1,5 +1,4 @@
-import { type Address, type Client, getAddress } from "viem";
-import { getBytecode } from "viem/actions";
+import { type Address, type Client, getAddress, type Hex } from "viem";
 import { RpcTransportError, SimulationValidationError } from "../../errors.js";
 import type { SimulationStateOverrides } from "../../params.js";
 import type { ParsedTransaction } from "../request/parse-request.js";
@@ -24,7 +23,7 @@ import { rpc } from "./eth-simulate-v1.js";
  * @param params.client - Caller-owned viem client.
  * @param params.transactions - Parsed caller transactions, in execution order.
  * @param params.chainId - Request chain id, named in the validation error.
- * @param params.blockNumber - Pinned state block the `eth_getCode` reads run at.
+ * @param params.blockHash - Canonical state block hash for the `eth_getCode` reads.
  * @param params.stateOverrides - Caller code overrides, checked instead of onchain code when present.
  * @param params.signal - Pipeline deadline; prevents starting reads after expiry.
  * @returns Nothing when every calldata target and its EIP-7702 delegate hold code.
@@ -42,11 +41,19 @@ export async function assertTransactionTargetsHaveCode(params: {
   readonly client: Client;
   readonly transactions: readonly ParsedTransaction[];
   readonly chainId: number;
-  readonly blockNumber: bigint;
+  readonly blockHash: Hex;
   readonly stateOverrides?: SimulationStateOverrides;
   readonly signal?: AbortSignal;
 }): Promise<void> {
-  const { client, transactions, chainId, blockNumber, stateOverrides } = params;
+  const { client, transactions, chainId, blockHash, stateOverrides } = params;
+  const readCode = (address: Address) =>
+    rpc("eth_getCode", () => {
+      params.signal?.throwIfAborted();
+      return client.request({
+        method: "eth_getCode",
+        params: [address, { blockHash, requireCanonical: true }],
+      });
+    });
   const overrides = new Map(
     Object.entries(stateOverrides ?? {}).map(([address, account]) => [
       address.toLowerCase(),
@@ -63,13 +70,7 @@ export async function assertTransactionTargetsHaveCode(params: {
     checked.set(
       transaction.to,
       (code === undefined
-        ? rpc("eth_getCode", () => {
-            params.signal?.throwIfAborted();
-            return getBytecode(client, {
-              address: transaction.to,
-              blockNumber,
-            });
-          })
+        ? readCode(transaction.to)
         : Promise.resolve(code)
       ).then((resolvedCode) => {
         if (
@@ -81,12 +82,7 @@ export async function assertTransactionTargetsHaveCode(params: {
         // EIP-7702 follows one delegation; a code-less delegate is still a no-op.
         const delegate = getAddress(`0x${resolvedCode.slice(8)}`);
         const delegateCode = overrides.get(delegate.toLowerCase())?.code;
-        return delegateCode === undefined
-          ? rpc("eth_getCode", () => {
-              params.signal?.throwIfAborted();
-              return getBytecode(client, { address: delegate, blockNumber });
-            })
-          : delegateCode;
+        return delegateCode === undefined ? readCode(delegate) : delegateCode;
       }),
     );
   }

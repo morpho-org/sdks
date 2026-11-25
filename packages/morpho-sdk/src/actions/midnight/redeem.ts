@@ -1,26 +1,21 @@
+import type { MarketInput } from "@morpho-org/midnight-sdk";
+import { deepFreeze } from "@morpho-org/morpho-ts";
+import type { Address } from "viem";
 import {
-  type MarketInput,
-  MarketUtils,
-  midnightAbi,
-} from "@morpho-org/midnight-sdk";
-import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
-import { type Address, isAddressEqual, zeroAddress } from "viem";
-import {
-  encodeMidnightCalldata,
-  encodeMidnightMarketId,
-} from "../../helpers/encodeMidnightCalldata.js";
-import { addTransactionMetadata } from "../../helpers/index.js";
-import { validateMidnightAddress } from "../../helpers/validateMidnightAccount.js";
-import { validateMidnightUint128Field } from "../../helpers/validateMidnightBounds.js";
-import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
+  type MidnightMarket,
+  parseMidnightAddress,
+  parseMidnightMarket,
+  parseMidnightOwner,
+  parseMidnightPositiveAmount,
+} from "../../helpers/parseMidnight.js";
 import { validateMidnightReceiver } from "../../helpers/validateMidnightReceiver.js";
-import {
-  type Metadata,
-  type MidnightRedeemAction,
-  MidnightZeroOnBehalfError,
-  NonPositiveInputError,
-  type Transaction,
+import type {
+  Metadata,
+  MidnightRedeemAction,
+  Transaction,
 } from "../../types/index.js";
+import { encodeMidnightRedeem } from "./encode.js";
+import { snapshotMidnightMetadata } from "./parse.js";
 
 /** Parameters for encoding a direct Midnight credit redemption. */
 export interface MidnightRedeemParams {
@@ -74,59 +69,48 @@ export interface MidnightRedeemParams {
  */
 export const midnightRedeem = (
   params: MidnightRedeemParams,
-): Readonly<Transaction<MidnightRedeemAction>> => {
-  // Reject a malformed account before comparing it with the zero address.
-  validateMidnightAddress("onBehalf", params.onBehalf);
-  if (params.units <= 0n) {
-    throw new NonPositiveInputError("units", params.units);
-  }
-  validateMidnightUint128Field("units", params.units);
-  if (isAddressEqual(params.onBehalf, zeroAddress)) {
-    throw new MidnightZeroOnBehalfError("onBehalf");
-  }
+): Readonly<Transaction<MidnightRedeemAction>> =>
+  encodeMidnightRedeem(parseMidnightRedeem(params));
+
+const parsedRedeem = Symbol();
+
+/** Owned inputs for the redeem encoder. @internal */
+export interface ParsedMidnightRedeem
+  extends Omit<MidnightRedeemParams, "market"> {
+  readonly market: MidnightMarket;
+  readonly units: bigint;
+  readonly onBehalf: Address;
+  readonly receiver: Address;
+  readonly [parsedRedeem]: true;
+}
+
+/** Parses static redeem constraints using the existing error order. @internal */
+export const parseMidnightRedeem = (
+  params: MidnightRedeemParams,
+): ParsedMidnightRedeem => {
+  const address = parseMidnightAddress("onBehalf", params.onBehalf);
+  const units = parseMidnightPositiveAmount("units", params.units);
+  const onBehalf = parseMidnightOwner(address);
 
   // Reject markets from another chain deployment before encoding the call.
-  validateMidnightMarket({ market: params.market, chainId: params.chainId });
-  const marketId = encodeMidnightMarketId(params.market);
-  const midnight = getChainAddress(params.chainId, "midnight");
+  const market = parseMidnightMarket(params.market, params.chainId);
+
   const receiver = params.receiver ?? params.onBehalf;
   // Rejects receivers that would strand the redeemed assets in a contract.
   validateMidnightReceiver({
     chainId: params.chainId,
-    market: params.market,
+    market: market.struct,
     field: "receiver",
     receiver,
   });
 
-  let tx = {
-    to: midnight,
-    value: 0n,
-    data: encodeMidnightCalldata({
-      abi: midnightAbi,
-      functionName: "withdraw",
-      args: [
-        MarketUtils.toStruct(params.market),
-        params.units,
-        params.onBehalf,
-        receiver,
-      ],
-    }),
-  };
-
-  if (params.metadata) {
-    tx = addTransactionMetadata(tx, params.metadata);
-  }
-
   return deepFreeze({
-    ...tx,
-    action: {
-      type: "midnightRedeem",
-      args: {
-        market: marketId,
-        units: params.units,
-        onBehalf: params.onBehalf,
-        receiver,
-      },
-    },
+    chainId: params.chainId,
+    market,
+    onBehalf,
+    units,
+    receiver,
+    metadata: snapshotMidnightMetadata(params.metadata),
+    [parsedRedeem]: true as const,
   });
 };

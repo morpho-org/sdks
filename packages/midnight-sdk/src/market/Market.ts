@@ -326,7 +326,9 @@ export class MarketParams {
    * ```
    */
   public static from(market: MarketInput): MarketParams {
-    if ("params" in market) return MarketParams.from(market.params);
+    if ("params" in market) {
+      return MarketParams.from(market.params);
+    }
     return market instanceof MarketParams ? market : new MarketParams(market);
   }
 }

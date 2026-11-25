@@ -44,14 +44,10 @@ export function computeVaultV2InKindRedeemQuote({
   if (amount <= 0n) {
     throw new NonPositiveInputError("amount", amount);
   }
-  const marketParamsListSnapshot = marketParamsList.map(
-    ({ loanToken, collateralToken, oracle, irm, lltv }) => ({
-      loanToken,
-      collateralToken,
-      oracle,
-      irm,
-      lltv,
-    }),
+  const marketParamsListSnapshot = Object.freeze(
+    marketParamsList.map(({ loanToken, collateralToken, oracle, irm, lltv }) =>
+      Object.freeze({ loanToken, collateralToken, oracle, irm, lltv }),
+    ),
   );
   const marketIdListSnapshot = marketParamsListSnapshot.map((marketParams) =>
     MarketUtils.getMarketId(marketParams),

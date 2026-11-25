@@ -232,6 +232,36 @@ describe("blueSupplyCollateralBorrow", () => {
     ).toThrow(NonPositiveInputError);
   });
 
+  test.each(["getter", "iterator"] as const)(
+    "rejects zero legs before reading a throwing reallocation %s",
+    (kind) => {
+      let reads = 0;
+      const args = {
+        userAddress,
+        collateralAssets: 0n,
+        borrowAssets: 0n,
+        maxLtv,
+        deadline,
+        get reallocations(): Iterable<never> {
+          if (kind === "getter") {
+            reads++;
+            throw new Error("unexpected reallocation read");
+          }
+          return {
+            [Symbol.iterator](): Iterator<never> {
+              reads++;
+              throw new Error("unexpected reallocation iteration");
+            },
+          };
+        },
+      };
+      expect(() => blueSupplyCollateralBorrow({ market, args })).toThrow(
+        NonPositiveInputError,
+      );
+      expect(reads).toBe(0);
+    },
+  );
+
   test("error: NegativeInputError for negative operation inputs", () => {
     expect(() =>
       blueSupplyCollateralBorrow({

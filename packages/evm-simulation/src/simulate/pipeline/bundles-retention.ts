@@ -3,11 +3,19 @@ import {
   UnsupportedChainIdError,
 } from "@morpho-org/blue-sdk";
 import { isDefined } from "@morpho-org/morpho-ts";
-import { type Address, ethAddress, getAddress } from "viem";
+import {
+  type Address,
+  encodeFunctionData,
+  erc20Abi,
+  ethAddress,
+  getAddress,
+} from "viem";
 import { BlacklistViolationError } from "../../errors.js";
 import type { SimulationReportVerification } from "../../result.js";
 import type { AccountAssetChanges, Transfer } from "../../types.js";
 import { freezeWarning, type SimulationWarning } from "../../warnings.js";
+import type { StateRead } from "../state/contract.js";
+import type { StateValue } from "../state/read-state.js";
 
 /**
  * Dust tolerance for standalone bundles retention, in raw token units.
@@ -26,10 +34,126 @@ interface BundlesRetentionEntry {
   netChange: bigint;
 }
 
+/** `balanceOf` reads of restricted intermediaries, decoded per phase. @internal */
+interface BundlesRetentionBalances {
+  readonly reads: readonly StateRead[];
+  readonly before: ReadonlyMap<string, StateValue>;
+  readonly after: ReadonlyMap<string, StateValue>;
+}
+
 interface AssertNoBundlesRetentionParams {
   chainId: number;
   transfers: Transfer[];
   assetChanges: readonly AccountAssetChanges[];
+  /**
+   * In-block token balances of the restricted intermediaries. A balance that
+   * grows above dust fails even when the transfer logs net to zero.
+   */
+  balances?: BundlesRetentionBalances;
+}
+
+/**
+ * Resolve the chain's restricted intermediaries: its standalone `bundles`
+ * contracts and `MidnightBundlesV2`.
+ * @returns The checksummed addresses, or the `RETENTION_CHECK_SKIPPED` warning
+ *   when blue-sdk does not support the chain or catalogs none for it.
+ * @throws Any non-`UnsupportedChainIdError` error from `getChainAddresses`.
+ */
+function getRestrictedAddresses(
+  chainId: number,
+):
+  | { readonly addresses: ReadonlySet<Address> }
+  | { readonly skipped: SimulationWarning } {
+  let addresses: ReturnType<typeof getChainAddresses>;
+  try {
+    addresses = getChainAddresses(chainId);
+  } catch (error) {
+    if (error instanceof UnsupportedChainIdError) {
+      return {
+        skipped: freezeWarning({
+          code: "RETENTION_CHECK_SKIPPED",
+          severity: "warn",
+          chainId,
+          message: "Chain not supported by blue-sdk, retention check skipped",
+          reason: "unsupported-chain",
+        }),
+      };
+    }
+    throw error;
+  }
+
+  const restrictedAddresses = new Set<Address>();
+  if (addresses.bundles) {
+    for (const addr of Object.values(addresses.bundles).filter(isDefined)) {
+      restrictedAddresses.add(getAddress(addr));
+    }
+  }
+  if (addresses.midnightBundlesV2) {
+    restrictedAddresses.add(getAddress(addresses.midnightBundlesV2));
+  }
+  if (restrictedAddresses.size === 0) {
+    return {
+      skipped: freezeWarning({
+        code: "RETENTION_CHECK_SKIPPED",
+        severity: "warn",
+        chainId,
+        message:
+          "Chain known to blue-sdk but has no restricted intermediary config, retention check skipped",
+        reason: "missing-restricted-addresses",
+      }),
+    };
+  }
+  return { addresses: restrictedAddresses };
+}
+
+/**
+ * Plan one `balanceOf` read per (restricted intermediary, token) pair, replayed
+ * before and after the user bundle in the same simulated block, so retention
+ * is checked against token state and not only against reported logs.
+ *
+ * @internal Internal pipeline stage, composed by `simulate`.
+ * @param params.chainId - Chain whose restricted intermediaries are read.
+ * @param params.tokens - ERC-20 tokens the request's operations measure;
+ *   duplicates are read once. Native ETH is not an ERC-20 and is skipped.
+ * @returns The reads, empty when the chain has no restricted intermediary.
+ * @throws Any non-`UnsupportedChainIdError` error from `getChainAddresses`.
+ */
+export function planBundlesRetentionReads(params: {
+  readonly chainId: number;
+  readonly tokens: readonly Address[];
+}): readonly StateRead[] {
+  if (params.tokens.length === 0) {
+    return [];
+  }
+  const restricted = getRestrictedAddresses(params.chainId);
+  if (!("addresses" in restricted)) {
+    return [];
+  }
+  const reads = new Map<string, StateRead>();
+  for (const account of restricted.addresses) {
+    for (const token of params.tokens) {
+      if (token.toLowerCase() === ethAddress) {
+        continue;
+      }
+      const id = `retention:${token}:${account}`.toLowerCase();
+      if (reads.has(id)) {
+        continue;
+      }
+      reads.set(id, {
+        kind: "erc20.balance",
+        id,
+        to: token,
+        token,
+        account,
+        data: encodeFunctionData({
+          abi: erc20Abi,
+          functionName: "balanceOf",
+          args: [account],
+        }),
+      });
+    }
+  }
+  return [...reads.values()];
 }
 
 /**
@@ -67,67 +191,32 @@ interface AssertNoBundlesRetentionParams {
  *   `eth_simulateV1` synthetic native sentinel) scanned for net retention.
  * @param params.assetChanges - Per-account native-ETH deltas, the source of
  *   truth for native value stuck in a restricted contract.
- * @returns Retention coverage, non-blocking diagnostics and any aggregate retained-value failure.
+ * @param params.balances - Decoded before/after `balanceOf` reads planned by
+ *   {@link planBundlesRetentionReads}. A pair whose balance grows above dust
+ *   is retained even when its logs net to zero; when both sources flag a
+ *   pair, the larger amount is reported.
+ * @returns Retention coverage, non-blocking diagnostics and any aggregate
+ *   retained-value failure. `incomplete` is set when a planned balance read is
+ *   missing in either phase, so that pair went unmeasured.
  */
 export function checkBundlesRetention(params: AssertNoBundlesRetentionParams): {
   readonly status: SimulationReportVerification["retention"];
+  readonly incomplete?: true;
   readonly warnings: readonly SimulationWarning[];
   readonly failures: readonly BlacklistViolationError[];
 } {
-  const { chainId, transfers, assetChanges } = params;
+  const { chainId, transfers, assetChanges, balances } = params;
   const warnings: SimulationWarning[] = [];
 
-  // Standalone bundles contracts and `MidnightBundlesV2` are transient
-  // intermediaries that route user value and must never retain it.
-  let addresses: ReturnType<typeof getChainAddresses>;
-  try {
-    addresses = getChainAddresses(chainId);
-  } catch (error) {
-    if (error instanceof UnsupportedChainIdError) {
-      return {
-        status: "skipped-unsupported-chain",
-        failures: [],
-        warnings: [
-          freezeWarning({
-            code: "RETENTION_CHECK_SKIPPED",
-            severity: "warn",
-            chainId,
-            message: "Chain not supported by blue-sdk, retention check skipped",
-            reason: "unsupported-chain",
-          }),
-        ],
-      };
-    }
-    throw error;
-  }
-
-  const restrictedAddresses = new Set<Address>();
-  if (addresses.bundles) {
-    for (const addr of Object.values(addresses.bundles).filter(isDefined)) {
-      restrictedAddresses.add(getAddress(addr));
-    }
-  }
-  if (addresses.midnightBundlesV2) {
-    restrictedAddresses.add(getAddress(addresses.midnightBundlesV2));
-  }
-  if (restrictedAddresses.size === 0) {
-    // blue-sdk knows the chain but cataloged no restricted intermediary for it.
-    // Treat the same as UnsupportedChainIdError — retention check skipped.
+  const restricted = getRestrictedAddresses(chainId);
+  if (!("addresses" in restricted)) {
     return {
       status: "skipped-unsupported-chain",
       failures: [],
-      warnings: [
-        freezeWarning({
-          code: "RETENTION_CHECK_SKIPPED",
-          severity: "warn",
-          chainId,
-          message:
-            "Chain known to blue-sdk but has no restricted intermediary config, retention check skipped",
-          reason: "missing-restricted-addresses",
-        }),
-      ],
+      warnings: [restricted.skipped],
     };
   }
+  const restrictedAddresses = restricted.addresses;
 
   // Map keyed by (address, token) → structured entry. Avoids string parse-back.
   const flow = new Map<string, BundlesRetentionEntry>();
@@ -196,16 +285,51 @@ export function checkBundlesRetention(params: AssertNoBundlesRetentionParams): {
     );
   }
 
-  const retained = entries.filter((e) => e.netChange > DUST_THRESHOLD);
+  const retained = new Map(
+    entries
+      .filter((e) => e.netChange > DUST_THRESHOLD)
+      .map((e) => [
+        `${e.address.toLowerCase()}:${e.token.toLowerCase()}`,
+        { ...e },
+      ]),
+  );
+  let incomplete = false;
+  for (const read of balances?.reads ?? []) {
+    if (read.kind !== "erc20.balance") {
+      continue;
+    }
+    const before = balances?.before.get(read.id);
+    const after = balances?.after.get(read.id);
+    if (typeof before !== "bigint" || typeof after !== "bigint") {
+      incomplete = true;
+      continue;
+    }
+    const netChange = after - before;
+    const key = `${read.account.toLowerCase()}:${read.token.toLowerCase()}`;
+    if (
+      netChange > DUST_THRESHOLD &&
+      !((retained.get(key)?.netChange ?? 0n) >= netChange)
+    ) {
+      retained.set(key, {
+        address: getAddress(read.account),
+        token: getAddress(read.token),
+        netChange,
+      });
+    }
+  }
 
-  if (retained.length > 0) {
+  const coverage: { readonly status: "checked"; readonly incomplete?: true } =
+    incomplete
+      ? { status: "checked", incomplete: true }
+      : { status: "checked" };
+  if (retained.size > 0) {
     return {
-      status: "checked",
+      ...coverage,
       warnings,
       failures: [
         new BlacklistViolationError(
           "Simulation detected asset transfers retained by restricted bundles contracts",
-          retained.map((e) => ({
+          [...retained.values()].map((e) => ({
             address: e.address,
             token: e.token,
             netRetained: e.netChange,
@@ -214,7 +338,7 @@ export function checkBundlesRetention(params: AssertNoBundlesRetentionParams): {
       ],
     };
   }
-  return { status: "checked", warnings, failures: [] };
+  return { ...coverage, warnings, failures: [] };
 }
 
 /** Reject the aggregate bundles-retention failure, if present. @internal */

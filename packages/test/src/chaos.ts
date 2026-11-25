@@ -201,51 +201,19 @@ export interface FaultProxy {
   revive(): Promise<void>;
 }
 
-/**
- * Starts a local JSON-RPC proxy that can inject deterministic faults.
- *
- * Malformed JSON and parsed requests without a string `method` are forwarded verbatim and are not
- * logged.
- *
- * Upstream failures return HTTP 502 with a body naming the upstream error.
- *
- * `nth` uses the per-method, zero-based arrival index, which is deterministic for sequential
- * calls or calls within one batch but not for concurrent requests. Use `match` to target a
- * particular concurrent call, for example by `params[0].to` or a calldata selector.
- *
- * @param parameters.upstream - HTTP or HTTPS URL of the upstream JSON-RPC node.
- * @param parameters.faults - Optional fault rules, checked in list order and matched by method, `match`, and `nth`.
- * @param parameters.port - Optional local port; defaults to an ephemeral port.
- * @returns A controllable proxy with its URL and live call log.
- * @throws {TypeError} when `upstream` is not an HTTP or HTTPS URL.
- * @throws {Error} when the proxy cannot listen on its port.
- * @example
- * ```ts
- * import { createFaultProxy } from "@morpho-org/test/chaos";
- *
- * const proxy = await createFaultProxy({ upstream: "http://127.0.0.1:8545" });
- * // proxy.url is an HTTP URL on 127.0.0.1
- * await proxy.kill();
- * ```
- */
-export const createFaultProxy = async (parameters: {
-  readonly upstream: string;
-  readonly faults?: readonly FaultRule[];
-  readonly port?: number;
-}): Promise<FaultProxy> => {
-  const upstream = new URL(parameters.upstream);
-  if (upstream.protocol !== "http:" && upstream.protocol !== "https:") {
-    throw new TypeError("upstream must use HTTP or HTTPS");
-  }
+type RpcCall = {
+  readonly method: string;
+  readonly value: Record<string, unknown>;
+};
+type RpcFault = Extract<Fault, { kind: "rpcError" }>;
+type RequestFault = Exclude<Fault, RpcFault>;
+type HttpExchange = {
+  readonly request: IncomingMessage;
+  readonly response: ServerResponse;
+  readonly body: Buffer;
+};
 
-  let port = parameters.port ?? 0;
-  let listening = false;
-  let activeFaults = [...(parameters.faults ?? [])];
-  const counters = new Map<string, number>();
-  const entries: FaultProxyLogEntry[] = [];
-  const errors: Error[] = [];
-  const sockets = new Set<Socket>();
-  const killedSockets = new WeakSet<Socket>();
+function createForwarder(upstream: URL) {
   const upstreamRequests = new Set<ClientRequest>();
   const forward = (
     body: Buffer,
@@ -276,12 +244,16 @@ export const createFaultProxy = async (parameters: {
         readonly contentType: string | undefined;
         readonly body: Buffer;
       }): void => {
-        if (settled) return;
+        if (settled) {
+          return;
+        }
         cleanup();
         resolve(result);
       };
       const rejectUpstream = (error: unknown): void => {
-        if (settled) return;
+        if (settled) {
+          return;
+        }
         cleanup();
         reject(error);
       };
@@ -344,348 +316,495 @@ export const createFaultProxy = async (parameters: {
       }
       upstreamRequest.end(body);
     });
-  // biome-ignore lint/complexity/useMaxParams: the shared writer keeps HTTP response fields explicit.
-  const sendBody = (
-    response: ServerResponse,
-    status: number,
-    contentType: string | undefined,
-    body: string | Buffer,
-  ): void => {
-    response.writeHead(status, {
-      connection: "close",
-      "content-length":
-        typeof body === "string" ? Buffer.byteLength(body) : body.length,
-      ...(contentType === undefined ? {} : { "content-type": contentType }),
-    });
-    response.end(body);
-  };
-  const sendBadGateway = (response: ServerResponse, error: unknown): void => {
-    if (response.destroyed || response.writableEnded) return;
-    const errorDetails =
-      typeof error === "object" && error !== null
-        ? (error as { readonly code?: unknown; readonly message?: unknown })
-        : undefined;
-    const reason =
-      typeof errorDetails?.code === "string"
-        ? errorDetails.code
-        : typeof errorDetails?.message === "string"
-          ? errorDetails.message
-          : String(error);
-    sendBody(
-      response,
-      502,
-      "text/plain; charset=utf-8",
-      `Upstream request failed: ${reason}`,
-    );
-  };
-  const forwardRaw = async (
-    response: ServerResponse,
-    forwardParameters: {
-      readonly request: IncomingMessage;
-      readonly body: Buffer;
-    },
-  ): Promise<void> => {
-    const { request, body } = forwardParameters;
-    try {
-      const result = await forward(body, { request, response });
-      sendBody(response, result.statusCode, result.contentType, result.body);
-    } catch (error) {
-      sendBadGateway(response, error);
+  return { forward, getPendingRequests: () => [...upstreamRequests] };
+}
+
+type Forward = ReturnType<typeof createForwarder>["forward"];
+
+function getUpstreamErrorReason(
+  error: unknown,
+  details: { readonly code?: unknown; readonly message?: unknown } | undefined,
+) {
+  if (typeof details?.code === "string") {
+    return details.code;
+  }
+  return typeof details?.message === "string" ? details.message : String(error);
+}
+
+// biome-ignore lint/complexity/useMaxParams: the shared writer keeps HTTP response fields explicit.
+const sendBody = (
+  response: ServerResponse,
+  status: number,
+  contentType: string | undefined,
+  body: string | Buffer,
+): void => {
+  response.writeHead(status, {
+    connection: "close",
+    "content-length":
+      typeof body === "string" ? Buffer.byteLength(body) : body.length,
+    ...(contentType === undefined ? {} : { "content-type": contentType }),
+  });
+  response.end(body);
+};
+const sendBadGateway = (response: ServerResponse, error: unknown): void => {
+  if (response.destroyed || response.writableEnded) {
+    return;
+  }
+  const errorDetails =
+    typeof error === "object" && error !== null
+      ? (error as { readonly code?: unknown; readonly message?: unknown })
+      : undefined;
+  const reason = getUpstreamErrorReason(error, errorDetails);
+  sendBody(
+    response,
+    502,
+    "text/plain; charset=utf-8",
+    `Upstream request failed: ${reason}`,
+  );
+};
+const forwardRaw = async (
+  response: ServerResponse,
+  forwardParameters: {
+    readonly log?: RpcCallLog;
+    readonly request: IncomingMessage;
+    readonly body: Buffer;
+    readonly forward: Forward;
+  },
+): Promise<void> => {
+  const { request, body, log, forward } = forwardParameters;
+  try {
+    const result = await forward(body, { request, response });
+    log?.finalize(() => "forwarded");
+    sendBody(response, result.statusCode, result.contentType, result.body);
+  } catch (error) {
+    log?.finalize(() => "upstreamError");
+    sendBadGateway(response, error);
+  }
+};
+
+function parseJson(buffer: Buffer): unknown {
+  try {
+    return JSON.parse(buffer.toString());
+  } catch {
+    return undefined;
+  }
+}
+
+function parseRpcCalls(body: Buffer) {
+  const parsed = parseJson(body);
+  const values: readonly unknown[] = Array.isArray(parsed) ? parsed : [parsed];
+  const calls: RpcCall[] = [];
+  for (const value of values) {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+      return undefined;
     }
-  };
-  const server: Server = createServer((request: IncomingMessage, response) => {
-    response.setHeader("connection", "close");
-    let finalizeInternalError: (() => void) | undefined;
-    void (async () => {
-      const chunks: Buffer[] = [];
-      for await (const chunk of request) {
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-      }
-      const body = Buffer.concat(chunks);
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(body.toString());
-      } catch {
-        await forwardRaw(response, { request, body });
-        return;
-      }
+    const call = value as Record<string, unknown>;
+    if (typeof call.method !== "string") {
+      return undefined;
+    }
+    calls.push({ method: call.method, value: call });
+  }
+  return calls.length > 0
+    ? { calls, isBatch: Array.isArray(parsed) }
+    : undefined;
+}
 
-      const values: readonly unknown[] = Array.isArray(parsed)
-        ? parsed
-        : [parsed];
-      if (values.length === 0) {
-        await forwardRaw(response, { request, body });
-        return;
-      }
-      const calls: {
-        readonly method: string;
-        readonly value: Record<string, unknown>;
-      }[] = [];
-      let invalid = false;
-      for (const value of values) {
-        if (
-          value === null ||
-          typeof value !== "object" ||
-          Array.isArray(value)
-        ) {
-          invalid = true;
-          break;
-        }
-        const call = value as Record<string, unknown>;
-        if (typeof call.method !== "string") {
-          invalid = true;
-          break;
-        }
-        calls.push({ method: call.method, value: call });
-      }
-      if (invalid) {
-        await forwardRaw(response, { request, body });
-        return;
-      }
-
-      const logIndexes: number[] = [];
-      for (let index = 0; index < calls.length; index += 1) {
-        logIndexes.push(entries.length);
-        entries.push(
-          Object.freeze({
-            method: calls[index]!.method,
-            outcome: "pending",
-          }),
-        );
-      }
-      const finalizeLogCalls = (
-        entryIndexes: readonly number[],
-        outcomeFor: (index: number) => FaultOutcome,
-      ): void => {
-        for (let index = 0; index < entryIndexes.length; index += 1) {
-          const logIndex = entryIndexes[index]!;
-          if (entries[logIndex]?.outcome !== "pending") continue;
+function createRpcCallLog() {
+  const entries: FaultProxyLogEntry[] = [];
+  function track(calls: readonly RpcCall[]) {
+    const tracked = calls.map(({ method }) => {
+      const logIndex = entries.length;
+      entries.push(Object.freeze({ method, outcome: "pending" }));
+      return { logIndex, method };
+    });
+    return {
+      finalize(outcomeFor: (index: number) => FaultOutcome) {
+        for (const [index, { logIndex, method }] of tracked.entries()) {
+          if (entries[logIndex]?.outcome !== "pending") {
+            continue;
+          }
           entries[logIndex] = Object.freeze({
-            method: calls[index]!.method,
+            method,
             outcome: outcomeFor(index),
           });
         }
-      };
-      finalizeInternalError = () => {
-        for (let index = 0; index < logIndexes.length; index += 1) {
-          entries[logIndexes[index]!] = Object.freeze({
-            method: calls[index]!.method,
+      },
+      fail() {
+        for (const { logIndex, method } of tracked) {
+          entries[logIndex] = Object.freeze({
+            method,
             outcome: "internalError",
           });
         }
-      };
-      const matchedFaults: (Fault | undefined)[] = [];
-      for (let index = 0; index < calls.length; index += 1) {
-        const call = calls[index]!;
-        const nth = counters.get(call.method) ?? 0;
-        counters.set(call.method, nth + 1);
-        const rule = activeFaults.find(
-          (candidate) =>
-            candidate.method === call.method &&
-            (candidate.match === undefined ||
-              candidate.match({
-                method: call.method,
-                params: call.value.params,
-              })) &&
-            (candidate.nth === undefined ||
-              (typeof candidate.nth === "number"
-                ? candidate.nth === nth
-                : candidate.nth.includes(nth))),
-        );
-        const matchedFault = rule?.fault;
-        matchedFaults.push(matchedFault);
-      }
+      },
+    };
+  }
+  return { entries, track };
+}
 
-      const requestFaultIndex = matchedFaults.findIndex(
-        (matched) => matched !== undefined && matched.kind !== "rpcError",
-      );
-      if (requestFaultIndex !== -1) {
-        const requestFault = matchedFaults[requestFaultIndex]!;
-        if (requestFault.kind === "forwardThenDrop") {
-          try {
-            await forward(body, {
-              request,
-              response,
-              cancelOnClientClose: false,
-            });
-            finalizeLogCalls(logIndexes, () => requestFault.kind);
-            request.socket.destroy();
-          } catch (error) {
-            finalizeLogCalls(logIndexes, () => "upstreamError");
-            sendBadGateway(response, error);
-          }
-          return;
-        }
-        finalizeLogCalls(logIndexes, () => requestFault.kind);
-        if (requestFault.kind === "refuse") {
-          request.socket.destroy();
-        } else if (requestFault.kind === "status") {
-          const faultBody = requestFault.body ?? "";
-          sendBody(
-            response,
-            requestFault.status,
-            "text/plain; charset=utf-8",
-            faultBody,
-          );
-        } else if (requestFault.kind === "rawBody") {
-          sendBody(response, 200, "application/json", requestFault.body);
-        }
-        return;
-      }
+type TrackRpcCalls = ReturnType<typeof createRpcCallLog>["track"];
+type RpcCallLog = ReturnType<TrackRpcCalls>;
 
-      const rpcFaults = matchedFaults.map((matched) =>
-        matched?.kind === "rpcError" ? matched : undefined,
+function createFaultMatcher(initialFaults: readonly FaultRule[]) {
+  let activeFaults = [...initialFaults];
+  const counters = new Map<string, number>();
+  return {
+    setFaults(faults: readonly FaultRule[]) {
+      activeFaults = [...faults];
+      counters.clear();
+    },
+    match(call: RpcCall) {
+      const nth = counters.get(call.method) ?? 0;
+      counters.set(call.method, nth + 1);
+      return activeFaults.find(
+        (candidate) =>
+          candidate.method === call.method &&
+          (candidate.match === undefined ||
+            candidate.match({
+              method: call.method,
+              params: call.value.params,
+            })) &&
+          (candidate.nth === undefined ||
+            (typeof candidate.nth === "number"
+              ? candidate.nth === nth
+              : candidate.nth.includes(nth))),
+      )?.fault;
+    },
+  };
+}
+
+async function applyRequestFault(
+  { request, response, body }: HttpExchange,
+  {
+    requestFault,
+    forward,
+    finalize,
+  }: {
+    readonly requestFault: RequestFault;
+    readonly forward: Forward;
+    readonly finalize: RpcCallLog["finalize"];
+  },
+) {
+  if (requestFault.kind === "forwardThenDrop") {
+    try {
+      await forward(body, {
+        request,
+        response,
+        cancelOnClientClose: false,
+      });
+      finalize(() => requestFault.kind);
+      request.socket.destroy();
+    } catch (error) {
+      finalize(() => "upstreamError");
+      sendBadGateway(response, error);
+    }
+    return;
+  }
+  finalize(() => requestFault.kind);
+  if (requestFault.kind === "refuse") {
+    request.socket.destroy();
+  } else if (requestFault.kind === "status") {
+    const faultBody = requestFault.body ?? "";
+    sendBody(
+      response,
+      requestFault.status,
+      "text/plain; charset=utf-8",
+      faultBody,
+    );
+  } else if (requestFault.kind === "rawBody") {
+    sendBody(response, 200, "application/json", requestFault.body);
+  }
+}
+
+function readBatchReplies(
+  body: Buffer,
+  forwardedCalls: readonly RpcCall[],
+): unknown[] | undefined {
+  const parsed = parseJson(body);
+  if (Array.isArray(parsed)) {
+    return parsed;
+  }
+  const [first] = forwardedCalls;
+  if (
+    forwardedCalls.length === 1 &&
+    first !== undefined &&
+    parsed !== null &&
+    typeof parsed === "object" &&
+    "id" in parsed &&
+    (JSON.stringify(first.value.id) ?? "undefined") ===
+      (JSON.stringify(parsed.id) ?? "undefined")
+  ) {
+    return [parsed];
+  }
+  return undefined;
+}
+
+function mergeBatchReplies(
+  calls: readonly RpcCall[],
+  {
+    rpcFaults,
+    upstreamReplies,
+  }: {
+    readonly rpcFaults: readonly (RpcFault | undefined)[];
+    readonly upstreamReplies: readonly unknown[];
+  },
+) {
+  const repliesById = new Map<string, unknown[]>();
+  for (const reply of upstreamReplies) {
+    if (reply !== null && typeof reply === "object" && "id" in reply) {
+      const key = JSON.stringify(reply.id) ?? "undefined";
+      const replies = repliesById.get(key) ?? [];
+      replies.push(reply);
+      repliesById.set(key, replies);
+    }
+  }
+  const missingForwardedCalls = new Set<number>();
+  const replies = calls.flatMap((call, index) => {
+    const rpcFault = rpcFaults[index];
+    if (rpcFault !== undefined) {
+      return [
+        {
+          jsonrpc: "2.0",
+          ...(call.value.id === undefined ? {} : { id: call.value.id }),
+          error: {
+            code: rpcFault.code,
+            message: rpcFault.message,
+            ...(rpcFault.data === undefined ? {} : { data: rpcFault.data }),
+          },
+        },
+      ];
+    }
+    const key = JSON.stringify(call.value.id) ?? "undefined";
+    const upstreamRepliesForId = repliesById.get(key);
+    const upstreamReply = upstreamRepliesForId?.shift();
+    if (upstreamReply === undefined) {
+      missingForwardedCalls.add(index);
+      return [];
+    }
+    return [upstreamReply];
+  });
+  return { replies, missingForwardedCalls };
+}
+
+async function sendBatchReplies(
+  { request, response }: HttpExchange,
+  {
+    calls,
+    isBatch,
+    rpcFaults,
+    forward,
+    finalize,
+  }: {
+    readonly calls: readonly RpcCall[];
+    readonly isBatch: boolean;
+    readonly rpcFaults: readonly (RpcFault | undefined)[];
+    readonly forward: Forward;
+    readonly finalize: RpcCallLog["finalize"];
+  },
+) {
+  finalize((index) =>
+    rpcFaults[index] === undefined ? "pending" : "rpcError",
+  );
+  const forwardedCalls = calls.filter(
+    (_, index) => rpcFaults[index] === undefined,
+  );
+  let upstreamResponse: Awaited<ReturnType<Forward>> | undefined;
+  let upstreamReplies: readonly unknown[] = [];
+  if (forwardedCalls.length > 0) {
+    try {
+      upstreamResponse = await forward(
+        Buffer.from(JSON.stringify(forwardedCalls.map((call) => call.value))),
+        { request, response },
       );
-      if (Array.isArray(parsed) || rpcFaults[0] !== undefined) {
-        finalizeLogCalls(logIndexes, (index) =>
-          rpcFaults[index] === undefined ? "pending" : "rpcError",
+    } catch (error) {
+      finalize((index) =>
+        rpcFaults[index] === undefined ? "upstreamError" : "rpcError",
+      );
+      sendBadGateway(response, error);
+      return;
+    }
+    const parsedReplies = readBatchReplies(
+      upstreamResponse.body,
+      forwardedCalls,
+    );
+    if (parsedReplies === undefined) {
+      if (rpcFaults.some((rpcFault) => rpcFault !== undefined)) {
+        finalize((index) =>
+          rpcFaults[index] === undefined ? "upstreamError" : "rpcError",
         );
-        const forwardedCalls = calls.filter(
-          (_, index) => rpcFaults[index] === undefined,
+        sendBadGateway(
+          response,
+          new Error("Upstream response was not a mergeable JSON-RPC reply"),
         );
-        let upstreamResponse: Awaited<ReturnType<typeof forward>> | undefined;
-        let upstreamReplies: unknown[] = [];
-        if (forwardedCalls.length > 0) {
-          try {
-            upstreamResponse = await forward(
-              Buffer.from(
-                JSON.stringify(forwardedCalls.map((call) => call.value)),
-              ),
-              { request, response },
-            );
-          } catch (error) {
-            finalizeLogCalls(logIndexes, (index) =>
-              rpcFaults[index] === undefined ? "upstreamError" : "rpcError",
-            );
-            sendBadGateway(response, error);
-            return;
-          }
-          let parsedReplies: unknown;
-          try {
-            parsedReplies = JSON.parse(upstreamResponse.body.toString());
-          } catch {
-            parsedReplies = undefined;
-          }
-          if (!Array.isArray(parsedReplies)) {
-            const canMergeSingleReply =
-              forwardedCalls.length === 1 &&
-              parsedReplies !== null &&
-              typeof parsedReplies === "object" &&
-              "id" in parsedReplies &&
-              (JSON.stringify(forwardedCalls[0]!.value.id) ?? "undefined") ===
-                (JSON.stringify(parsedReplies.id) ?? "undefined");
-            if (canMergeSingleReply) {
-              upstreamReplies = [parsedReplies];
-            } else {
-              if (rpcFaults.some((rpcFault) => rpcFault !== undefined)) {
-                finalizeLogCalls(logIndexes, (index) =>
-                  rpcFaults[index] === undefined ? "upstreamError" : "rpcError",
-                );
-                sendBadGateway(
-                  response,
-                  new Error(
-                    "Upstream response was not a mergeable JSON-RPC reply",
-                  ),
-                );
-              } else {
-                finalizeLogCalls(logIndexes, () => "forwarded");
-                sendBody(
-                  response,
-                  upstreamResponse.statusCode,
-                  upstreamResponse.contentType,
-                  upstreamResponse.body,
-                );
-              }
-              return;
-            }
-          } else {
-            upstreamReplies = parsedReplies;
-          }
-        }
-        const repliesById = new Map<string, unknown[]>();
-        for (const reply of upstreamReplies) {
-          if (reply !== null && typeof reply === "object" && "id" in reply) {
-            const key = JSON.stringify(reply.id) ?? "undefined";
-            const replies = repliesById.get(key) ?? [];
-            replies.push(reply);
-            repliesById.set(key, replies);
-          }
-        }
-        const missingForwardedCalls = new Set<number>();
-        const replies = calls.flatMap((call, index) => {
-          const rpcFault = rpcFaults[index];
-          if (rpcFault !== undefined) {
-            return [
-              {
-                jsonrpc: "2.0",
-                ...(call.value.id === undefined ? {} : { id: call.value.id }),
-                error: {
-                  code: rpcFault.code,
-                  message: rpcFault.message,
-                  ...(rpcFault.data === undefined
-                    ? {}
-                    : { data: rpcFault.data }),
-                },
-              },
-            ];
-          }
-          const key = JSON.stringify(call.value.id) ?? "undefined";
-          const upstreamRepliesForId = repliesById.get(key);
-          const upstreamReply = upstreamRepliesForId?.shift();
-          if (upstreamReply === undefined) {
-            missingForwardedCalls.add(index);
-            return [];
-          }
-          return [upstreamReply];
-        });
-        if (missingForwardedCalls.size > 0) {
-          finalizeLogCalls(logIndexes, (index) => {
-            if (missingForwardedCalls.has(index)) return "upstreamError";
-            return rpcFaults[index] === undefined ? "forwarded" : "rpcError";
-          });
-          sendBadGateway(
-            response,
-            new Error("Upstream response was not a mergeable JSON-RPC reply"),
-          );
-          return;
-        }
-        finalizeLogCalls(logIndexes, (index) =>
-          rpcFaults[index] === undefined ? "forwarded" : "rpcError",
-        );
+      } else {
+        finalize(() => "forwarded");
         sendBody(
           response,
-          upstreamResponse?.statusCode ?? 200,
-          upstreamResponse?.contentType ?? "application/json",
-          JSON.stringify(Array.isArray(parsed) ? replies : replies[0]),
+          upstreamResponse.statusCode,
+          upstreamResponse.contentType,
+          upstreamResponse.body,
         );
-        return;
       }
-
-      try {
-        const result = await forward(body, { request, response });
-        finalizeLogCalls(logIndexes, () => "forwarded");
-        sendBody(response, result.statusCode, result.contentType, result.body);
-      } catch (error) {
-        finalizeLogCalls(logIndexes, () => "upstreamError");
-        sendBadGateway(response, error);
+      return;
+    }
+    upstreamReplies = parsedReplies;
+  }
+  const { replies, missingForwardedCalls } = mergeBatchReplies(calls, {
+    rpcFaults,
+    upstreamReplies,
+  });
+  if (missingForwardedCalls.size > 0) {
+    finalize((index) => {
+      if (missingForwardedCalls.has(index)) {
+        return "upstreamError";
       }
-    })().catch((error: unknown) => {
-      const internalError =
-        error instanceof Error ? error : new Error(String(error));
-      // Only ignore errors from sockets destroyed during teardown.
-      if (!killedSockets.has(request.socket)) errors.push(internalError);
-      finalizeInternalError?.();
-      if (response.destroyed || response.headersSent) {
-        response.destroy();
-        return;
-      }
-      sendBody(
-        response,
-        500,
-        "text/plain; charset=utf-8",
-        `Fault proxy internal error: ${internalError.message}`,
-      );
+      return rpcFaults[index] === undefined ? "forwarded" : "rpcError";
     });
+    sendBadGateway(
+      response,
+      new Error("Upstream response was not a mergeable JSON-RPC reply"),
+    );
+    return;
+  }
+  finalize((index) =>
+    rpcFaults[index] === undefined ? "forwarded" : "rpcError",
+  );
+  sendBody(
+    response,
+    upstreamResponse?.statusCode ?? 200,
+    upstreamResponse?.contentType ?? "application/json",
+    JSON.stringify(isBatch ? replies : replies[0]),
+  );
+}
+
+type FaultRequestState = {
+  readonly forward: Forward;
+  readonly matcher: ReturnType<typeof createFaultMatcher>;
+  readonly trackRpcCalls: TrackRpcCalls;
+  readonly recordError: (socket: Socket, error: Error) => void;
+};
+
+async function handleFaultProxyRequest(
+  { request, response }: Omit<HttpExchange, "body">,
+  { forward, matcher, trackRpcCalls, recordError }: FaultRequestState,
+) {
+  let log: RpcCallLog | undefined;
+  try {
+    const chunks: Buffer[] = [];
+    for await (const chunk of request) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    const body = Buffer.concat(chunks);
+    const parsed = parseRpcCalls(body);
+    if (parsed === undefined) {
+      await forwardRaw(response, { request, body, forward });
+      return;
+    }
+
+    const exchange = { request, response, body };
+    const { calls, isBatch } = parsed;
+    log = trackRpcCalls(calls);
+    const { finalize } = log;
+    const matchedFaults = calls.map(matcher.match);
+    const requestFault = matchedFaults.find(
+      (matched): matched is RequestFault =>
+        matched !== undefined && matched.kind !== "rpcError",
+    );
+    if (requestFault !== undefined) {
+      await applyRequestFault(exchange, { requestFault, forward, finalize });
+      return;
+    }
+    const rpcFaults = matchedFaults.map((matched) =>
+      matched?.kind === "rpcError" ? matched : undefined,
+    );
+    if (isBatch || rpcFaults[0] !== undefined) {
+      await sendBatchReplies(exchange, {
+        calls,
+        isBatch,
+        rpcFaults,
+        forward,
+        finalize,
+      });
+      return;
+    }
+    await forwardRaw(response, { request, body, forward, log });
+  } catch (error) {
+    const internalError =
+      error instanceof Error ? error : new Error(String(error));
+    recordError(request.socket, internalError);
+    log?.fail();
+    if (response.destroyed || response.headersSent) {
+      response.destroy();
+      return;
+    }
+    sendBody(
+      response,
+      500,
+      "text/plain; charset=utf-8",
+      `Fault proxy internal error: ${internalError.message}`,
+    );
+  }
+}
+
+/**
+ * Starts a local JSON-RPC proxy that can inject deterministic faults.
+ *
+ * Malformed JSON and parsed requests without a string `method` are forwarded verbatim and are not
+ * logged.
+ *
+ * Upstream failures return HTTP 502 with a body naming the upstream error.
+ *
+ * `nth` uses the per-method, zero-based arrival index, which is deterministic for sequential
+ * calls or calls within one batch but not for concurrent requests. Use `match` to target a
+ * particular concurrent call, for example by `params[0].to` or a calldata selector.
+ *
+ * @param parameters.upstream - HTTP or HTTPS URL of the upstream JSON-RPC node.
+ * @param parameters.faults - Optional fault rules, checked in list order and matched by method, `match`, and `nth`.
+ * @param parameters.port - Optional local port; defaults to an ephemeral port.
+ * @returns A controllable proxy with its URL and live call log.
+ * @throws {TypeError} when `upstream` is not an HTTP or HTTPS URL.
+ * @throws {Error} when the proxy cannot listen on its port.
+ * @example
+ * ```ts
+ * import { createFaultProxy } from "@morpho-org/test/chaos";
+ *
+ * const proxy = await createFaultProxy({ upstream: "http://127.0.0.1:8545" });
+ * // proxy.url is an HTTP URL on 127.0.0.1
+ * await proxy.kill();
+ * ```
+ */
+export const createFaultProxy = async (parameters: {
+  readonly upstream: string;
+  readonly faults?: readonly FaultRule[];
+  readonly port?: number;
+}): Promise<FaultProxy> => {
+  const upstream = new URL(parameters.upstream);
+  if (upstream.protocol !== "http:" && upstream.protocol !== "https:") {
+    throw new TypeError("upstream must use HTTP or HTTPS");
+  }
+
+  let port = parameters.port ?? 0;
+  let listening = false;
+  const matcher = createFaultMatcher(parameters.faults ?? []);
+  const { entries, track: trackRpcCalls } = createRpcCallLog();
+  const errors: Error[] = [];
+  const sockets = new Set<Socket>();
+  const killedSockets = new WeakSet<Socket>();
+  const { forward, getPendingRequests } = createForwarder(upstream);
+  const state: FaultRequestState = {
+    forward,
+    matcher,
+    trackRpcCalls,
+    recordError(socket, error) {
+      // Only ignore errors from sockets destroyed during teardown.
+      if (!killedSockets.has(socket)) {
+        errors.push(error);
+      }
+    },
+  };
+  const server: Server = createServer((request, response) => {
+    response.setHeader("connection", "close");
+    void handleFaultProxyRequest({ request, response }, state);
   });
   server.on("connection", (socket) => {
     sockets.add(socket);
@@ -713,20 +832,21 @@ export const createFaultProxy = async (parameters: {
     log: entries,
     errors,
     setFaults(faults) {
-      activeFaults = [...faults];
-      counters.clear();
+      matcher.setFaults(faults);
     },
     async kill() {
       if (listening) {
         listening = false;
         const socketsToDestroy = [...sockets];
-        for (const socket of socketsToDestroy) killedSockets.add(socket);
+        for (const socket of socketsToDestroy) {
+          killedSockets.add(socket);
+        }
         const closed = new Promise<void>((resolve, reject) => {
           server.close((error) =>
             error === undefined ? resolve() : reject(error),
           );
         });
-        const requests = [...upstreamRequests];
+        const requests = getPendingRequests();
         const requestsClosed = Promise.all(
           requests.map(
             (request) =>
@@ -734,8 +854,12 @@ export const createFaultProxy = async (parameters: {
           ),
         );
         server.closeAllConnections();
-        for (const socket of socketsToDestroy) socket.destroy();
-        for (const request of requests) request.destroy();
+        for (const socket of socketsToDestroy) {
+          socket.destroy();
+        }
+        for (const request of requests) {
+          request.destroy();
+        }
         await Promise.all([closed, requestsClosed]);
       }
       if (errors.length > 0) {
@@ -751,7 +875,9 @@ export const createFaultProxy = async (parameters: {
       }
     },
     async revive() {
-      if (listening) return;
+      if (listening) {
+        return;
+      }
       await new Promise<void>((resolve, reject) => {
         const onError = (error: Error): void => {
           server.off("listening", onListening);
@@ -858,6 +984,8 @@ const ERROR_CATEGORY_RULES: readonly {
   { name: "ConsumerLimitViolationError", category: "revert" },
   { name: "MissingContractCodeError", category: "config" },
   { name: "SimulationValidationError", category: "config" },
+  { name: "InvalidBigIntInputError", category: "config" },
+  { name: "InvalidMidnightNativeAmountTypeError", category: "config" },
   { name: "UnsupportedChainError", category: "config" },
   { name: "RpcTransportError", category: "infra" },
   { name: "HttpRequestError", category: "infra" },
@@ -904,8 +1032,12 @@ const walkErrorChain = (error: unknown): ErrorChainEntry[] => {
         ? (record.constructor as { readonly name?: unknown }).name
         : undefined;
     const names: string[] = [];
-    if (typeof constructorName === "string") names.push(constructorName);
-    if (typeof record.name === "string") names.push(record.name);
+    if (typeof constructorName === "string") {
+      names.push(constructorName);
+    }
+    if (typeof record.name === "string") {
+      names.push(record.name);
+    }
     const rule = ERROR_CATEGORY_RULES.find(
       (candidate) =>
         names.includes(candidate.name) &&

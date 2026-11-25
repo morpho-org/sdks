@@ -41,12 +41,48 @@ import {
 } from "../../helpers/index.js";
 import {
   type BundlesTokenRequirementSignature,
+  ChainIdMismatchError,
   type Erc2612RequirementSignature,
   isRequirementApproval,
   isRequirementSignature,
 } from "../../types/index.js";
 
 const amount = 100n;
+
+test("[INV-05] native deposit validates the served chain exactly once", async () => {
+  for (const servedChain of ["0x2105", "0x1"]) {
+    const handle = createMockClient(mainnet);
+    handle.request.mockImplementation(async ({ method }) => {
+      if (method === "eth_chainId") return servedChain;
+      if (method === "eth_getCode") return "0x6000";
+      throw new Error(`unexpected ${method}`);
+    });
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+    const vaultData = inKindVaultV1Data();
+    expect(
+      Reflect.set(vaultData, "asset", getChainAddress(mainnet.id, "wNative")),
+    ).toBe(true);
+    const action = vault.deposit({
+      nativeAmount: amount,
+      userAddress: IN_KIND_USER,
+      vaultData,
+    });
+    if (servedChain === "0x1") {
+      expect(await action.getRequirements()).toEqual([]);
+    } else {
+      await expect(action.getRequirements()).rejects.toBeInstanceOf(
+        ChainIdMismatchError,
+      );
+    }
+    expect(
+      handle.request.mock.calls.filter(
+        ([call]) => call.method === "eth_chainId",
+      ),
+    ).toHaveLength(1);
+  }
+});
 const ALLOWANCE_SELECTOR = "0xdd62ed3e"; // allowance(address,address)
 
 const MUTATED_ASSET = "0x0000000000000000000000000000000000002001";
@@ -122,6 +158,48 @@ const prepareDeposit = (handle: ReturnType<typeof createMockClient>) =>
     });
 
 describe("MorphoVaultV1 deposit getRequirements", () => {
+  test("a concurrent invocation checks its own served chain before sharing pending state", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: IN_KIND_ASSET,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const base = handle.request.getMockImplementation()!;
+    const enteredRead = Promise.withResolvers<void>();
+    const releaseRead = Promise.withResolvers<void>();
+    let servedChain = "0x1";
+    handle.request.mockImplementation(async (call) => {
+      if (call.method === "eth_chainId") return servedChain;
+      if (call.method === "eth_call") {
+        enteredRead.resolve();
+        await releaseRead.promise;
+      }
+      return base(call);
+    });
+    const deposit = prepareDeposit(handle);
+    const first = deposit.getRequirements();
+    await enteredRead.promise;
+    servedChain = "0x2105";
+    try {
+      await expect(deposit.getRequirements()).rejects.toBeInstanceOf(
+        ChainIdMismatchError,
+      );
+      expect(countAllowanceReads(handle)).toBe(1);
+      expect(
+        handle.request.mock.calls.filter(
+          ([{ method }]) => method === "eth_chainId",
+        ),
+      ).toHaveLength(2);
+    } finally {
+      releaseRead.resolve();
+    }
+    expect((await first).map(({ action }) => action.type)).toEqual([
+      "erc20Approval",
+    ]);
+  });
+
   test("behavior: concurrent callers share one requirement resolution", async () => {
     const handle = createMockClient(mainnet);
     mockRead(handle, {
@@ -770,6 +848,47 @@ describe("MorphoVaultV1 withdraw getRequirements", () => {
 });
 
 describe("MorphoVaultV1 redeem getRequirements", () => {
+  test("nested vault-data and share resolvers reuse only this invocation's preflight", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const vault = handle.client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+    vi.spyOn(
+      vault as unknown as {
+        getDataWithChainCheck: (
+          check: () => Promise<void>,
+        ) => ReturnType<typeof vault.getData>;
+      },
+      "getDataWithChainCheck",
+    ).mockImplementation(async (check) => {
+      await check();
+      return inKindVaultV1Data();
+    });
+    const output = vault.redeem({ shares: amount, userAddress: IN_KIND_USER });
+    const first = await output.getRequirements();
+    expect(first.map(({ action }) => action.type)).toEqual(["erc20Approval"]);
+    expect(
+      handle.request.mock.calls.filter(
+        ([{ method }]) => method === "eth_chainId",
+      ),
+    ).toHaveLength(1);
+    handle.request.mockClear();
+    expect(
+      (await output.getRequirements()).map(({ action }) => action),
+    ).toEqual(first.map(({ action }) => action));
+    expect(
+      handle.request.mock.calls.filter(
+        ([{ method }]) => method === "eth_chainId",
+      ),
+    ).toHaveLength(1);
+  });
+
   test.each(["redeem", "migration assets", "migration shares"] as const)(
     "behavior: %s refreshes allowances and nonces while signed permits stay usable",
     async (operation) => {
@@ -789,7 +908,10 @@ describe("MorphoVaultV1 redeem getRequirements", () => {
       const vault = handle.client
         .extend(morphoViemExtension({ supportSignature: true }))
         .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
-      vi.spyOn(vault, "getData").mockResolvedValue(inKindVaultV1Data());
+      vi.spyOn(
+        vault as unknown as { getDataWithChainCheck: typeof vault.getData },
+        "getDataWithChainCheck",
+      ).mockResolvedValue(inKindVaultV1Data());
       const prepared =
         operation === "redeem"
           ? vault.redeem({ shares: amount, userAddress: IN_KIND_USER })
@@ -892,7 +1014,10 @@ describe("MorphoVaultV1 redeem getRequirements", () => {
       const vault = handle.client
         .extend(morphoViemExtension({ supportSignature }))
         .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
-      vi.spyOn(vault, "getData").mockResolvedValue(inKindVaultV1Data());
+      vi.spyOn(
+        vault as unknown as { getDataWithChainCheck: typeof vault.getData },
+        "getDataWithChainCheck",
+      ).mockResolvedValue(inKindVaultV1Data());
       const params: { shares: bigint; userAddress: Address } = {
         shares: amount,
         userAddress: IN_KIND_USER,
@@ -972,7 +1097,10 @@ describe("MorphoVaultV1 redeem getRequirements", () => {
       const vault = handle.client
         .extend(morphoViemExtension({ supportSignature: true }))
         .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
-      vi.spyOn(vault, "getData").mockResolvedValue(inKindVaultV1Data());
+      vi.spyOn(
+        vault as unknown as { getDataWithChainCheck: typeof vault.getData },
+        "getDataWithChainCheck",
+      ).mockResolvedValue(inKindVaultV1Data());
       return vault;
     };
     const params = {
@@ -1261,7 +1389,10 @@ describe("MorphoVaultV1 migrateToV2 getRequirements", () => {
       const vault = handle.client
         .extend(morphoViemExtension({ supportSignature: true }))
         .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
-      vi.spyOn(vault, "getData").mockResolvedValue(inKindVaultV1Data());
+      vi.spyOn(
+        vault as unknown as { getDataWithChainCheck: typeof vault.getData },
+        "getDataWithChainCheck",
+      ).mockResolvedValue(inKindVaultV1Data());
       return vault;
     };
     const params = {
@@ -1313,9 +1444,7 @@ describe("MorphoVaultV1 missing contract code", () => {
       throw new Error(`unhandled RPC ${method}`);
     });
     const { expectFailClosed } = await import("@morpho-org/test/chaos");
-    const { ChainIdMismatchError, MissingContractCodeError } = await import(
-      "../../types/index.js"
-    );
+    const { MissingContractCodeError } = await import("../../types/index.js");
     const promise = prepareDeposit(handle).getRequirements();
     await expectFailClosed(promise, "chain");
     await expect(promise).rejects.toBeInstanceOf(ChainIdMismatchError);

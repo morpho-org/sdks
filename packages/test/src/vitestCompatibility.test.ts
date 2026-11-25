@@ -98,6 +98,11 @@ const setFeeTokenBalanceMock = vi.fn().mockResolvedValue(undefined);
 const getCodeMock = vi.fn().mockResolvedValue(undefined);
 const signAuthorizationMock = vi.fn();
 const sendTransactionMock = vi.fn();
+// A task whose whole run, finished hooks included, has ended in a pass.
+const finishedPassingTask = {
+  id: "finished-task",
+  result: { duration: 1, state: "pass" },
+};
 const fakeClient = {
   account: { address: accountAddress },
   chain: mainnet,
@@ -123,6 +128,7 @@ describe.sequential("createViemTest compatibility", () => {
     testState.createAnvilTestClientMock.mockReturnValue(fakeClient);
     setBlockTimestampIntervalMock.mockResolvedValue(undefined);
     getCodeMock.mockResolvedValue(undefined);
+    stopAndWaitMock.mockReset();
     stopAndWaitMock.mockResolvedValue(true);
   });
 
@@ -533,5 +539,84 @@ describe.sequential("createViemTest compatibility", () => {
     expect(error.cause).toBeInstanceOf(AggregateError);
     if (!(error.cause instanceof AggregateError)) throw error.cause;
     expect(error.cause.errors).toEqual([setupError, cleanupError]);
+  });
+  test.each([
+    { name: "a test that has not finished", task: undefined, spawns: 2 },
+    { name: "a finished, passing test", task: finishedPassingTask, spawns: 1 },
+  ])("behavior: reuse lends the process of $name", async ({ task, spawns }) => {
+    const blockHash = `0x${"11".repeat(32)}`;
+    testState.createAnvilTestClientMock.mockImplementation(() => ({
+      ...fakeClient,
+      getBlock: vi.fn().mockResolvedValue({ hash: blockHash }),
+      request: vi.fn().mockResolvedValue(true),
+      snapshot: vi.fn().mockResolvedValue("0x1"),
+      transport: {},
+    }));
+    testState.spawnAnvilMock.mockResolvedValue({
+      rpcUrl: "http://localhost:31001",
+      stop: vi.fn(),
+      stopAndWait: stopAndWaitMock,
+    });
+    createViemTest(
+      mainnet,
+      { forkUrl: "https://rpc.example", forkBlockNumber: 1n },
+      { reuseAnvil: true },
+    );
+    const clientFixture = testState.clientFixture as VitestClientFixture;
+    // Without a task, the default mock task is still running, as when finished hooks have yet to pass.
+    await clientFixture(task === undefined ? {} : { task }, async () => {});
+    testState.finishedHandlers.length = 0;
+
+    await clientFixture({}, async () => {});
+    expect(testState.spawnAnvilMock).toHaveBeenCalledTimes(spawns);
+  });
+  test.each([
+    {
+      name: "behavior: reuse starts a fresh process after the idle one exited",
+      stopError: new AnvilProcessError("Anvil exited"),
+      spawns: 2,
+    },
+    {
+      name: "error: AnvilCleanupError when the idle process's stop is unconfirmed",
+      stopError: new AnvilCleanupError("Anvil did not close"),
+      spawns: 1,
+    },
+  ])("$name", async ({ stopError, spawns }) => {
+    const blockHash = `0x${"11".repeat(32)}`;
+    const getBlockMock = vi
+      .fn()
+      .mockResolvedValueOnce({ hash: blockHash })
+      .mockResolvedValueOnce({ hash: blockHash })
+      .mockRejectedValueOnce(new Error("fetch failed"))
+      .mockResolvedValue({ hash: blockHash });
+    testState.createAnvilTestClientMock.mockImplementation(() => ({
+      ...fakeClient,
+      getBlock: getBlockMock,
+      request: vi.fn().mockResolvedValue(true),
+      snapshot: vi.fn().mockResolvedValue("0x1"),
+      transport: {},
+    }));
+    stopAndWaitMock.mockRejectedValueOnce(stopError);
+    testState.spawnAnvilMock.mockResolvedValue({
+      rpcUrl: "http://localhost:31001",
+      stop: vi.fn(),
+      stopAndWait: stopAndWaitMock,
+    });
+    createViemTest(
+      mainnet,
+      { forkUrl: "https://rpc.example", forkBlockNumber: 1n },
+      { reuseAnvil: true },
+    );
+    const clientFixture = testState.clientFixture as VitestClientFixture;
+    await clientFixture({ task: finishedPassingTask }, async () => {});
+    testState.finishedHandlers.length = 0;
+
+    const next = clientFixture({}, async () => {});
+    if (stopError instanceof AnvilCleanupError) {
+      await expect(next).rejects.toBe(stopError);
+    } else {
+      await expect(next).resolves.toBeUndefined();
+    }
+    expect(testState.spawnAnvilMock).toHaveBeenCalledTimes(spawns);
   });
 });

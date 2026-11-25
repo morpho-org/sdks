@@ -13,7 +13,7 @@ import {
 } from "../../../test/fixtures/inKindRedeem.js";
 import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { vaultV1Deposit } from "../../actions/vaultV1/deposit.js";
-import { morphoViemExtension } from "../../client/index.js";
+import { computeVaultMaxSharePrice } from "../../helpers/index.js";
 import {
   ChainIdMismatchError,
   ExpiredDeadlineError,
@@ -115,19 +115,26 @@ describe("prepareVaultV1Deposit", () => {
       assets: maxUint256,
     });
     expect(plan.signatureRequests).toEqual([]);
-    const entityTx = handle.client
-      .extend(morphoViemExtension())
-      .morpho.vaultV1(params.vault.address, params.chainId)
-      .deposit({
+    const entityTx = vaultV1Deposit({
+      vault: {
+        chainId: params.chainId,
+        address: params.vault.address,
+        asset: vaultData.asset,
+      },
+      args: {
         amount: params.assets,
-        vaultData,
+        maxSharePrice: computeVaultMaxSharePrice({
+          vaultData,
+          deadline: BigInt(expiresAt),
+          assets: 98n,
+          slippageTolerance,
+        }),
         userAddress: params.account,
         deadline: BigInt(expiresAt),
-        slippageTolerance,
         referralFeePct: 25_000000000000000n,
         referralFeeRecipient: IN_KIND_USER,
-      })
-      .buildTx();
+      },
+    });
     const tx = buildTransactions(plan)[1]!;
     expect(tx.data).toBe(entityTx.data);
     expect(tx.to).toBe(entityTx.to);

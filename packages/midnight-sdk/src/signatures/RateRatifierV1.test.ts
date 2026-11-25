@@ -148,12 +148,9 @@ describe("RateRatifierV1.hashLeaf", () => {
   test("behavior: matches HashLib vector", () => {
     const rate = 920000000000000000n;
     const allowed = "0x0000000000000000000000000000000000009999" as const;
-    const restricted = RateRatifierV1.buildDescriptor([
-      { offer: deterministicOffer, rate, allowedTaker: allowed },
-    ]).entries[0]!;
-    const unrestricted = RateRatifierV1.buildDescriptor([
-      { offer: deterministicOffer, rate },
-    ]).entries[0]!;
+    const offer = OfferUtils.toStruct({ offer: deterministicOffer });
+    const restricted = { offer, rate, allowedTaker: allowed };
+    const unrestricted = { offer, rate, allowedTaker: zeroAddress };
 
     expect(RateRatifierV1.hashLeaf(restricted)).toBe(
       "0xff5284f177648bada55149e7bf5ea4d1adaa541f3cb2f25cc43781eabec436ee",
@@ -547,6 +544,39 @@ describe("RateRatifierV1.buildDescriptor", () => {
           leaves: [zeroHash, ...descriptor.leaves.slice(1)],
         },
       }),
+    ).toThrow(InvalidTreeError);
+  });
+
+  test.each([
+    { slot: "visible", index: 1 },
+    { slot: "padding", index: 3 },
+  ])(
+    "error: InvalidTreeError for a missing $slot snapshot entry",
+    ({ index }) => {
+      const descriptor = RateRatifierV1.buildDescriptor([
+        leaf(),
+        leaf({ maxUnits: 7n }),
+        leaf({ maxUnits: 8n }),
+      ]);
+      const entries = [...descriptor.entries];
+      delete entries[index];
+
+      expect(() =>
+        RateRatifierV1.ratify({ tree: { ...descriptor, entries } }),
+      ).toThrow(InvalidTreeError);
+    },
+  );
+
+  test("error: InvalidTreeError for a null snapshot leaf hash", () => {
+    const descriptor = RateRatifierV1.buildDescriptor([
+      leaf(),
+      leaf({ maxUnits: 7n }),
+    ]);
+    const leaves = [...descriptor.leaves];
+    leaves[1] = null as unknown as Hex;
+
+    expect(() =>
+      RateRatifierV1.ratify({ tree: { ...descriptor, leaves } }),
     ).toThrow(InvalidTreeError);
   });
 });

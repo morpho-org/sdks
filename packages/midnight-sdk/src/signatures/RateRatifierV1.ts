@@ -43,6 +43,7 @@ import {
   resolveRatifierV1Tree,
 } from "./ratifierV1Internal.js";
 import { type TreeProof, TreeUtils } from "./TreeUtils.js";
+import { requireTreeItem } from "./treeMathInternal.js";
 import type { TreeData, TreeSnapshot } from "./treeTypes.js";
 
 const rateRatifierV1DataAbi = [
@@ -327,7 +328,9 @@ export namespace RateRatifierV1 {
    */
   export function memberHash(leaf: RateRatifierV1Leaf): Hash {
     const rate = BigInt(leaf.rate);
-    if (rate < 0n) throw new InvalidRateRatifierV1RateError(rate);
+    if (rate < 0n) {
+      throw new InvalidRateRatifierV1RateError(rate);
+    }
 
     return hashLeaf({
       offer: OfferUtils.toStruct({ offer: leaf.offer, group: zeroHash }),
@@ -410,10 +413,11 @@ export namespace RateRatifierV1 {
    *
    * @param leaves - Rate-bounded offer leaves in leaf order.
    * @returns RateRatifierV1 tree descriptor.
-   * @throws {InvalidOfferGroupError} when an explicitly grouped offer breaks `OfferUtils.validateOfferGroup` rules (members differ in maker, side, loan token, chain, Midnight contract or cap mode/value, an offer has an invalid cap, or a buy offer sets `receiverIfMakerIsSeller`).
-   * @throws {InvalidTreeError} when the leaf list is empty, contains duplicate leaf hashes, or mixes ratifier addresses.
    * @throws {InvalidRateRatifierV1RateError} when a leaf rate is negative.
    * @throws {InvalidRateRatifierV1TickError} when a leaf offer tick is below {@link MIN_TICK}.
+   * @throws {InvalidOfferParameterError} when a sell offer has the zero address as its receiver.
+   * @throws {InvalidOfferGroupError} when an explicitly grouped offer breaks `OfferUtils.validateOfferGroup` rules (members differ in maker, side, loan token, chain, Midnight contract or cap mode/value, an offer has an invalid cap, or a buy offer sets `receiverIfMakerIsSeller`).
+   * @throws {InvalidTreeError} when the leaf list is empty, contains duplicate leaf hashes, or mixes ratifier addresses.
    * @throws {InvalidTreeHeightError} when the padded tree exceeds supported ratifier typehashes.
    * @example
    * ```ts
@@ -429,19 +433,22 @@ export namespace RateRatifierV1 {
   ): RateRatifierV1TreeDescriptor {
     const normalized = leaves.map((leaf) => {
       const rate = BigInt(leaf.rate);
-      if (rate < 0n) throw new InvalidRateRatifierV1RateError(rate);
+      if (rate < 0n) {
+        throw new InvalidRateRatifierV1RateError(rate);
+      }
 
       const allowedTaker = leaf.allowedTaker ?? zeroAddress;
       const input = Offer.from(leaf.offer);
-      if (input.tick < MIN_TICK)
+      if (input.tick < MIN_TICK) {
         throw new InvalidRateRatifierV1TickError(input.tick, MIN_TICK);
+      }
 
       return { offer: input, rate, allowedTaker };
     });
     const assignedOffers = assignRatifierV1Groups(normalized, groupId);
     const offers: Offer[] = [];
     const structs = normalized.map(({ rate, allowedTaker }, index) => {
-      const offer = assignedOffers[index]!;
+      const offer = requireTreeItem(assignedOffers, index);
       offers.push(offer);
 
       return { offer: OfferUtils.toStruct({ offer }), rate, allowedTaker };
@@ -475,9 +482,12 @@ export namespace RateRatifierV1 {
     ratifierOf: (leafStruct: RateRatifierV1LeafStruct) =>
       leafStruct.offer.ratifier,
     validateEntry: (entry: RateRatifierV1LeafStruct) => {
-      if (entry.rate < 0n) throw new InvalidRateRatifierV1RateError(entry.rate);
-      if (entry.offer.tick < MIN_TICK)
+      if (entry.rate < 0n) {
+        throw new InvalidRateRatifierV1RateError(entry.rate);
+      }
+      if (entry.offer.tick < MIN_TICK) {
         throw new InvalidRateRatifierV1TickError(entry.offer.tick, MIN_TICK);
+      }
     },
     label: "RateRatifierV1",
     type: "rateV1",
@@ -489,11 +499,12 @@ export namespace RateRatifierV1 {
    * @param params.tree - RateRatifierV1 tree descriptor or raw leaf input.
    * @param params.leafIndex - Leaf index to prove.
    * @returns Proof descriptor.
+   * @throws {InvalidRateRatifierV1RateError} when a raw leaf carries a negative rate.
+   * @throws {InvalidRateRatifierV1TickError} when a leaf offer tick is below {@link MIN_TICK}, including inside a caller-supplied descriptor.
+   * @throws {InvalidOfferParameterError} when raw tree input contains a sell offer with a zero receiver.
    * @throws {InvalidOfferGroupError} when an explicitly grouped offer breaks `OfferUtils.validateOfferGroup` rules (members differ in maker, side, loan token, chain, Midnight contract or cap mode/value, an offer has an invalid cap, or a buy offer sets `receiverIfMakerIsSeller`). For raw leaf input only.
    * @throws {InvalidTreeError} when the tree is invalid or the leaf index is out of range.
    * @throws {InvalidTreeHeightError} when the tree exceeds the supported height.
-   * @throws {InvalidRateRatifierV1RateError} when a raw leaf carries a negative rate.
-   * @throws {InvalidRateRatifierV1TickError} when a leaf offer tick is below {@link MIN_TICK}, including inside a caller-supplied descriptor.
    * @example
    * ```ts
    * import { RateRatifierV1, type IOffer } from "@morpho-org/midnight-sdk";
@@ -608,6 +619,8 @@ export namespace RateRatifierV1 {
    * Consumers can query those values at their own block context after local
    * proof verification.
    *
+   * This verifies the existing commitment without applying tree-construction checks.
+   *
    * @param params.offer - Offer carried by the payload item.
    * @param params.ratifierData - ABI-encoded RateRatifierV1 ratifier data.
    * @param params.taker - Optional taker to check against the leaf's allowed taker.
@@ -663,11 +676,12 @@ export namespace RateRatifierV1 {
    * @param params.tree - RateRatifierV1 tree descriptor or raw leaf input.
    * @param params.leafIndex - Leaf index to prove.
    * @returns ABI-encoded RateRatifierV1 data.
+   * @throws {InvalidRateRatifierV1RateError} when a raw leaf carries a negative rate.
+   * @throws {InvalidRateRatifierV1TickError} when a leaf offer tick is below {@link MIN_TICK}, including inside a caller-supplied descriptor.
+   * @throws {InvalidOfferParameterError} when raw tree input contains a sell offer with a zero receiver.
    * @throws {InvalidOfferGroupError} when an explicitly grouped offer breaks `OfferUtils.validateOfferGroup` rules (members differ in maker, side, loan token, chain, Midnight contract or cap mode/value, an offer has an invalid cap, or a buy offer sets `receiverIfMakerIsSeller`). For raw leaf input only.
    * @throws {InvalidTreeError} when the tree is invalid, the leaf index is outside the tree, or the tree contains multiple ratifiers.
    * @throws {InvalidTreeHeightError} when the tree exceeds the supported height.
-   * @throws {InvalidRateRatifierV1RateError} when a raw leaf carries a negative rate.
-   * @throws {InvalidRateRatifierV1TickError} when a leaf offer tick is below {@link MIN_TICK}, including inside a caller-supplied descriptor.
    * @example
    * ```ts
    * import { RateRatifierV1, type IOffer } from "@morpho-org/midnight-sdk";
@@ -686,7 +700,7 @@ export namespace RateRatifierV1 {
   }): Hex {
     const tree = resolveRatifierV1Tree(params.tree, treeHelpers);
     const proof = TreeUtils.buildProof({ tree, leafIndex: params.leafIndex });
-    const entry = tree.entries[Number(proof.leafIndex)]!;
+    const entry = requireTreeItem(tree.entries, Number(proof.leafIndex));
 
     return encodeRatifierData({
       root: proof.root,
@@ -707,11 +721,12 @@ export namespace RateRatifierV1 {
    *
    * @param params.tree - RateRatifierV1 tree descriptor or raw leaf input whose root has already been ratified onchain.
    * @returns Items containing each non-padding offer and its ratifier data.
+   * @throws {InvalidRateRatifierV1RateError} when a raw leaf carries a negative rate.
+   * @throws {InvalidRateRatifierV1TickError} when a leaf offer tick is below {@link MIN_TICK}, including inside a caller-supplied descriptor.
+   * @throws {InvalidOfferParameterError} when raw tree input contains a sell offer with a zero receiver.
    * @throws {InvalidOfferGroupError} when an explicitly grouped offer breaks `OfferUtils.validateOfferGroup` rules (members differ in maker, side, loan token, chain, Midnight contract or cap mode/value, an offer has an invalid cap, or a buy offer sets `receiverIfMakerIsSeller`). For raw leaf input only.
    * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
    * @throws {InvalidTreeHeightError} when the tree exceeds the supported height.
-   * @throws {InvalidRateRatifierV1RateError} when a raw leaf carries a negative rate.
-   * @throws {InvalidRateRatifierV1TickError} when a leaf offer tick is below {@link MIN_TICK}, including inside a caller-supplied descriptor.
    * @example
    * ```ts
    * import { RateRatifierV1, type IOffer } from "@morpho-org/midnight-sdk";
@@ -734,8 +749,8 @@ export namespace RateRatifierV1 {
     });
 
     return tree.offers.map((offer, leafIndex) => {
-      const entry = tree.entries[leafIndex]!;
-      const proof = proofs[leafIndex]!;
+      const entry = requireTreeItem(tree.entries, leafIndex);
+      const proof = requireTreeItem(proofs, leafIndex);
 
       return {
         offer,
@@ -783,7 +798,9 @@ export namespace RateRatifierV1 {
     readonly buy: boolean;
   }): bigint {
     const rate = BigInt(params.rate);
-    if (rate < 0n) throw new InvalidRateRatifierV1RateError(rate);
+    if (rate < 0n) {
+      throw new InvalidRateRatifierV1RateError(rate);
+    }
     const timeToMaturity = BigInt(params.timeToMaturity);
     if (timeToMaturity < 0n) {
       throw new InvalidRateRatifierV1TimeError(
@@ -864,7 +881,9 @@ export namespace RateRatifierV1 {
         buy: params.offer.buy,
       });
     } catch (error) {
-      if (error instanceof RateRatifierV1BoundOverflowError) return false;
+      if (error instanceof RateRatifierV1BoundOverflowError) {
+        return false;
+      }
       throw error;
     }
     const offerPrice = TickLib.tickToPrice(params.offer.tick);

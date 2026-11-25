@@ -28,7 +28,12 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
 
 ## Common builder pattern
 
-1. Validate inputs with dedicated errors from `src/types/error.ts` (`assets > 0`, `shares > 0`, `maxSharePrice > 0`, `nativeAmount >= 0`).
+1. Pass each Blue, Vault or Midnight operation's complete raw params to its constructor. The constructor
+   owns field validation, defaults and cross-field rules and returns one complete readonly internal
+   object; entity handles retain that object and share the internal encoders with standalone builders.
+   Midnight includes direct cancellation and collateral batches. Static inputs do not certify dynamic
+   feasibility, signatures or encoder overrides: check these when used. Other builders validate inputs
+   with dedicated errors from `src/types/error.ts` (`assets > 0`, `shares > 0`, `maxSharePrice > 0`, `nativeAmount >= 0`).
 2. Encode calldata. **Vault V1 and Vault V2 write paths** encode one registered
    `VaultBundlesV1` entrypoint directly. **Blue write paths**
    encode one registered `BlueBundlesV1` entrypoint directly, except `withdrawBuyCallback`, a
@@ -65,9 +70,14 @@ above). The cancellation lists below are those of `midnightCancelAndMake` and th
   Each taker builder fixes its intent-selecting arguments and exposes only the inputs that vary
   within that intent; never expose them as free inputs. Reject inputs that would make one intent
   encode another intent's call (for example an empty collateral list on a collateral flow) with a
-  typed error. Maker intents share one pure builder, `midnightCancelAndMake`, which mirrors the
-  contract call and does not guard intents; the entity methods fill in its intent arguments and
-  enforce the per-intent rules.
+  typed error. Maker entities enforce their per-intent rules and parse once
+  through `parseMidnightCancelAndMake`. They share `encodeMidnightCancelAndMake` with the
+  validating standalone `midnightCancelAndMake` wrapper, which mirrors the contract call and
+  does not guard intents.
+- **Standalone native collateral supply.** `midnightSupplyCollateralWithNative` encodes
+  `midnightBundlesV2CancelAndMake` directly with one collateral supply and a zero root:
+  `midnightCancelAndMake`'s publication validator rejects a zero root. This route does not
+  publish or cancel offers.
 - **Every entrypoint acts for `msg.sender`.** Inputs name that account `accountAddress`; there is no
   `taker`, `onBehalf` or `maker` distinct from it, and maker offers must have
   `maker === accountAddress`.
@@ -92,11 +102,12 @@ above). The cancellation lists below are those of `midnightCancelAndMake` and th
   from the tree type. They encode all-zero root-signature fields for every maker and rely on the
   `MidnightBundlesV2` authorization; only the pure `midnightCancelAndMake` builder accepts an
   explicit delegated signature (see [`ADR-2026-10-02-midnight-bundles-v2-sdk-actions`](../../../../docs/adrs/ADR-2026-10-02-midnight-bundles-v2-sdk-actions.md)).
-- **Native funding.** V2 flows that can pull wNative accept an optional `nativeAmount`, sent as
+- **Native funding.** V2 flows that can pull wNative generally accept an optional `nativeAmount`, sent as
   `tx.value` with the chain's registered wNative as `wrappedNative`. It cannot exceed the call's
   total wNative pull, and the wNative approval to `midnightBundlesV2` still covers the full pull.
   An omitted or zero amount encodes `value = 0` and `wrappedNative = zeroAddress`, as do flows that
-  pull nothing, such as a cancel-only `midnightCancelAndMake`.
+  pull nothing, such as a cancel-only `midnightCancelAndMake`. The standalone
+  `midnightSupplyCollateralWithNative` builder instead requires a positive bigint `nativeAmount`.
 
 ## Shared liquidity / reallocations (canonical statement)
 

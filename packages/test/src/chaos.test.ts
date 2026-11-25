@@ -1188,6 +1188,8 @@ describe("classifyError", () => {
     ["AuthorizationRequestMismatchError", "auth"],
     ["ContractFunctionZeroDataError", "config"],
     ["SimulationValidationError", "config"],
+    ["InvalidBigIntInputError", "config"],
+    ["InvalidMidnightNativeAmountTypeError", "config"],
     ["UnsupportedChainError", "config"],
     ["RpcTransportError", "infra"],
     ["TimeoutError", "infra"],

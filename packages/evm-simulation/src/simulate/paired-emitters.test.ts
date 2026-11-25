@@ -1,5 +1,6 @@
 import {
   type Address,
+  decodeFunctionData,
   encodeFunctionData,
   encodeFunctionResult,
   erc20Abi,
@@ -47,7 +48,14 @@ describe.each([
       const fetch = vi.fn<typeof globalThis.fetch>(async (_input, init) => {
         const { id, method, params } = JSON.parse(String(init?.body));
         let result: unknown;
-        if (method === "eth_getCode") result = "0x6000";
+        if (method === "eth_getBlockByHash") {
+          expect(params).toEqual([blockHash, false]);
+          result = {
+            number: numberToHex(fixture.source.stateBlock),
+            hash: blockHash,
+            timestamp: numberToHex(timestamp),
+          };
+        } else if (method === "eth_getCode") result = "0x6000";
         else if (method === "eth_call") {
           expect(isAddressEqual(params[0].to, vault)).toBe(true);
           expect(params[0]).toMatchObject({
@@ -76,14 +84,14 @@ describe.each([
               calls: calls.map((call) => {
                 const transaction = call.data === deposit;
                 if (transaction) deposited = true;
-                else {
-                  expect(call.data).toBe(
-                    encodeFunctionData({
-                      abi: erc20Abi,
-                      functionName: "balanceOf",
-                      args: [owner],
-                    }),
-                  );
+                const { functionName, args } = transaction
+                  ? { functionName: undefined, args: undefined }
+                  : decodeFunctionData({ abi: erc20Abi, data: call.data });
+                const retentionRead =
+                  functionName === "balanceOf" &&
+                  !isAddressEqual(args[0], owner);
+                if (!transaction) {
+                  expect(functionName).toBe("balanceOf");
                   expect([primary, vault]).toContain(call.to.toLowerCase());
                 }
                 return {
@@ -91,15 +99,17 @@ describe.each([
                   gasUsed: "0x5208",
                   returnData: transaction
                     ? encodeUint256(1n)
-                    : encodeUint256(
-                        isAddressEqual(call.to, primary)
-                          ? deposited
-                            ? assets
-                            : assets * 2n
-                          : deposited
-                            ? 1n
-                            : 0n,
-                      ),
+                    : retentionRead
+                      ? encodeUint256(0n)
+                      : encodeUint256(
+                          isAddressEqual(call.to, primary)
+                            ? deposited
+                              ? assets
+                              : assets * 2n
+                            : deposited
+                              ? 1n
+                              : 0n,
+                        ),
                   logs: transaction ? fixture.logs : [],
                 };
               }),

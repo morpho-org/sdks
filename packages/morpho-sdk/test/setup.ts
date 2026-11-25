@@ -8,11 +8,15 @@ const FORCE_REDEEM_FORK_BLOCK = 24_593_903n;
 /**
  * This test will run on `mainnet`
  */
-export const test = createViemTest(mainnet, {
-  forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
-  chainId: mainnet.id,
-  forkBlockNumber: FORCE_REDEEM_FORK_BLOCK,
-}).extend<{ client: AnvilTestClient<typeof mainnet> }>({
+export const test = createViemTest(
+  mainnet,
+  {
+    forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
+    chainId: mainnet.id,
+    forkBlockNumber: FORCE_REDEEM_FORK_BLOCK,
+  },
+  { reuseAnvil: true },
+).extend<{ client: AnvilTestClient<typeof mainnet> }>({
   client: async ({ client }, use) => {
     // The test account (0xf39Fd6…) has EIP-7702 delegation code on mainnet at
     // this fork block signatureChecker sees code and attempts EIP-1271

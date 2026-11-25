@@ -12,10 +12,15 @@ import {
   type OfferStruct,
   OfferUtils,
 } from "../offers/index.js";
+import { assertNonzeroSellReceiver } from "../offers/offerReceiverInternal.js";
 import { GroupUtils } from "./GroupUtils.js";
 import { isZeroAddress } from "./offerStructInternal.js";
 import { TreeUtils } from "./TreeUtils.js";
-import { isPowerOfTwo, nextPowerOfTwo } from "./treeMathInternal.js";
+import {
+  isPowerOfTwo,
+  nextPowerOfTwo,
+  requireTreeItem,
+} from "./treeMathInternal.js";
 import type { TreeData } from "./treeTypes.js";
 
 /** @internal Resolves V1 leaf groups mirroring the router's group_identity content ids and validates explicit groups. */
@@ -31,15 +36,22 @@ export function assignRatifierV1Groups<TLeaf extends { readonly offer: Offer }>(
   const buckets = new Map<string, number[]>();
 
   for (const [index, leaf] of leaves.entries()) {
-    if (!leaf.offer.hasExplicitGroup) continue;
+    // Check implicitly grouped offers too, before the explicit group checks.
+    assertNonzeroSellReceiver(leaf.offer);
+    if (!leaf.offer.hasExplicitGroup) {
+      continue;
+    }
     const label = leaf.offer.group.toLowerCase();
     const bucket = buckets.get(label);
-    if (bucket) bucket.push(index);
-    else buckets.set(label, [index]);
+    if (bucket) {
+      bucket.push(index);
+    } else {
+      buckets.set(label, [index]);
+    }
   }
 
   for (const [label, indices] of buckets) {
-    const bucketLeaves = indices.map((index) => leaves[index]!);
+    const bucketLeaves = indices.map((index) => requireTreeItem(leaves, index));
     // Called only to throw on incompatible group members.
     OfferUtils.validateOfferGroup({
       offers: bucketLeaves.map((leaf) => leaf.offer),
@@ -53,7 +65,10 @@ export function assignRatifierV1Groups<TLeaf extends { readonly offer: Offer }>(
 
     const group = groupId(bucketLeaves);
     for (const index of indices) {
-      offers[index] = Offer.from({ ...leaves[index]!.offer, group });
+      offers[index] = Offer.from({
+        ...requireTreeItem(leaves, index).offer,
+        group,
+      });
     }
   }
 
@@ -63,7 +78,8 @@ export function assignRatifierV1Groups<TLeaf extends { readonly offer: Offer }>(
   >();
   for (const [index, offer] of offers.entries()) {
     const label = offer.group.toLowerCase();
-    const hasExplicitGroup = leaves[index]!.offer.hasExplicitGroup;
+    const hasExplicitGroup = requireTreeItem(leaves, index).offer
+      .hasExplicitGroup;
     const bucket = finalGroups.get(label);
     if (bucket) {
       bucket.offers.push(offer);
@@ -76,7 +92,9 @@ export function assignRatifierV1Groups<TLeaf extends { readonly offer: Offer }>(
     offers: groupOffers,
     hasExplicitGroup,
   } of finalGroups.values()) {
-    if (!hasExplicitGroup) continue;
+    if (!hasExplicitGroup) {
+      continue;
+    }
     // Catches explicit groups that collide with a defaulted or re-derived id.
     OfferUtils.validateOfferGroup({ offers: groupOffers });
   }
@@ -117,9 +135,9 @@ export function buildRatifierV1Descriptor<TStruct>(params: {
     }
   }
 
-  const entryHashes = entries.map(hashLeaf);
+  const leaves = entries.map(hashLeaf);
   const seen = new Set<Hash>();
-  for (const leafHash of entryHashes) {
+  for (const leafHash of leaves) {
     if (seen.has(leafHash)) {
       throw new InvalidTreeError(`Duplicate leaf hash "${leafHash}" in tree.`);
     }
@@ -133,11 +151,12 @@ export function buildRatifierV1Descriptor<TStruct>(params: {
     ...entries,
     ...Array.from({ length: paddingCount }, () => padding),
   ];
-  const paddingHash = paddingCount === 0 ? undefined : hashLeaf(padding);
-  const leaves = [
-    ...entryHashes,
-    ...Array.from({ length: paddingCount }, () => paddingHash!),
-  ];
+  if (paddingCount > 0) {
+    const paddingHash = hashLeaf(padding);
+    for (let index = 0; index < paddingCount; index++) {
+      leaves.push(paddingHash);
+    }
+  }
   const { root, height } = TreeUtils.buildRootFromLeaves(leaves);
 
   return { entries: paddedEntries, leaves, root, height };
@@ -172,7 +191,9 @@ export function resolveRatifierV1Tree<
   },
 ): TDescriptor {
   const { buildDescriptor, hashLeaf, isPadding, ratifierOf, label } = helpers;
-  if (Array.isArray(tree)) return buildDescriptor(tree as readonly TLeaf[]);
+  if (Array.isArray(tree)) {
+    return buildDescriptor(tree as readonly TLeaf[]);
+  }
 
   const descriptor = tree as TDescriptor;
   if (
@@ -205,8 +226,11 @@ export function resolveRatifierV1Tree<
     );
   }
 
-  const visibleEntries = descriptor.entries.slice(0, descriptor.offers.length);
-  const ratifier = ratifierOf(visibleEntries[0]!);
+  const entries = Array.from({ length: expectedLength }, (_, index) =>
+    requireTreeItem(descriptor.entries, index),
+  );
+  const visibleEntries = entries.slice(0, descriptor.offers.length);
+  const ratifier = ratifierOf(requireTreeItem(visibleEntries, 0));
   for (const entry of visibleEntries.slice(1)) {
     const other = ratifierOf(entry);
     if (!isAddressEqual(other, ratifier)) {
@@ -226,10 +250,10 @@ export function resolveRatifierV1Tree<
     helpers.validateEntry?.(entry);
   }
 
-  const computedLeaves = descriptor.entries.map((entry) => hashLeaf(entry));
+  const computedLeaves = entries.map((entry) => hashLeaf(entry));
   const seen = new Set<string>();
   for (const [index, offer] of descriptor.offers.entries()) {
-    const entry = descriptor.entries[index]!;
+    const entry = requireTreeItem(entries, index);
     if (
       OfferUtils.hashStruct(
         OfferUtils.toStruct({ offer: Offer.from(offer) }),
@@ -239,7 +263,7 @@ export function resolveRatifierV1Tree<
         "Visible offers do not match the tree entries.",
       );
     }
-    const leafHash = computedLeaves[index]!.toLowerCase();
+    const leafHash = requireTreeItem(computedLeaves, index).toLowerCase();
     if (seen.has(leafHash)) {
       throw new InvalidTreeError(`Duplicate leaf hash "${leafHash}" in tree.`);
     }
@@ -247,9 +271,7 @@ export function resolveRatifierV1Tree<
   }
 
   if (
-    descriptor.entries
-      .slice(descriptor.offers.length)
-      .some((entry) => !isPadding(entry))
+    entries.slice(descriptor.offers.length).some((entry) => !isPadding(entry))
   ) {
     throw new InvalidTreeError(
       "Tree padding contains entries hidden from the visible offer list.",
@@ -259,7 +281,8 @@ export function resolveRatifierV1Tree<
   if (
     computedLeaves.some(
       (leaf, index) =>
-        leaf.toLowerCase() !== descriptor.leaves[index]!.toLowerCase(),
+        leaf.toLowerCase() !==
+        requireTreeItem(descriptor.leaves, index).toLowerCase(),
     )
   ) {
     throw new InvalidTreeError("Tree leaves do not match its entries.");

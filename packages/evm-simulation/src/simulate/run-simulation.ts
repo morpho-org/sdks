@@ -5,7 +5,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import { getMidnightBlueBuyCallbackAddress } from "@morpho-org/morpho-sdk";
 import { _try } from "@morpho-org/morpho-ts";
-import { type Address, isAddressEqual, zeroAddress } from "viem";
+import { type Address, type Hex, isAddressEqual, zeroAddress } from "viem";
 import {
   ApprovalCheckUnavailableError,
   InvalidSimulationResponseError,
@@ -36,16 +36,22 @@ import { executePlan } from "./backends/index.js";
 import { resolveAssets } from "./backends/resolve-assets.js";
 import { resolvePinnedBlock } from "./backends/resolve-pinned-block.js";
 import type { CheckContext } from "./context.js";
+import { verifyControlCalls } from "./control-calls.js";
 import {
   decodeDerivationState,
   planDerivationReads,
 } from "./derivation-reads.js";
 import { deriveQuote } from "./derive-quote.js";
+import { effectApprovals, verifyEffects } from "./effects.js";
 import { toFailureReport } from "./failure-report.js";
 import { parseTransfers } from "./parsing/index.js";
-import { checkBundlesRetention } from "./pipeline/bundles-retention.js";
+import {
+  checkBundlesRetention,
+  planBundlesRetentionReads,
+} from "./pipeline/bundles-retention.js";
 import { validateOptions } from "./pipeline/validate-options.js";
 import { planExecution } from "./plan/plan-execution.js";
+import { findUnexpectedPositionChanges } from "./position-changes.js";
 import {
   findPreparationTransferFailures,
   prepareAuthorizations,
@@ -57,7 +63,11 @@ import {
   resolveSenderSpendTokens,
 } from "./sender-transfers.js";
 import { findSignedAuthorizationUseFailures } from "./signed-authorizations.js";
-import { decodeStateRead, planStateReads } from "./state/read-state.js";
+import {
+  decodeMarketParamsRead,
+  decodeStateRead,
+  planStateReads,
+} from "./state/read-state.js";
 import { findOperationSlippageFailures } from "./verify-slippage.js";
 
 /**
@@ -103,6 +113,56 @@ export const NO_WNATIVE_MIRROR_WRAPPERS: ReadonlyMap<number, Address> = new Map<
   [ChainId.AbstractMainnet, "0x3439153EB7AF838Ad19d56E1571FBD09333C2809"],
 ]);
 
+/**
+ * Registered wrapped-native wrappers whose recent on-chain wraps and unwraps
+ * emit only a zero-address `Transfer` (no `Deposit`/`Withdrawal`), such as
+ * Arbitrum's aeWETH.
+ *
+ * Keyed by chain ID with each measured wrapper address. On a listed chain the
+ * zero-address `Transfer` is the mint/burn and raises no
+ * `WRAPPED_NATIVE_DEDUP_MISS`; a `Deposit`/`Withdrawal` the wrapper does emit
+ * is still paired one-to-one. If the registered wNative no longer matches, the
+ * chain falls back to the default dedup and its warning.
+ * See `packages/evm-simulation/AGENTS.md` for maintenance instructions.
+ *
+ * @internal
+ */
+export const TRANSFER_ONLY_WNATIVE_WRAPPERS: ReadonlyMap<number, Address> =
+  new Map<number, Address>([
+    [ChainId.ArbitrumMainnet, "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1"],
+    [ChainId.PlumeMainnet, "0xEa237441c92CAe6FC17Caaf9a7acB3f953be4bd1"],
+    [ChainId.RobinhoodMainnet, "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73"],
+  ]);
+
+const isMeasuredWrapper = (
+  measured: Address | undefined,
+  wNative: Address | null | undefined,
+): boolean =>
+  measured !== undefined &&
+  wNative != null &&
+  isAddressEqual(wNative, measured);
+
+function transferParsingOptions({
+  request,
+  environment,
+}: Pick<VerificationContext, "request" | "environment">): Parameters<
+  typeof parseTransfers
+>[1] {
+  const { addresses } = environment;
+  return {
+    chainId: request.chainId,
+    wNative: addresses === undefined ? undefined : (addresses.wNative ?? null),
+    wNativeEmitsTransfer: !isMeasuredWrapper(
+      NO_WNATIVE_MIRROR_WRAPPERS.get(request.chainId),
+      addresses?.wNative,
+    ),
+    wNativeEmitsWrapEvents: !isMeasuredWrapper(
+      TRANSFER_ONLY_WNATIVE_WRAPPERS.get(request.chainId),
+      addresses?.wNative,
+    ),
+  };
+}
+
 type PublicOperationField<T> = T extends unknown ? keyof T : never;
 
 const PUBLIC_OPERATION_FIELDS = {
@@ -138,8 +198,13 @@ const DEFAULT_TIMEOUT_MS = 5000;
 
 /**
  * Run the verified simulation pipeline in a single `eth_simulateV1` call:
- * resolve quoted assets → plan quoted observations → execution →
- * slippage comparisons → bundle-retention assertion → result assembly.
+ * pin the state block → calldata-target contract-code check and quoted-asset
+ * resolution, run concurrently at that block → approval checks and quoted
+ * observation planning → execution → slippage comparisons → bundle-retention
+ * assertion → result assembly.
+ *
+ * Planning and `eth_simulateV1` start only after both preflight reads succeed.
+ * A contract-code failure is reported as soon as it occurs, over any asset failure.
  *
  * Every RPC step runs on the caller's client. `options.timeoutMs` is one deadline
  * for the whole pipeline: no read starts after it, and a step still pending
@@ -220,11 +285,7 @@ function resolveEnvironment(request: ParsedRequest) {
     operations: request.limits === "none" ? [] : request.limits.operations,
   };
   const preview = request.mode === "preview";
-  const [firstTransaction] = request.transactions;
-  if (firstTransaction === undefined) {
-    throw new SimulationValidationError("Supply at least one transaction.");
-  }
-  const owner = firstTransaction.from;
+  const owner = request.owner;
   const addresses = _try(
     () => getChainAddresses(request.chainId),
     UnsupportedChainIdError,
@@ -233,13 +294,19 @@ function resolveEnvironment(request: ParsedRequest) {
   const nativeValue = request.transactions.reduce(
     (total, transaction) =>
       isAddressEqual(transaction.from, owner)
-        ? total + (transaction.value ?? 0n)
+        ? total + transaction.value
         : total,
     0n,
   );
   const nativeValueSent = nativeValue > 0n;
   const requiresMorpho =
     limits.operations.length > 0 ||
+    (request.limits !== "none" &&
+      request.limits.effects?.some(
+        (effect) =>
+          effect.type === "blueAuthorization" ||
+          effect.type === "erc20Approval",
+      )) ||
     request.authorizations.some(
       (authorization) => authorization.type === "blueAuthorizationSignature",
     ) ||
@@ -252,6 +319,12 @@ function resolveEnvironment(request: ParsedRequest) {
     (operation) => operation.type === "midnightSupplyBlueMakeLend",
   );
   const requiresMidnight =
+    (request.limits !== "none" &&
+      request.limits.effects?.some(
+        (effect) =>
+          effect.type === "midnightAuthorization" ||
+          effect.type === "midnightCancelOffers",
+      )) ||
     limits.operations.some(
       (operation) =>
         operation.type === "midnightSupplyCollateralBatch" ||
@@ -309,27 +382,37 @@ async function resolveAndExecute(context: PipelineContext) {
     context;
   const { limits, wNative, morpho, midnight } = environment;
   // Monad nodes reject `validation: false` and charge no gas in the simulated
-  // block either way. Its `latest` block is not final: simulating at its number
-  // runs on another parent, so default to `finalized`.
+  // block either way. Its `latest` block is not final and its pinned hash can
+  // be replaced, so default to `finalized`.
   const monad = request.chainId === ChainId.MonadMainnet;
-  const pinnedBlock =
-    request.block ??
-    (await withinDeadline(
-      resolvePinnedBlock({
-        client,
-        blockNumber: request.blockNumber ?? (monad ? "finalized" : undefined),
-      }),
-    ));
+  const pinnedBlock = await withinDeadline(
+    resolvePinnedBlock({
+      client,
+      block: request.block,
+      blockNumber: request.blockNumber ?? (monad ? "finalized" : undefined),
+    }),
+  );
 
-  // A code-less `to` with calldata would simulate as a silent success; reject it
-  // before `eth_simulateV1` is sent.
+  // Asset resolution needs only the pinned block. Start it alongside code checks,
+  // but retain code-error precedence before planning or executing the request.
+  const assets = resolveAssets({
+    client,
+    signal,
+    morpho,
+    midnight,
+    wNative,
+    operations: limits.operations,
+    blockHash: pinnedBlock.hash,
+  });
+  // Observe a rejection even when a code failure ends the run before assets is awaited.
+  assets.catch(() => undefined);
   await withinDeadline(
     assertTransactionTargetsHaveCode({
       client,
       signal,
       transactions: request.transactions,
       chainId: request.chainId,
-      blockNumber: pinnedBlock.number,
+      blockHash: pinnedBlock.hash,
       ...(request.stateOverrides !== undefined && {
         stateOverrides: request.stateOverrides,
       }),
@@ -339,21 +422,9 @@ async function resolveAndExecute(context: PipelineContext) {
   // With no calldata decoding, the caller's declared `limits.operations`
   // entries are the operations: subjects for state reads and per-operation
   // checks come straight from the limit list.
-  const resolved = await withinDeadline(
-    resolveAssets({
-      client,
-      signal,
-      morpho,
-      midnight,
-      wNative,
-      operations: limits.operations,
-      blockNumber: pinnedBlock.number,
-    }),
-  );
-  const { approvalLimits, observations, plan } = planResolvedExecution(
-    context,
-    resolved,
-  );
+  const resolved = await withinDeadline(assets);
+  const { approvalLimits, observations, retentionReads, plan } =
+    planResolvedExecution(context, resolved);
   const senderSpendTokens =
     request.limits === "none"
       ? undefined
@@ -411,6 +482,8 @@ async function resolveAndExecute(context: PipelineContext) {
   return {
     execution,
     observations,
+    retentionReads,
+    resolved,
     approvalLimits,
     senderSpendTokens,
     senderNativeValueBudget,
@@ -525,13 +598,16 @@ function verifyExecution(context: VerificationContext): SimulationInputReport {
     chainId: request.chainId,
     transfers,
     assetChanges,
+    balances: { reads: context.retentionReads, before, after },
   });
   failures.push(...retention.failures);
   warnings.push(...retention.warnings);
   const verification =
     execution.calls.some(
       (call) => call.planned.type === "transaction" && call.logsMissing,
-    ) || warnings.some((warning) => warning.code === "MALFORMED_TRANSFER_LOG")
+    ) ||
+    warnings.some((warning) => warning.code === "MALFORMED_TRANSFER_LOG") ||
+    retention.incomplete
       ? undefined
       : Object.freeze({ retention: retention.status });
   if (failures.length > 0) {
@@ -626,15 +702,27 @@ function planResolvedExecution(
       })
     : [];
 
+  const retentionReads = planBundlesRetentionReads({
+    chainId: request.chainId,
+    tokens: observations.reads.flatMap((read) =>
+      read.kind === "erc20.balance" ? [read.token] : [],
+    ),
+  });
+
   const plan = planExecution({
     request,
     owner,
     preparations,
-    reads: observations.reads,
+    reads: [...observations.reads, ...retentionReads],
+    afterOnlyReadIds: new Set(
+      observations.refinanceMarketParamReads?.flatMap(
+        ({ sourceReadId, targetReadId }) => [sourceReadId, targetReadId],
+      ),
+    ),
     derivationReads: planDerivationReads(resolved, { morpho, owner }),
   });
 
-  return { approvalLimits, observations, plan };
+  return { approvalLimits, observations, retentionReads, plan };
 }
 
 /** Check approval events, preparation transfers and signature use before transfer derivation. @internal */
@@ -668,11 +756,49 @@ function checkEventEvidence({
         ),
       );
     } else {
+      for (const call of execution.calls) {
+        const effects =
+          request.limits === "none" ? [] : (request.limits.effects ?? []);
+        const scopedApprovals = effectApprovals(effects, {
+          txIdx:
+            call.planned.type === "transaction"
+              ? call.planned.transactionIndex
+              : -1,
+          transactionCount: request.transactions.length,
+        });
+        failures.push(
+          ...findApprovalEventFailures({
+            logs: call.result.logs,
+            owner,
+            allowed: [
+              ...approvalLimits.approvals,
+              ...scopedApprovals.filter(
+                (approval) => approval.type !== "token",
+              ),
+            ],
+            directTokenApprovals: scopedApprovals.filter(
+              (approval) => approval.type === "token",
+            ),
+            addresses: approvalLimits.eventAddresses,
+          }),
+        );
+      }
+    }
+    failures.push(
+      ...verifyEffects({
+        effects:
+          request.limits === "none" ? [] : (request.limits.effects ?? []),
+        transactions: request.transactions,
+        calls: userCalls,
+        addresses: approvalLimits.eventAddresses,
+        transferOptions: transferParsingOptions(context),
+      }),
+    );
+    if (request.limits !== "none" && request.limits.operations.length === 0) {
       failures.push(
-        ...findApprovalEventFailures({
-          logs: execution.calls.flatMap(({ result }) => result.logs),
-          owner,
-          allowed: approvalLimits.approvals,
+        ...verifyControlCalls({
+          effects: request.limits.effects ?? [],
+          transactions: request.transactions,
           addresses: approvalLimits.eventAddresses,
         }),
       );
@@ -726,6 +852,7 @@ function checkEventEvidence({
 }
 
 /** Derive transfers, decode both state phases and derive operation expectations. @internal */
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: post-simulation checks share one ordered failure pipeline
 function resolveMeasurements({
   context,
   warnings,
@@ -744,11 +871,18 @@ function resolveMeasurements({
   collect: <T>(check: () => T) => T | undefined;
 }) {
   const { request, execution, observations } = context;
-  const { addresses } = context.environment;
+  const marketParamsFailures = new Map<
+    string,
+    { marketId: Hex; message: string }
+  >();
   const decodePhase = (phase: "before" | "after") => {
     const values = new Map<string, ReturnType<typeof decodeStateRead>>();
     for (const read of execution.stateReads) {
-      if (read.phase !== phase || read.read.kind === "derivation") {
+      if (
+        read.phase !== phase ||
+        read.read.kind === "derivation" ||
+        read.read.kind === "morpho.marketParams"
+      ) {
         continue;
       }
       try {
@@ -766,16 +900,30 @@ function resolveMeasurements({
     }
     return values;
   };
-  const verified = NO_WNATIVE_MIRROR_WRAPPERS.get(request.chainId);
-  const parsed = parseTransfers(userCalls, {
-    chainId: request.chainId,
-    wNative: addresses === undefined ? undefined : (addresses.wNative ?? null),
-    wNativeEmitsTransfer: !(
-      verified !== undefined &&
-      addresses?.wNative != null &&
-      isAddressEqual(addresses.wNative, verified)
-    ),
-  });
+  const decodeMarketParamsPhase = (phase: "before" | "after") => {
+    const values = new Map<string, ReturnType<typeof decodeMarketParamsRead>>();
+    for (const read of execution.stateReads) {
+      if (read.phase !== phase || read.read.kind !== "morpho.marketParams") {
+        continue;
+      }
+      try {
+        values.set(
+          read.read.id,
+          decodeMarketParamsRead(read.read, read.returnData),
+        );
+      } catch (error) {
+        if (!(error instanceof SimulationPackageError)) {
+          throw error;
+        }
+        marketParamsFailures.set(read.read.id, {
+          marketId: read.read.marketId,
+          message: error.message,
+        });
+      }
+    }
+    return values;
+  };
+  const parsed = parseTransfers(userCalls, transferParsingOptions(context));
   const { transfers } = parsed;
   warnings.push(...parsed.warnings);
 
@@ -808,7 +956,79 @@ function resolveMeasurements({
       );
     }
   }
-
+  const afterMarketParams = decodeMarketParamsPhase("after");
+  if (!skipTransferChecks && request.limits !== "none") {
+    const refinanceMarketTokens =
+      observations.refinanceMarketParamReads?.flatMap(
+        ({ sourceMarketId, targetMarketId, sourceReadId, targetReadId }) => {
+          const source = afterMarketParams.get(sourceReadId);
+          const target = afterMarketParams.get(targetReadId);
+          if (source === undefined || target === undefined) {
+            return [];
+          }
+          return [
+            {
+              sourceMarketId,
+              targetMarketId,
+              sourceToken: source.collateralToken,
+              targetToken: target.collateralToken,
+            },
+          ];
+        },
+      );
+    for (const finding of findUnexpectedPositionChanges({
+      owner: context.environment.owner,
+      logs: userCalls.flatMap((call) => call.logs),
+      operations: request.limits.operations,
+      resolvedOperations: context.resolved,
+      refinanceMarketTokens,
+      morpho: context.environment.morpho,
+      midnight: context.environment.midnight,
+    })) {
+      warnings.push(
+        freezeWarning({
+          code: finding.code,
+          severity: "warn",
+          message: finding.message,
+          protocol: finding.protocol,
+          event: finding.event,
+          marketId: finding.marketId,
+          owner: finding.owner,
+          chainId: request.chainId,
+        }),
+      );
+    }
+    for (const route of observations.refinanceMarketParamReads ?? []) {
+      for (const [readId, marketId] of [
+        [route.sourceReadId, route.sourceMarketId],
+        [route.targetReadId, route.targetMarketId],
+      ] as const) {
+        if (
+          !afterMarketParams.has(readId) &&
+          !marketParamsFailures.has(readId)
+        ) {
+          marketParamsFailures.set(readId, {
+            marketId,
+            message: `Refinance market-parameter read "${readId}" failed during simulation. Check that the endpoint executes view calls in the same block.`,
+          });
+        }
+      }
+    }
+    for (const { marketId, message } of marketParamsFailures.values()) {
+      warnings.push(
+        freezeWarning({
+          code: "UNEXPECTED_POSITION_CHANGE",
+          severity: "warn",
+          message,
+          protocol: "Blue",
+          event: "MarketParams",
+          marketId,
+          owner: context.environment.owner,
+          chainId: request.chainId,
+        }),
+      );
+    }
+  }
   const before = decodePhase("before");
   const after = decodePhase("after");
   const derivationData = new Map(

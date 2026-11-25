@@ -1,7 +1,10 @@
 import type { AddressLabel } from "@morpho-org/morpho-ts";
 import type { Address, Client } from "viem";
 import { getBytecode } from "viem/actions";
-import { validateClientChainId } from "../../actions/requirements/validateClientChainId.js";
+import {
+  type ChainCheck,
+  createChainCheck,
+} from "../../actions/requirements/chainCheck.js";
 import {
   ChainIdMismatchError,
   MissingContractCodeError,
@@ -46,16 +49,20 @@ export const assertContractCode = async (
 /**
  * Asserts that each distinct target in a flow's write-surface list holds code.
  *
- * One `eth_getCode` per distinct address runs before any other requirement read.
- * A wrong-chain RPC reports no code at every target, so on the first
- * {@link MissingContractCodeError} a single `eth_chainId` probe decides: a served
+ * One `eth_getCode` per distinct address launches concurrently, preserving the
+ * first occurrence's reporting order. Each read's rejection handler attaches
+ * immediately; outcomes are then consumed in target order, so a known earlier
+ * failure does not wait for later reads to settle. Later rejections stay observed
+ * even after this assertion returns early.
+ * Before any other requirement read, a selected {@link MissingContractCodeError}
+ * uses the invocation's lazy chain preflight (reusing an earlier result): a served
  * chain mismatch surfaces as {@link ChainIdMismatchError} (never as missing
  * code), a failed probe keeps the original missing-code error, and a matching
  * chain rethrows it unchanged. Other assertion errors propagate unwrapped.
  *
  * @param client - Connected viem client used for the `eth_getCode` reads.
  * @param chainId - Chain id the flow targets, reported on the errors.
- * @param targets - Distinct-by-address targets to check, in reporting order.
+ * @param targets - Targets to deduplicate by address and check, in reporting order.
  * @returns Nothing when every target holds code.
  * @throws {MissingContractCodeError} when a target has no deployed bytecode on
  *   the endpoint's chain.
@@ -71,25 +78,37 @@ export const assertRegistryTargetsHaveCode = async (
     readonly role: AddressLabel;
     readonly address: Address;
   }[],
+  chainCheck: ChainCheck = createChainCheck(client, chainId),
 ): Promise<void> => {
   const seen = new Set<Address>();
+  const checks: Promise<PromiseSettledResult<void>>[] = [];
   for (const target of targets) {
     if (seen.has(target.address)) {
       continue;
     }
     seen.add(target.address);
-    try {
-      await assertContractCode(client, {
+    checks.push(
+      assertContractCode(client, {
         address: target.address,
         chainId,
         role: target.role,
-      });
-    } catch (error) {
+      }).then(
+        () => ({ status: "fulfilled" as const, value: undefined }),
+        (reason: unknown) => ({ status: "rejected" as const, reason }),
+      ),
+    );
+  }
+  // Every started read is already observed; await only the next ordered outcome,
+  // not all reads together, so stalled later targets cannot hide an earlier error.
+  for (const check of checks) {
+    const result = await check;
+    if (result.status === "rejected") {
+      const error: unknown = result.reason;
       if (!(error instanceof MissingContractCodeError)) {
         throw error;
       }
       try {
-        await validateClientChainId(client, chainId);
+        await chainCheck();
       } catch (probeError) {
         throw probeError instanceof ChainIdMismatchError ? probeError : error;
       }

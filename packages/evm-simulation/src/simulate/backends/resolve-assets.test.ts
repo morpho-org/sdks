@@ -28,6 +28,7 @@ import type { ParsedOperationLimit } from "../request/parse-request.js";
 import { resolveAssets } from "./resolve-assets.js";
 
 const vault = "0x0000000000000000000000000000000000000001";
+const BLOCK_HASH = `0x${"ab".repeat(32)}` as const;
 const loan = "0x0000000000000000000000000000000000000002";
 const collateral = "0x0000000000000000000000000000000000000003";
 const blueMarketParams = {
@@ -76,6 +77,71 @@ const limit: ParsedOperationLimit = {
 };
 
 describe("resolveAssets", () => {
+  test.each([
+    [undefined, SlippageCheckUnavailableError],
+    [loan, ApprovalCheckUnavailableError],
+  ] as const)(
+    "error: data-less internal execution revert stays unavailable (assetPaid=%s)",
+    async (assetPaid, ErrorClass) => {
+      const handle = createMockClient(mainnet);
+      handle.request.mockRejectedValue(
+        new RpcRequestError({
+          body: {},
+          url: "https://rpc.example",
+          error: { code: -32603, message: "execution reverted" },
+        }),
+      );
+      await expect(
+        resolveAssets({
+          client: handle.client,
+          morpho: zeroAddress,
+          operations: [
+            { ...limit, ...(assetPaid === undefined ? {} : { assetPaid }) },
+          ],
+          blockHash: BLOCK_HASH,
+        }),
+      ).rejects.toBeInstanceOf(ErrorClass);
+      expect(handle.request).toHaveBeenCalledTimes(1);
+      expect(handle.request.mock.calls[0]?.[0]).toMatchObject({
+        method: "eth_call",
+        params: [
+          expect.any(Object),
+          { blockHash: BLOCK_HASH, requireCanonical: true },
+        ],
+      });
+    },
+  );
+  test.each([undefined, loan] as const)(
+    "error: data-less internal selector rejection is a transport failure (assetPaid=%s)",
+    async (assetPaid) => {
+      const handle = createMockClient(mainnet);
+      handle.request.mockRejectedValue(
+        new RpcRequestError({
+          body: {},
+          url: "https://rpc.example",
+          error: { code: -32603, message: "blockHash selector not supported" },
+        }),
+      );
+      await expect(
+        resolveAssets({
+          client: handle.client,
+          morpho: zeroAddress,
+          operations: [
+            { ...limit, ...(assetPaid === undefined ? {} : { assetPaid }) },
+          ],
+          blockHash: BLOCK_HASH,
+        }),
+      ).rejects.toBeInstanceOf(RpcTransportError);
+      expect(handle.request).toHaveBeenCalledTimes(1);
+      expect(handle.request.mock.calls[0]?.[0]).toMatchObject({
+        method: "eth_call",
+        params: [
+          expect.any(Object),
+          { blockHash: BLOCK_HASH, requireCanonical: true },
+        ],
+      });
+    },
+  );
   test("error: approval identity mismatch stays visible in the public error response", async () => {
     const handle = createMockClient(mainnet);
     const otherMarket = {
@@ -102,7 +168,7 @@ describe("resolveAssets", () => {
           slippageTolerance: 0n,
         },
       ],
-      blockNumber: 1n,
+      blockHash: BLOCK_HASH,
     }).catch((cause: unknown) => cause);
     expect(error).toBeInstanceOf(ApprovalCheckUnavailableError);
     const response = toSimulationErrorResponse(error);
@@ -142,7 +208,7 @@ describe("resolveAssets", () => {
             ...(assetPaid === undefined ? {} : { assetPaid }),
           },
         ],
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       }).catch((cause: unknown) => cause);
       expect(error).toBeInstanceOf(
         assetPaid === undefined
@@ -197,7 +263,7 @@ describe("resolveAssets", () => {
               ...(assetPaid === undefined ? {} : { assetPaid }),
             },
           ],
-          blockNumber: 1n,
+          blockHash: BLOCK_HASH,
         }),
       ).rejects.toBeInstanceOf(
         assetPaid === undefined
@@ -241,7 +307,7 @@ describe("resolveAssets", () => {
               ...(assetPaid === undefined ? {} : { assetPaid }),
             },
           ],
-          blockNumber: 1n,
+          blockHash: BLOCK_HASH,
         }),
       ).rejects.toBeInstanceOf(
         assetPaid === undefined
@@ -290,14 +356,25 @@ describe("resolveAssets", () => {
         morpho: zeroAddress,
         midnight: suppliedMidnightMarket.midnight,
         operations: [
-          {
-            type,
-            marketId: suppliedMidnightMarketId,
-            quote: { [field]: [{ collateralIndex: 0n, assets: 10n }] },
-            slippageTolerance: 0n,
-          },
+          type === "midnightSupplyCollateralBatch"
+            ? {
+                type,
+                marketId: suppliedMidnightMarketId,
+                quote: {
+                  collateralSupplies: [{ collateralIndex: 0n, assets: 10n }],
+                },
+                slippageTolerance: 0n,
+              }
+            : {
+                type,
+                marketId: suppliedMidnightMarketId,
+                quote: {
+                  collateralWithdrawals: [{ collateralIndex: 0n, assets: 10n }],
+                },
+                slippageTolerance: 0n,
+              },
         ],
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       });
       await expect(resolution).rejects.toBeInstanceOf(
         SlippageCheckUnavailableError,
@@ -332,23 +409,30 @@ describe("resolveAssets", () => {
         functionName: "toMarket",
         result: suppliedMidnightMarket,
       });
-      const quote =
+      const operation: ParsedOperationLimit =
         type === "midnightSupplyCollateralBatch"
-          ? { collateralSupplies: [{ collateralIndex: 0n, assets: 10n }] }
-          : { collateralWithdrawals: [{ collateralIndex: 0n, assets: 10n }] };
+          ? {
+              type,
+              marketId: suppliedMidnightMarketId,
+              quote: {
+                collateralSupplies: [{ collateralIndex: 0n, assets: 10n }],
+              },
+              slippageTolerance: 0n,
+            }
+          : {
+              type,
+              marketId: suppliedMidnightMarketId,
+              quote: {
+                collateralWithdrawals: [{ collateralIndex: 0n, assets: 10n }],
+              },
+              slippageTolerance: 0n,
+            };
       const resolved = await resolveAssets({
         client: handle.client,
         morpho: zeroAddress,
         midnight: suppliedMidnightMarket.midnight,
-        operations: [
-          {
-            type,
-            marketId: suppliedMidnightMarketId,
-            quote,
-            slippageTolerance: 0n,
-          },
-        ],
-        blockNumber: 1n,
+        operations: [operation],
+        blockHash: BLOCK_HASH,
       });
       expect(resolved[0]?.midnightCollateralTokens).toEqual([
         { collateralIndex: 0n, token: collateral },
@@ -380,21 +464,39 @@ describe("resolveAssets", () => {
         type === "midnightSupplyCollateralTakeBorrow"
           ? "collateralSupplies"
           : "collateralWithdrawals";
+      let operation: ParsedOperationLimit;
+      if (type === "midnightSupplyCollateralTakeBorrow") {
+        operation = {
+          type,
+          marketId: suppliedMidnightMarketId,
+          quote: {
+            assetsReceived: 10n,
+            unitsSold: 10n,
+            collateralSupplies: [{ collateralIndex: 9n, assets: 10n }],
+          },
+          slippageTolerance: 0n,
+        };
+      } else if (type === "midnightSupplyCollateralBatch") {
+        operation = {
+          type,
+          marketId: suppliedMidnightMarketId,
+          quote: { collateralSupplies: [{ collateralIndex: 9n, assets: 10n }] },
+          slippageTolerance: 0n,
+        };
+      } else {
+        operation = {
+          type,
+          marketId: suppliedMidnightMarketId,
+          quote: { [field]: [{ collateralIndex: 9n, assets: 10n }] },
+          slippageTolerance: 0n,
+        };
+      }
       const resolution = resolveAssets({
         client: handle.client,
         morpho: zeroAddress,
         midnight: suppliedMidnightMarket.midnight,
-        operations: [
-          {
-            type,
-            marketId: suppliedMidnightMarketId,
-            quote: {
-              [field]: [{ collateralIndex: 9n, assets: 10n }],
-            },
-            slippageTolerance: 0n,
-          },
-        ],
-        blockNumber: 1n,
+        operations: [operation],
+        blockHash: BLOCK_HASH,
       });
       await expect(resolution).rejects.toThrow(SlippageCheckUnavailableError);
       await expect(resolution).rejects.toMatchObject({
@@ -434,7 +536,7 @@ describe("resolveAssets", () => {
       client: handle.client,
       morpho: zeroAddress,
       operations,
-      blockNumber: 1n,
+      blockHash: BLOCK_HASH,
     });
     expect(result[0]?.assetsPaid).toBe(loan);
     expect(result[1]?.assetsReceived).toBe(loan);
@@ -468,7 +570,7 @@ describe("resolveAssets", () => {
           slippageTolerance: 0n,
         },
       ],
-      blockNumber: 1n,
+      blockHash: BLOCK_HASH,
     });
     expect(result[0]?.assetsPaid).toBe(loan);
     expect(result[0]?.marketParams).toEqual(blueMarketParams);
@@ -502,7 +604,7 @@ describe("resolveAssets", () => {
           slippageTolerance: 0n,
         },
       ],
-      blockNumber: 1n,
+      blockHash: BLOCK_HASH,
     }).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(SlippageCheckUnavailableError);
     expect((error as Error).message).toContain("returned params for market");
@@ -534,7 +636,7 @@ describe("resolveAssets", () => {
           slippageTolerance: 0n,
         },
       ],
-      blockNumber: 1n,
+      blockHash: BLOCK_HASH,
     }).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(ApprovalCheckUnavailableError);
     expect((error as Error).message).toContain("returned params for market");
@@ -565,7 +667,7 @@ describe("resolveAssets", () => {
           slippageTolerance: 0n,
         },
       ],
-      blockNumber: 1n,
+      blockHash: BLOCK_HASH,
     }).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(ApprovalCheckUnavailableError);
     expect((error as Error).message).toContain("returned params for market");
@@ -589,7 +691,7 @@ describe("resolveAssets", () => {
           slippageTolerance: 0n,
         },
       ],
-      blockNumber: 1n,
+      blockHash: BLOCK_HASH,
     }).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(SlippageCheckUnavailableError);
     expect((error as Error).message).toContain(
@@ -644,7 +746,7 @@ describe("resolveAssets", () => {
                       slippageTolerance: 0n,
                     },
               ],
-              blockNumber: 1n,
+              blockHash: BLOCK_HASH,
             });
           if (
             explicit === undefined ||
@@ -673,7 +775,7 @@ describe("resolveAssets", () => {
         morpho: zeroAddress,
         midnight: zeroAddress,
         operations: [],
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       }),
     ).toEqual([]);
     expect(handle.request).not.toHaveBeenCalled();
@@ -695,7 +797,7 @@ describe("resolveAssets", () => {
       morpho: zeroAddress,
       midnight: zeroAddress,
       operations,
-      blockNumber: 1n,
+      blockHash: BLOCK_HASH,
     });
     expect(result[0]).toEqual({
       limit: operations[0],
@@ -720,7 +822,7 @@ describe("resolveAssets", () => {
       morpho: zeroAddress,
       midnight: zeroAddress,
       operations: [parking],
-      blockNumber: 10n,
+      blockHash: BLOCK_HASH,
     });
     expect(result[0]?.assetsPaid).toBe(loan);
     expect(result[0]?.midnightApprovalTokens).toEqual([loan]);
@@ -741,7 +843,7 @@ describe("resolveAssets", () => {
           slippageTolerance: 0n,
         },
       ],
-      blockNumber: 1n,
+      blockHash: BLOCK_HASH,
     }).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(SimulationValidationError);
     expect(error).toMatchObject({
@@ -767,7 +869,7 @@ describe("resolveAssets", () => {
       morpho: zeroAddress,
       midnight: zeroAddress,
       operations: [invalidLimit],
-      blockNumber: 1n,
+      blockHash: BLOCK_HASH,
     }).catch((cause: unknown) => cause);
     expect(error).toBeInstanceOf(SlippageCheckUnavailableError);
     expect(error).toHaveProperty(
@@ -790,11 +892,14 @@ describe("resolveAssets", () => {
       morpho: zeroAddress,
       midnight: zeroAddress,
       operations: [limit, limit],
-      blockNumber: 10n,
+      blockHash: BLOCK_HASH,
     });
     expect(result.map((r) => r.assetsPaid)).toEqual([loan, loan]);
     expect(handle.request).toHaveBeenCalledTimes(1);
-    expect(handle.request.mock.calls[0]?.[0].params?.[1]).toBe("0xa");
+    expect(handle.request.mock.calls[0]?.[0].params?.[1]).toEqual({
+      blockHash: BLOCK_HASH,
+      requireCanonical: true,
+    });
   });
   test("behavior: combined actions choose collateral and loan tokens by direction", async () => {
     const handle = createMockClient(mainnet);
@@ -820,7 +925,7 @@ describe("resolveAssets", () => {
       morpho: zeroAddress,
       midnight: zeroAddress,
       operations,
-      blockNumber: 1n,
+      blockHash: BLOCK_HASH,
     });
     expect(
       result.map(({ assetsPaid, assetsReceived }) => [
@@ -879,7 +984,7 @@ describe("resolveAssets", () => {
       morpho: zeroAddress,
       midnight: zeroAddress,
       operations: [operation],
-      blockNumber: 1n,
+      blockHash: BLOCK_HASH,
     });
     expect(result[0]?.assetsReceived).toBe(loan);
     expect(result[0]?.midnightCollateralTokens).toEqual([
@@ -907,7 +1012,7 @@ describe("resolveAssets", () => {
           slippageTolerance: 0n,
         },
       ],
-      blockNumber: 1n,
+      blockHash: BLOCK_HASH,
     });
     expect(result[0]?.assetsPaid).toBe(loan);
   });
@@ -931,7 +1036,7 @@ describe("resolveAssets", () => {
           slippageTolerance: 0n,
         },
       ],
-      blockNumber: 1n,
+      blockHash: BLOCK_HASH,
     });
     await expect(request).rejects.toThrowError(
       expect.objectContaining({
@@ -960,7 +1065,7 @@ describe("resolveAssets", () => {
         morpho: zeroAddress,
         midnight: zeroAddress,
         operations: [{ ...limit, assetPaid: loan }],
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       }),
     ).rejects.toBeInstanceOf(ApprovalCheckUnavailableError);
   });
@@ -986,7 +1091,7 @@ describe("resolveAssets", () => {
       morpho: zeroAddress,
       midnight: zeroAddress,
       operations: [{ ...limit, assetPaid: loan }],
-      blockNumber: 1n,
+      blockHash: BLOCK_HASH,
     }).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(ApprovalCheckUnavailableError);
     expect(error).not.toHaveProperty("context");
@@ -1016,7 +1121,7 @@ describe("resolveAssets", () => {
         morpho: zeroAddress,
         midnight: zeroAddress,
         operations: [{ ...limit, assetPaid: loan }],
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       }),
     ).rejects.toBeInstanceOf(ApprovalCheckUnavailableError);
   });
@@ -1035,7 +1140,7 @@ describe("resolveAssets", () => {
         morpho: zeroAddress,
         midnight: zeroAddress,
         operations: [{ ...limit, assetPaid: loan }],
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       }),
     ).rejects.toBeInstanceOf(RpcTransportError);
   });
@@ -1050,7 +1155,7 @@ describe("resolveAssets", () => {
         morpho: zeroAddress,
         midnight: zeroAddress,
         operations: [{ ...limit, assetPaid: loan }],
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       }),
     ).rejects.toBeInstanceOf(RpcTransportError);
   });
@@ -1063,7 +1168,7 @@ describe("resolveAssets", () => {
         morpho: zeroAddress,
         midnight: zeroAddress,
         operations: [{ ...limit, assetPaid: loan }],
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       }),
     ).rejects.toBeInstanceOf(RpcTransportError);
   });
@@ -1078,7 +1183,7 @@ describe("resolveAssets", () => {
         morpho: zeroAddress,
         midnight: zeroAddress,
         operations: [{ ...limit, assetPaid: loan }],
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       }),
     ).rejects.toBeInstanceOf(RpcTransportError);
   });
@@ -1091,7 +1196,7 @@ describe("resolveAssets", () => {
         morpho: zeroAddress,
         midnight: zeroAddress,
         operations: [{ ...limit, assetPaid: loan }],
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       }),
     ).rejects.toBeInstanceOf(ApprovalCheckUnavailableError);
   });
@@ -1104,7 +1209,7 @@ describe("resolveAssets", () => {
         morpho: zeroAddress,
         midnight: zeroAddress,
         operations: [{ ...limit, assetPaid: loan }],
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       }),
     ).rejects.toBeInstanceOf(ApprovalCheckUnavailableError);
   });
@@ -1119,7 +1224,7 @@ describe("resolveAssets", () => {
         morpho: zeroAddress,
         midnight: zeroAddress,
         operations: [{ ...limit, assetPaid: loan }],
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       }),
     ).rejects.toBeInstanceOf(RpcTransportError);
   });
@@ -1143,7 +1248,7 @@ describe("resolveAssets", () => {
           slippageTolerance: 0n,
         },
       ],
-      blockNumber: 1n,
+      blockHash: BLOCK_HASH,
     }).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(SlippageCheckUnavailableError);
     expect((error as Error).message).toContain(
@@ -1162,7 +1267,7 @@ describe("resolveAssets", () => {
           client: handle.client,
           morpho: zeroAddress,
           operations: [limit],
-          blockNumber: 1n,
+          blockHash: BLOCK_HASH,
         }),
       ).rejects.toBeInstanceOf(SlippageCheckUnavailableError);
     },
@@ -1181,7 +1286,7 @@ describe("resolveAssets", () => {
         client: handle.client,
         morpho: zeroAddress,
         operations: [limit],
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       }),
     ).rejects.toBeInstanceOf(SlippageCheckUnavailableError);
   });
@@ -1196,7 +1301,7 @@ describe("resolveAssets", () => {
         client: handle.client,
         morpho: zeroAddress,
         operations: [limit],
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       }),
     ).rejects.toBeInstanceOf(RpcTransportError);
   });
@@ -1223,7 +1328,7 @@ describe("resolveAssets", () => {
         client: handle.client,
         morpho: zeroAddress,
         operations: [limit],
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       }),
     ).rejects.toBeInstanceOf(SlippageCheckUnavailableError);
   });
@@ -1443,7 +1548,7 @@ describe("resolveAssets", () => {
         client: handle.client,
         morpho: zeroAddress,
         operations: [operation as ParsedOperationLimit],
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       });
       expect(result[0]?.approvalToken).toBe(expected);
     },
@@ -1468,13 +1573,16 @@ describe("resolveAssets", () => {
           slippageTolerance: 0n,
         },
       ],
-      blockNumber: 42n,
+      blockHash: BLOCK_HASH,
     });
     expect(result?.approvalToken).toBe(loan);
     expect(handle.request).toHaveBeenCalledWith(
       expect.objectContaining({
         method: "eth_call",
-        params: [expect.anything(), "0x2a"],
+        params: [
+          expect.anything(),
+          { blockHash: BLOCK_HASH, requireCanonical: true },
+        ],
       }),
       undefined,
     );
@@ -1500,7 +1608,7 @@ describe("resolveAssets", () => {
           slippageTolerance: 0n,
         },
       ],
-      blockNumber: 1n,
+      blockHash: BLOCK_HASH,
     });
     await expect(request).rejects.toThrow("the market token address is zero");
     await expect(request).rejects.toBeInstanceOf(ApprovalCheckUnavailableError);
@@ -1536,7 +1644,7 @@ describe("resolveAssets", () => {
           client: handle.client,
           morpho: zeroAddress,
           operations: [operation],
-          blockNumber: 1n,
+          blockHash: BLOCK_HASH,
         }),
       ).rejects.toBeInstanceOf(ApprovalCheckUnavailableError);
   });
@@ -1600,7 +1708,7 @@ describe("resolveAssets", () => {
           },
           operation,
         ],
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       }).catch((caught: unknown) => caught);
       expect(error).toBeInstanceOf(SimulationValidationError);
       expect(error).toMatchObject({
@@ -1639,7 +1747,7 @@ describe("resolveAssets", () => {
           slippageTolerance: 0n,
         },
       ],
-      blockNumber: 1n,
+      blockHash: BLOCK_HASH,
     });
     expect(result[0]?.approvalToken).toBe(collateral);
     expect(result[1]?.approvalToken).toBe(collateral);
@@ -1715,7 +1823,7 @@ describe("resolveAssets — Midnight collateral", () => {
       morpho: zeroAddress,
       midnight,
       operations: [midnightLimit, { ...midnightLimit, collateralIndex: 0n }],
-      blockNumber: 1n,
+      blockHash: BLOCK_HASH,
     });
     expect(result.map((r) => r.assetsPaid)).toEqual([
       secondCollateral,
@@ -1731,7 +1839,7 @@ describe("resolveAssets — Midnight collateral", () => {
       morpho: zeroAddress,
       midnight,
       operations: [midnightLimit, { ...midnightLimit, assetPaid: vault }],
-      blockNumber: 1n,
+      blockHash: BLOCK_HASH,
     });
     expect(result[0]?.midnightApprovalTokens).toEqual([secondCollateral]);
     expect(result[1]?.assetsPaid).toBe(vault);
@@ -1745,7 +1853,7 @@ describe("resolveAssets — Midnight collateral", () => {
       morpho: zeroAddress,
       midnight,
       operations: [{ ...midnightLimit, assetPaid: vault }],
-      blockNumber: 1n,
+      blockHash: BLOCK_HASH,
     });
     expect(result[0]?.assetsPaid).toBe(vault);
     expect(result[0]?.midnightApprovalTokens).toEqual([secondCollateral]);
@@ -1773,7 +1881,7 @@ describe("resolveAssets — Midnight collateral", () => {
         morpho: zeroAddress,
         midnight,
         operations: [{ ...midnightLimitForType(type), assetPaid: collateral }],
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       });
       expect(result[0]?.midnightApprovalTokens).toEqual([collateral]);
     },
@@ -1789,7 +1897,7 @@ describe("resolveAssets — Midnight collateral", () => {
         morpho: zeroAddress,
         midnight,
         operations: [{ ...midnightLimit, assetPaid: collateral }],
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       }),
     ).rejects.toBeInstanceOf(RpcTransportError);
   });
@@ -1810,7 +1918,7 @@ describe("resolveAssets — Midnight collateral", () => {
         morpho: zeroAddress,
         midnight,
         operations: [{ ...midnightLimitForType(type), assetPaid: collateral }],
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       }).catch((e: unknown) => e);
       expect(error).toBeInstanceOf(ApprovalCheckUnavailableError);
       expect((error as Error).cause).toBeDefined();
@@ -1844,7 +1952,7 @@ describe("resolveAssets — Midnight collateral", () => {
             ...(assetPaid === undefined ? {} : { assetPaid }),
           },
         ],
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       }).catch((caught: unknown) => caught);
       expect(error).toBeInstanceOf(SimulationValidationError);
       expect(error).toMatchObject({
@@ -1890,7 +1998,7 @@ describe("resolveAssets — Midnight collateral", () => {
             ...(assetPaid === undefined ? {} : { assetPaid }),
           },
         ],
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       }).catch((caught: unknown) => caught);
       expect(error).toBeInstanceOf(SimulationValidationError);
       expect(error).toMatchObject({
@@ -1947,7 +2055,7 @@ describe("resolveAssets — Midnight collateral", () => {
         morpho: zeroAddress,
         midnight,
         operations: [midnightLimitForType(type)],
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       }).catch((caught: unknown) => caught);
       expect(error).toBeInstanceOf(
         failure === "transport"
@@ -1977,7 +2085,7 @@ describe("resolveAssets — Midnight collateral", () => {
           market: suppliedMidnightMarket,
         },
       ],
-      blockNumber: 1n,
+      blockHash: BLOCK_HASH,
     });
     expect(result[0]?.midnightApprovalTokens).toEqual([collateral]);
     expect(handle.request).not.toHaveBeenCalled();
@@ -1996,7 +2104,7 @@ describe("resolveAssets — Midnight collateral", () => {
       morpho: zeroAddress,
       midnight,
       operations: [{ ...redeemLimit, assetReceived: collateral }, redeemLimit],
-      blockNumber: 1n,
+      blockHash: BLOCK_HASH,
     });
     expect(explicit?.assetsReceived).toBe(collateral);
     expect(derived?.assetsReceived).toBe(loan);
@@ -2037,7 +2145,7 @@ describe("resolveAssets — Midnight collateral", () => {
       morpho: zeroAddress,
       midnight,
       operations,
-      blockNumber: 1n,
+      blockHash: BLOCK_HASH,
     });
     expect(result.map((op) => op.assetsPaid)).toEqual([
       loan,
@@ -2068,12 +2176,12 @@ describe("resolveAssets — Midnight collateral", () => {
     async (type) => {
       const handle = createMockClient(mainnet);
       mockToMarket(handle);
-      const repayLimit: ParsedOperationLimit = {
+      const repayLimit = {
         type,
         marketId: midnightMarketId,
         quote: { assetsPaid: 10n, debtRepaid: 10n },
         slippageTolerance: 0n,
-      };
+      } satisfies ParsedOperationLimit;
       const [withoutCollateral, withCollateral] = await resolveAssets({
         client: handle.client,
         morpho: zeroAddress,
@@ -2088,7 +2196,7 @@ describe("resolveAssets — Midnight collateral", () => {
             },
           },
         ],
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       });
       expect(withoutCollateral?.assetsPaid).toBe(loan);
       expect(withoutCollateral?.midnightMarket?.loanToken).toBe(loan);
@@ -2128,7 +2236,7 @@ describe("resolveAssets — Midnight collateral", () => {
               slippageTolerance: 0n,
             },
           ],
-          blockNumber: 1n,
+          blockHash: BLOCK_HASH,
         }),
       ).rejects.toThrow(SlippageCheckUnavailableError);
     },
@@ -2164,7 +2272,7 @@ describe("resolveAssets — Midnight collateral", () => {
             assetReceived: collateral,
           },
         ],
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       }),
     ).rejects.toThrow(SlippageCheckUnavailableError);
   });
@@ -2199,7 +2307,7 @@ describe("resolveAssets — Midnight collateral", () => {
             assetReceived: collateral,
           },
         ],
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       }),
     ).rejects.toBeInstanceOf(SlippageCheckUnavailableError);
   });
@@ -2221,7 +2329,7 @@ describe("resolveAssets — Midnight collateral", () => {
       morpho: zeroAddress,
       midnight: suppliedMidnightMarket.midnight,
       operations: [operation],
-      blockNumber: 1n,
+      blockHash: BLOCK_HASH,
     });
     expect(result[0]).toMatchObject({
       assetsReceived: loan,
@@ -2262,7 +2370,7 @@ describe("resolveAssets — Midnight collateral", () => {
         morpho: zeroAddress,
         midnight: suppliedMidnightMarket.midnight,
         operations: [operation],
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       });
       await expect(resolution).rejects.toThrow(SimulationValidationError);
       await expect(resolution).rejects.toThrow(
@@ -2293,7 +2401,7 @@ describe("resolveAssets — Midnight collateral", () => {
       morpho: zeroAddress,
       midnight: suppliedMidnightMarket.midnight,
       operations: [operation],
-      blockNumber: 1n,
+      blockHash: BLOCK_HASH,
     });
     expect(result?.assetsPaid).toBe(collateral);
     expect(handle.request).not.toHaveBeenCalled();
@@ -2314,7 +2422,7 @@ describe("resolveAssets — Midnight collateral", () => {
       morpho: zeroAddress,
       midnight: suppliedMidnightMarket.midnight,
       operations: [operation],
-      blockNumber: 1n,
+      blockHash: BLOCK_HASH,
     });
     await expect(resolution).rejects.toThrow(SimulationValidationError);
     await expect(resolution).rejects.toMatchObject({
@@ -2349,7 +2457,7 @@ describe("resolveAssets — Midnight collateral", () => {
         morpho: zeroAddress,
         midnight: suppliedMidnightMarket.midnight,
         operations,
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       });
       expect(
         result.map((operation) => operation.midnightMarket?.loanToken),
@@ -2374,7 +2482,7 @@ describe("resolveAssets — Midnight collateral", () => {
         morpho: zeroAddress,
         midnight: suppliedMidnightMarket.midnight,
         operations: [operation],
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       });
     } catch (caught) {
       error = caught;
@@ -2419,7 +2527,7 @@ describe("resolveAssets — Midnight collateral", () => {
             slippageTolerance: 0n,
           },
         ],
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       }),
     ).rejects.toThrow(SlippageCheckUnavailableError);
   });
@@ -2432,7 +2540,7 @@ describe("resolveAssets — Midnight collateral", () => {
         morpho: zeroAddress,
         midnight,
         operations: [{ ...midnightLimit, collateralIndex: 2n }],
-        blockNumber: 1n,
+        blockHash: BLOCK_HASH,
       }),
     ).rejects.toThrow(SimulationValidationError);
   });

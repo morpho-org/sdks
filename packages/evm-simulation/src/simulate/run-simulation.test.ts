@@ -9,15 +9,18 @@ import { MarketUtils as MidnightMarketUtils } from "@morpho-org/morpho-sdk/midni
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import {
   type Address,
+  createClient,
   createPublicClient,
   encodeAbiParameters,
   encodeErrorResult,
   encodeEventTopics,
+  encodeFunctionData,
   encodeFunctionResult,
   erc20Abi,
   erc4626Abi,
   ethAddress,
   fallback,
+  getAddress,
   type Hex,
   http,
   isAddressEqual,
@@ -26,7 +29,7 @@ import {
   parseAbi,
   zeroAddress,
 } from "viem";
-import { base, mainnet } from "viem/chains";
+import { arbitrum, base, mainnet } from "viem/chains";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type {
   Erc2612PermitAuthorization,
@@ -38,6 +41,7 @@ import {
   ConsumerLimitViolationError,
   InvalidSimulationResponseError,
   RpcTransportError,
+  SimulationEffectError,
   SimulationValidationError,
   SlippageCheckUnavailableError,
   UnexpectedTokenApprovalError,
@@ -64,7 +68,11 @@ import type { SimulationExecution } from "./backends/parse-response.js";
 import { TRANSFER_TOPIC, WITHDRAWAL_TOPIC } from "./parsing/transfers.js";
 import type { ExecutionPlan, PlannedCall } from "./plan/plan-execution.js";
 import { parseRequest } from "./request/parse-request.js";
-import { NO_WNATIVE_MIRROR_WRAPPERS, runSimulation } from "./run-simulation.js";
+import {
+  NO_WNATIVE_MIRROR_WRAPPERS,
+  runSimulation,
+  TRANSFER_ONLY_WNATIVE_WRAPPERS,
+} from "./run-simulation.js";
 
 const mockExecutePlan = vi.fn<typeof executePlan>();
 const runOrThrow = async (...args: Parameters<typeof runSimulation>) =>
@@ -206,6 +214,7 @@ function stubFetch(
   code: Hex = "0x6000",
   servedChainId?: number | "fail",
   mockClient?: ReturnType<typeof createMockClient>,
+  blockGasLimit?: bigint,
 ) {
   const methods: string[] = [];
   const fetch = vi.fn<typeof globalThis.fetch>(async (_input, init) => {
@@ -225,11 +234,14 @@ function stubFetch(
       return rpc(
         `0x${"c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2".padStart(64, "0")}`,
       );
-    if (method === "eth_getBlockByNumber")
+    if (method === "eth_getBlockByNumber" || method === "eth_getBlockByHash")
       return rpc({
         number: numberToHex(STATE_BLOCK),
         hash: STATE_BLOCK_HASH,
         timestamp: numberToHex(STATE_BLOCK_TIMESTAMP),
+        ...(blockGasLimit === undefined
+          ? {}
+          : { gasLimit: numberToHex(blockGasLimit) }),
       });
     if (method === "eth_simulateV1")
       return rpc([
@@ -258,6 +270,219 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe.sequential("runSimulation", () => {
+  test.each([0n, 1n])(
+    "operations plus effects fail closed on value without native traces: %s",
+    async (value) => {
+      const asset: Address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+      const handle = createMockClient(mainnet);
+      mockRead(handle, {
+        address: TARGET,
+        abi: erc4626Abi,
+        functionName: "asset",
+        result: asset,
+      });
+      stubFetch([], "0x6000", 1, handle);
+      mockExecutePlan.mockImplementationOnce(async ({ plan, stateBlock }) => ({
+        ...execution(plan, stateBlock),
+        calls: execution(plan, stateBlock).calls.map((call) => ({
+          ...call,
+          result: {
+            ...call.result,
+            logs: [
+              {
+                address: asset,
+                topics: encodeEventTopics({
+                  abi: erc20Abi,
+                  eventName: "Approval",
+                  args: { owner: OWNER, spender: TARGET },
+                }) as RawLog["topics"],
+                data: encodeUint256(0n),
+              },
+            ],
+          },
+        })),
+        stateReads: plan.calls.flatMap((call) =>
+          call.type === "stateRead"
+            ? [
+                {
+                  phase: call.phase,
+                  read: call.read,
+                  returnData: encodeUint256(
+                    call.phase === "before"
+                      ? 100n
+                      : call.read.kind === "erc20.balance" &&
+                          isAddressEqual(call.read.token, TARGET)
+                        ? 101n
+                        : 99n,
+                  ),
+                },
+              ]
+            : [],
+        ),
+      }));
+      const report = await simulate(simulationClientFor(RPC_URL, 1), {
+        transactions: [{ ...TRANSACTION, value }],
+        limits: {
+          operations: [
+            {
+              type: "vaultV2Deposit",
+              vault: TARGET,
+              quote: { assetsPaid: 1n, sharesMinted: 1n },
+            },
+          ],
+          effects: [
+            {
+              type: "erc20Approval",
+              token: asset,
+              owner: OWNER,
+              spender: TARGET,
+              amount: 0n,
+            },
+          ],
+        },
+      });
+      expect(report.ok).toBe(value === 0n);
+      if (!report.ok)
+        expect(report.failures).toEqual([expect.any(SimulationEffectError)]);
+    },
+  );
+  test.each([false, true])(
+    "effect reports resolve bindings and reject unlisted transactions: %s",
+    async (bothBound) => {
+      stubFetch([], "0x6000", 1);
+      userCallCount = 2;
+      mockExecutePlan.mockImplementationOnce(async ({ plan, stateBlock }) => {
+        const result = execution(plan, stateBlock);
+        return {
+          ...result,
+          calls: result.calls.map((call) => ({
+            ...call,
+            result: {
+              ...call.result,
+              logs: [
+                {
+                  address: TARGET,
+                  topics: encodeEventTopics({
+                    abi: erc20Abi,
+                    eventName: "Approval",
+                    args: { owner: OWNER, spender: TARGET },
+                  }) as RawLog["topics"],
+                  data: encodeUint256(1n),
+                },
+              ],
+            },
+          })),
+        };
+      });
+      const effect = {
+        type: "erc20Approval" as const,
+        token: TARGET,
+        owner: OWNER,
+        spender: TARGET,
+        amount: 1n,
+      };
+      const report = await simulate(simulationClientFor(RPC_URL, 1), {
+        transactions: [TRANSACTION, TRANSACTION].map((tx) => ({
+          ...tx,
+          data: encodeFunctionData({
+            abi: erc20Abi,
+            functionName: "approve",
+            args: [TARGET, 1n],
+          }),
+        })),
+        limits: {
+          operations: [],
+          effects: bothBound ? [{ ...effect, txIdx: 0 }, effect] : [effect],
+        },
+      });
+      expect(report.ok).toBe(bothBound);
+      if (report.ok) {
+        expect(report.result.verification.limits).toEqual({
+          operations: [],
+          effects: [
+            { ...effect, txIdx: 0 },
+            { ...effect, txIdx: 1 },
+          ],
+        });
+        const limits = report.result.verification.limits;
+        if (limits === "none") throw new Error("Expected checked effects");
+        expect(Object.isFrozen(limits)).toBe(true);
+        expect(Object.isFrozen(limits.effects)).toBe(true);
+        expect(limits.effects?.every(Object.isFrozen)).toBe(true);
+        expect(Object.isFrozen(effect)).toBe(false);
+      }
+      if (!report.ok) {
+        expect(report.failures).toContainEqual(
+          expect.any(UnexpectedTokenApprovalError),
+        );
+        expect(report.failures).toContainEqual(
+          expect.any(SimulationEffectError),
+        );
+      }
+    },
+  );
+  test.each([
+    { actualAmount: 0n, unexpectedCall: false },
+    { actualAmount: 1n, unexpectedCall: false },
+    { actualAmount: 0n, unexpectedCall: true },
+  ])(
+    "control effects block amount mismatches and undeclared calls: $actualAmount / $unexpectedCall",
+    async ({ actualAmount, unexpectedCall }) => {
+      stubFetch([], "0x6000", 1);
+      mockExecutePlan.mockImplementationOnce(async ({ plan, stateBlock }) => {
+        const result = execution(plan, stateBlock);
+        return {
+          ...result,
+          calls: result.calls.map((call) => ({
+            ...call,
+            result: {
+              ...call.result,
+              logs: [
+                {
+                  address: TARGET,
+                  topics: encodeEventTopics({
+                    abi: erc20Abi,
+                    eventName: "Approval",
+                    args: { owner: OWNER, spender: TARGET },
+                  }) as RawLog["topics"],
+                  data: encodeUint256(actualAmount),
+                },
+              ],
+            },
+          })),
+        };
+      });
+      const report = await simulate(simulationClientFor(RPC_URL, 1), {
+        transactions: [
+          {
+            ...TRANSACTION,
+            data: encodeFunctionData({
+              abi: erc20Abi,
+              functionName: unexpectedCall ? "transfer" : "approve",
+              args: [TARGET, 0n],
+            }),
+          },
+        ],
+        limits: {
+          operations: [],
+          effects: [
+            {
+              type: "erc20Approval",
+              token: TARGET,
+              owner: OWNER,
+              spender: TARGET,
+              amount: 0n,
+            },
+          ],
+        },
+      });
+      expect(report.ok).toBe(actualAmount === 0n && !unexpectedCall);
+      if (!report.ok)
+        expect(report.failures).toContainEqual(
+          expect.any(SimulationEffectError),
+        );
+    },
+  );
   test.each([1, 14, 123456789])(
     "behavior: reports retention coverage and skip warnings on chain %s",
     async (chainId) => {
@@ -779,6 +1004,107 @@ describe.sequential("runSimulation", () => {
     expect(report).toMatchObject({ ok: true, warnings: [] });
   });
 
+  test("behavior: the calls simulate plans for a Monad Vault V2 deposit stay under Monad's default simulation cap", async () => {
+    const { fetch } = stubFetch([], "0x6000", 143);
+    const { executePlan: sendPlan } = await vi.importActual<
+      typeof import("./backends/index.js")
+    >("./backends/index.js");
+    let plan: ExecutionPlan | undefined;
+    mockExecutePlan.mockImplementationOnce(async (args) => {
+      plan = args.plan;
+      await sendPlan(args).catch(() => undefined);
+      return execution(args.plan, args.stateBlock);
+    });
+    await simulate(simulationClientFor(RPC_URL, 143), {
+      transactions: [TRANSACTION],
+      limits: {
+        operations: [
+          {
+            type: "vaultV2Deposit",
+            vault: TARGET,
+            assetPaid: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+            quote: { assetsPaid: 1n, sharesMinted: 1n },
+          },
+        ],
+      },
+    });
+    const request = fetch.mock.calls
+      .map(
+        ([, init]) =>
+          JSON.parse(String(init?.body)) as {
+            method: string;
+            params: [{ blockStateCalls: [{ calls: { gas?: string }[] }] }];
+          },
+      )
+      .find(({ method }) => method === "eth_simulateV1");
+    const calls = request?.params[0].blockStateCalls[0]?.calls ?? [];
+    expect(
+      plan?.calls.some(
+        (call) =>
+          call.type === "stateRead" && call.read.id.startsWith("retention:"),
+      ),
+    ).toBe(true);
+    expect(calls).toHaveLength(plan?.calls.length ?? -1);
+    const reserved = calls.reduce(
+      (sum, call) =>
+        sum + (call.gas === undefined ? 150_000_000n : BigInt(call.gas)),
+      0n,
+    );
+    expect(reserved).toBeLessThan(1_600_000_000n);
+  });
+
+  test("behavior: evidence reads stay within half of a 3M pinned block's gas limit", async () => {
+    const { fetch } = stubFetch([], "0x6000", 1, undefined, 3_000_000n);
+    const { executePlan: sendPlan } = await vi.importActual<
+      typeof import("./backends/index.js")
+    >("./backends/index.js");
+    let plan: ExecutionPlan | undefined;
+    mockExecutePlan.mockImplementationOnce(async (args) => {
+      plan = args.plan;
+      await sendPlan(args).catch(() => undefined);
+      return execution(args.plan, args.stateBlock);
+    });
+    await simulate(simulationClientFor(RPC_URL, 1), {
+      transactions: [TRANSACTION],
+      limits: {
+        operations: [
+          {
+            type: "vaultV2Deposit",
+            vault: TARGET,
+            assetPaid: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+            quote: { assetsPaid: 1n, sharesMinted: 1n },
+          },
+        ],
+      },
+    });
+    const request = fetch.mock.calls
+      .map(
+        ([, init]) =>
+          JSON.parse(String(init?.body)) as {
+            method: string;
+            params: [{ blockStateCalls: [{ calls: { gas?: string }[] }] }];
+          },
+      )
+      .find(({ method }) => method === "eth_simulateV1");
+    const calls = request?.params[0].blockStateCalls[0]?.calls ?? [];
+    expect(calls).toHaveLength(plan?.calls.length ?? -1);
+    const evidenceGas = (plan?.calls ?? []).flatMap((call, index) =>
+      call.type === "stateRead" && call.read.kind !== "derivation"
+        ? [BigInt(calls[index]?.gas ?? 0)]
+        : [],
+    );
+    expect(
+      plan?.calls.some(
+        (call) =>
+          call.type === "stateRead" && call.read.id.startsWith("retention:"),
+      ),
+    ).toBe(true);
+    expect(evidenceGas.length).toBeGreaterThan(0);
+    expect(evidenceGas.reduce((sum, gas) => sum + gas, 0n)).toBeLessThanOrEqual(
+      1_500_000n,
+    );
+  });
+
   test("behavior: a state read returning no data in both phases is reported once", async () => {
     stubFetch([]);
     let readIds: string[] = [];
@@ -1245,7 +1571,6 @@ describe.sequential("runSimulation", () => {
   test.each([
     { label: "owner sends ETH", value: 1n, from: OWNER, guard: true },
     { label: "owner sends no ETH", value: 0n, from: OWNER, guard: false },
-    { label: "other sender sends ETH", value: 1n, from: TARGET, guard: false },
   ])(
     "behavior: native value sent wiring — $label",
     async ({ value, from, guard }) => {
@@ -1298,28 +1623,9 @@ describe.sequential("runSimulation", () => {
         RPC_URL,
         ChainId.BaseMainnet,
       );
-      const error =
-        from === TARGET
-          ? await runOrThrow({
-              client: simulationConfig,
-              options: {},
-              request: {
-                ...parseRequest(
-                  {
-                    ...request,
-                    transactions: [{ ...TRANSACTION, value: 0n }],
-                  },
-                  ChainId.BaseMainnet,
-                ),
-                transactions: [
-                  { ...TRANSACTION, value: 0n },
-                  { ...TRANSACTION, from: TARGET, value: 1n },
-                ],
-              },
-            }).catch((cause: unknown) => cause)
-          : await simulateOrThrow(simulationConfig, request).catch(
-              (cause: unknown) => cause,
-            );
+      const error = await simulateOrThrow(simulationConfig, request).catch(
+        (cause: unknown) => cause,
+      );
       if (guard) {
         expect(error).toBeInstanceOf(SimulationValidationError);
         expect(error).toMatchObject({
@@ -1447,7 +1753,7 @@ describe.sequential("runSimulation", () => {
             to: selfCall ? OWNER : TARGET,
             value: selfCall ? selfValue : 10n,
           },
-        ],
+        ] as const,
         limits: {
           operations: [
             {
@@ -1540,6 +1846,49 @@ describe.sequential("runSimulation", () => {
               vault: TARGET,
               quote: { assetsPaid: 1n, sharesMinted: 1n },
               slippageTolerance: 0n,
+            },
+          ],
+        },
+      }),
+    ).rejects.toBeInstanceOf(UnsupportedChainError);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test("error: Blue authorization effects require a registered Blue address before RPC", async () => {
+    const { fetch } = stubFetch([]);
+    await expect(
+      simulateOrThrow(config, {
+        transactions: [TRANSACTION],
+        limits: {
+          operations: [],
+          effects: [
+            {
+              type: "blueAuthorization",
+              authorizer: OWNER,
+              authorized: TARGET,
+              isAuthorized: true,
+            },
+          ],
+        },
+      }),
+    ).rejects.toBeInstanceOf(UnsupportedChainError);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test("error: ERC-20 approval effects require a registered Blue address before RPC", async () => {
+    const { fetch } = stubFetch([]);
+    await expect(
+      simulateOrThrow(config, {
+        transactions: [TRANSACTION],
+        limits: {
+          operations: [],
+          effects: [
+            {
+              type: "erc20Approval",
+              token: TARGET,
+              owner: OWNER,
+              spender: TARGET,
+              amount: 1n,
             },
           ],
         },
@@ -2254,6 +2603,107 @@ describe.sequential("runSimulation", () => {
     }
   });
 
+  test("behavior: Transfer-only wrapper entries match registered wNative addresses", () => {
+    expect([...TRANSFER_ONLY_WNATIVE_WRAPPERS.keys()]).toEqual([
+      ChainId.ArbitrumMainnet,
+      ChainId.PlumeMainnet,
+      ChainId.RobinhoodMainnet,
+    ]);
+    for (const [chainId, wrapperAddress] of TRANSFER_ONLY_WNATIVE_WRAPPERS) {
+      expect(NO_WNATIVE_MIRROR_WRAPPERS.has(chainId)).toBe(false);
+      const wNative = getChainAddresses(chainId as ChainId)?.wNative;
+      expect(wNative).toBeDefined();
+      if (wNative === undefined) continue;
+      expect(isAddressEqual(wNative, wrapperAddress)).toBe(true);
+    }
+  });
+
+  test.each([
+    { kind: "mint", from: zeroAddress, to: OWNER },
+    { kind: "burn", from: OWNER, to: zeroAddress },
+  ])(
+    "behavior: keeps an Arbitrum aeWETH $kind Transfer without warnings",
+    async ({ from, to }) => {
+      const amount = 1_000n;
+      const token = getChainAddresses(ChainId.ArbitrumMainnet)!.wNative!;
+      expect(token).toBe("0x82aF49447D8a07e3bd95BD0d56f35241523fBab1");
+      const logs: RawLog[] = [
+        {
+          address: token,
+          topics: [TRANSFER_TOPIC, padAddress(from), padAddress(to)],
+          data: encodeUint256(amount),
+        },
+      ];
+      const mockClient = createMockClient(arbitrum);
+      stubFetch([], "0x6000", ChainId.ArbitrumMainnet, mockClient);
+      mockExecutePlan.mockImplementationOnce(async ({ plan, stateBlock }) => {
+        const result = execution(plan, stateBlock);
+        return {
+          ...result,
+          calls: result.calls.map((call, index) =>
+            index === 0 ? { ...call, result: { ...call.result, logs } } : call,
+          ),
+        };
+      });
+
+      const report = await simulate(
+        simulationClientFor(RPC_URL, ChainId.ArbitrumMainnet),
+        {
+          limits: "none",
+          transactions: [TRANSACTION],
+        },
+      );
+
+      expect(report.ok).toBe(true);
+      expect(report.ok && report.result.transfers).toEqual([
+        { token, from, to, amount, txIdx: 0 },
+      ]);
+      expect(report.warnings).toEqual([]);
+    },
+  );
+
+  test("behavior: warns on an unpaired mint when Arbitrum registers another wNative", async () => {
+    const token: Address = "0x3333333333333333333333333333333333333333";
+    const amount = 1_000n;
+    const logs: RawLog[] = [
+      {
+        address: token,
+        topics: [TRANSFER_TOPIC, padAddress(zeroAddress), padAddress(OWNER)],
+        data: encodeUint256(amount),
+      },
+    ];
+    const mockClient = createMockClient(arbitrum);
+    stubFetch([], "0x6000", ChainId.ArbitrumMainnet, mockClient);
+    mockExecutePlan.mockImplementationOnce(async ({ plan, stateBlock }) => {
+      const result = execution(plan, stateBlock);
+      return {
+        ...result,
+        calls: result.calls.map((call, index) =>
+          index === 0 ? { ...call, result: { ...call.result, logs } } : call,
+        ),
+      };
+    });
+    const getChainAddressesSpy = vi
+      .spyOn(blueSdk, "getChainAddresses")
+      .mockReturnValue({
+        ...getChainAddresses(ChainId.ArbitrumMainnet),
+        wNative: token,
+      });
+    try {
+      const report = await simulate(
+        simulationClientFor(RPC_URL, ChainId.ArbitrumMainnet),
+        { limits: "none", transactions: [TRANSACTION] },
+      );
+
+      expect(report.ok).toBe(true);
+      expect(report.warnings).toMatchObject([
+        { code: "WRAPPED_NATIVE_DEDUP_MISS", token, kind: "mint", txIdx: 0 },
+      ]);
+    } finally {
+      getChainAddressesSpy.mockRestore();
+    }
+  });
+
   test("behavior: keeps a Withdrawal and zero-address Transfer on Base", async () => {
     const amount = 1_000n;
     const token = getChainAddresses(ChainId.BaseMainnet)!.wNative!;
@@ -2470,7 +2920,7 @@ describe.sequential("runSimulation", () => {
     expect(mockExecutePlan.mock.calls[0]?.[0].validation).toBe(true);
   });
 
-  test("behavior: a supplied block skips the block lookup only", async () => {
+  test("behavior: a supplied block adds exactly one hash verification before reads", async () => {
     const actual = await vi.importActual<typeof import("./backends/index.js")>(
       "./backends/index.js",
     );
@@ -2488,12 +2938,88 @@ describe.sequential("runSimulation", () => {
       },
     });
     expect(result.calls).toHaveLength(1);
-    expect(methods).toEqual(["eth_getCode", "eth_simulateV1"]);
-    const request = JSON.parse(String(fetch.mock.calls[1]?.[1]?.body)) as {
+    expect(methods).toEqual([
+      "eth_getBlockByHash",
+      "eth_getCode",
+      "eth_simulateV1",
+    ]);
+    expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body)).params).toEqual([
+      STATE_BLOCK_HASH,
+      false,
+    ]);
+    const request = JSON.parse(String(fetch.mock.calls[2]?.[1]?.body)) as {
       params: unknown[];
     };
-    expect(request.params[1]).toBe(numberToHex(STATE_BLOCK));
+    expect(request.params[1]).toEqual({
+      blockHash: STATE_BLOCK_HASH,
+      requireCanonical: true,
+    });
   });
+
+  test.each([
+    ["eth_getCode", -32000],
+    ["eth_call", -32000],
+    ["eth_call", -32603],
+  ])(
+    "error: %s rejects a pinned view with code %i that the numeric view would accept",
+    async (methodToReject, code) => {
+      const { fetch } = stubFetch([]);
+      const respondNormally = fetch.getMockImplementation()!;
+      fetch.mockImplementation(async (input, init) => {
+        const { method, params } = JSON.parse(String(init?.body));
+        if (
+          method === methodToReject &&
+          params[1]?.blockHash === STATE_BLOCK_HASH
+        ) {
+          return Response.json({
+            jsonrpc: "2.0",
+            id: 1,
+            error: { code, message: "block is not canonical" },
+          });
+        }
+        return respondNormally(input, init);
+      });
+
+      const client = createClient({
+        account: TARGET,
+        chain: mainnet,
+        transport: http(RPC_URL, { retryCount: 0 }),
+      });
+      const report = await simulate(client, {
+        transactions: [TRANSACTION],
+        block: {
+          number: STATE_BLOCK,
+          hash: STATE_BLOCK_HASH,
+          timestamp: STATE_BLOCK_TIMESTAMP,
+        },
+        limits: {
+          operations: [
+            {
+              type: "vaultV1Deposit",
+              vault: TARGET,
+              quote: { assetsPaid: 1n, sharesMinted: 1n },
+            },
+          ],
+        },
+      });
+
+      const request = fetch.mock.calls
+        .map(([, init]) => JSON.parse(String(init?.body)))
+        .find(({ method }) => method === methodToReject);
+      if (methodToReject === "eth_call") {
+        expect(request?.params[0].from).toBe(TARGET);
+      }
+      expect(request?.params[1]).toEqual({
+        blockHash: STATE_BLOCK_HASH,
+        requireCanonical: true,
+      });
+      expect(mockExecutePlan).not.toHaveBeenCalled();
+      expect(report).toMatchObject({
+        ok: false,
+        failures: [{ code: "RPC_TRANSPORT_ERROR" }],
+      });
+    },
+  );
 
   test("behavior: a mixed-case supplied block hash matches the successor parentHash", async () => {
     const actual = await vi.importActual<typeof import("./backends/index.js")>(
@@ -2506,6 +3032,12 @@ describe.sequential("runSimulation", () => {
       vi.fn<typeof globalThis.fetch>(async (_input, init) => {
         const { method } = JSON.parse(String(init?.body)) as { method: string };
         methods.push(method);
+        if (method === "eth_getBlockByHash")
+          return rpc({
+            number: numberToHex(STATE_BLOCK),
+            hash: STATE_BLOCK_HASH,
+            timestamp: numberToHex(STATE_BLOCK_TIMESTAMP),
+          });
         if (method === "eth_getCode") return rpc("0x6000");
         return rpc([
           {
@@ -2530,8 +3062,55 @@ describe.sequential("runSimulation", () => {
       },
     });
     expect(result.calls).toHaveLength(1);
-    expect(methods).toEqual(["eth_getCode", "eth_simulateV1"]);
+    expect(methods).toEqual([
+      "eth_getBlockByHash",
+      "eth_getCode",
+      "eth_simulateV1",
+    ]);
   });
+
+  test.each(["number", "timestamp", "hash", "missing"] as const)(
+    "error: supplied block %s mismatch fails before reads and execution",
+    async (field) => {
+      const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(
+        rpc(
+          field === "missing"
+            ? null
+            : {
+                number: numberToHex(
+                  STATE_BLOCK + (field === "number" ? 1n : 0n),
+                ),
+                timestamp: numberToHex(
+                  STATE_BLOCK_TIMESTAMP + (field === "timestamp" ? 1n : 0n),
+                ),
+                hash:
+                  field === "hash" ? `0x${"cd".repeat(32)}` : STATE_BLOCK_HASH,
+              },
+        ),
+      );
+      vi.stubGlobal("fetch", fetch);
+      await expect(
+        simulateOrThrow(config, {
+          limits: "none",
+          transactions: [TRANSACTION],
+          block: {
+            number: STATE_BLOCK,
+            hash: STATE_BLOCK_HASH,
+            timestamp: STATE_BLOCK_TIMESTAMP,
+          },
+        }),
+      ).rejects.toBeInstanceOf(
+        field === "missing"
+          ? RpcTransportError
+          : InvalidSimulationResponseError,
+      );
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body)).method).toBe(
+        "eth_getBlockByHash",
+      );
+      expect(mockExecutePlan).not.toHaveBeenCalled();
+    },
+  );
 
   test("error: block lookup transport failures omit viem diagnostics", async () => {
     vi.stubGlobal(
@@ -2584,6 +3163,243 @@ describe.sequential("runSimulation", () => {
     expect(error).toBeInstanceOf(SlippageCheckUnavailableError);
     expect((error as Error).message).toContain(plannedReadId);
   });
+
+  const checkRefinanceMetadata = async ({
+    malformed = false,
+    mismatchedMarket = false,
+    missingTargetMetadata = false,
+    supplyCollateral = false,
+    unusedRoute = false,
+  }: {
+    malformed?: boolean;
+    mismatchedMarket?: boolean;
+    missingTargetMetadata?: boolean;
+    supplyCollateral?: boolean;
+    unusedRoute?: boolean;
+  }) => {
+    const market = {
+      loanToken: TARGET,
+      collateralToken: TARGET,
+      oracle: zeroAddress,
+      irm: zeroAddress,
+      lltv: 0n,
+    };
+    const targetMarket = { ...market, oracle: OWNER };
+    const marketId = blueSdk.MarketUtils.getMarketId(market);
+    const targetMarketId = blueSdk.MarketUtils.getMarketId(targetMarket);
+    const unusedMarketId = blueSdk.MarketUtils.getMarketId({
+      ...market,
+      oracle: TARGET,
+    });
+    const handle = createMockClient(mainnet);
+    const blue = getChainAddresses(1)!.blue!;
+    mockRead(handle, {
+      address: blue,
+      abi: blueAbi,
+      functionName: "idToMarketParams",
+      result: [
+        market.loanToken,
+        market.collateralToken,
+        market.oracle,
+        market.irm,
+        market.lltv,
+      ],
+    });
+    stubFetch([], "0x6000", 1, handle);
+    mockExecutePlan.mockImplementationOnce(async ({ plan, stateBlock }) => ({
+      ...execution(plan, stateBlock),
+      calls: execution(plan, stateBlock).calls.map((call) => ({
+        ...call,
+        result: {
+          ...call.result,
+          logs: [
+            {
+              address: blue,
+              topics: encodeEventTopics({
+                abi: blueAbi,
+                eventName: "WithdrawCollateral",
+                args: {
+                  id: marketId,
+                  onBehalf: OWNER,
+                  receiver: TARGET,
+                },
+              }) as Hex[],
+              data: encodeAbiParameters(
+                [{ type: "address" }, { type: "uint256" }],
+                [TARGET, 1n],
+              ),
+            },
+            ...(supplyCollateral
+              ? [
+                  {
+                    address: blue,
+                    topics: encodeEventTopics({
+                      abi: blueAbi,
+                      eventName: "SupplyCollateral",
+                      args: {
+                        id: targetMarketId,
+                        caller: TARGET,
+                        onBehalf: OWNER,
+                      },
+                    }) as Hex[],
+                    data: encodeAbiParameters([{ type: "uint256" }], [1n]),
+                  },
+                ]
+              : []),
+          ],
+        },
+      })),
+      stateReads: plan.calls.flatMap((call) =>
+        call.type === "stateRead" &&
+        !(
+          missingTargetMetadata &&
+          call.read.kind === "morpho.marketParams" &&
+          call.read.marketId === targetMarketId
+        )
+          ? [
+              {
+                phase: call.phase,
+                read: call.read,
+                returnData:
+                  call.read.kind === "erc20.balance"
+                    ? malformed
+                      ? "0x1234"
+                      : encodeUint256(call.phase === "before" ? 100n : 99n)
+                    : call.read.kind === "morpho.marketParams"
+                      ? encodeFunctionResult({
+                          abi: blueAbi,
+                          functionName: "idToMarketParams",
+                          result:
+                            call.read.marketId === unusedMarketId
+                              ? [
+                                  zeroAddress,
+                                  zeroAddress,
+                                  zeroAddress,
+                                  zeroAddress,
+                                  0n,
+                                ]
+                              : [
+                                  market.loanToken,
+                                  market.collateralToken,
+                                  call.read.marketId === targetMarketId &&
+                                  !mismatchedMarket
+                                    ? targetMarket.oracle
+                                    : market.oracle,
+                                  market.irm,
+                                  market.lltv,
+                                ],
+                        })
+                      : encodeFunctionResult({
+                          abi: blueAbi,
+                          functionName: "position",
+                          result:
+                            call.read.kind === "morpho.position" &&
+                            call.read.marketId === unusedMarketId
+                              ? [0n, 0n, 0n]
+                              : call.read.kind === "morpho.position" &&
+                                  call.read.marketId === targetMarketId
+                                ? [
+                                    100n,
+                                    call.phase === "before" ? 0n : 1n,
+                                    100n,
+                                  ]
+                                : call.phase === "before"
+                                  ? [100n, 1n, 100n]
+                                  : [101n, 0n, 100n],
+                        }),
+              },
+            ]
+          : [],
+      ),
+    }));
+    const report = await simulate(simulationClientFor(RPC_URL, 1), {
+      transactions: [TRANSACTION],
+      limits: {
+        operations: [
+          {
+            type: "blueRefinance",
+            sourceMarketId: marketId,
+            targetMarketId,
+            quote: { sharesBurned: 1n, sharesMinted: 1n },
+            slippageTolerance: 0n,
+          },
+          {
+            type: "blueSupply",
+            marketId,
+            quote: { assetsPaid: 1n, sharesMinted: 1n },
+            slippageTolerance: 0n,
+          },
+          ...(unusedRoute
+            ? [
+                {
+                  type: "blueRefinance" as const,
+                  sourceMarketId: marketId,
+                  targetMarketId: unusedMarketId,
+                  quote: { sharesBurned: 1n, sharesMinted: 1n },
+                  slippageTolerance: 0n,
+                },
+              ]
+            : []),
+        ],
+      },
+    });
+    expect(report.ok).toBe(!malformed);
+    const warning = report.warnings.find(
+      ({ code }) => code === "UNEXPECTED_POSITION_CHANGE",
+    );
+    if (mismatchedMarket || missingTargetMetadata) {
+      expect(report.warnings).toContainEqual(
+        expect.objectContaining({
+          code: "UNEXPECTED_POSITION_CHANGE",
+          severity: "warn",
+          protocol: "Blue",
+          event: "MarketParams",
+          marketId: targetMarketId,
+          owner: OWNER,
+          message: mismatchedMarket
+            ? `Market parameters do not match market "${targetMarketId}". Check the RPC endpoint.`
+            : `Refinance market-parameter read "market-params:${targetMarketId.toLowerCase()}" failed during simulation. Check that the endpoint executes view calls in the same block.`,
+        }),
+      );
+    }
+    if (supplyCollateral && !mismatchedMarket && !missingTargetMetadata) {
+      expect(warning).toBeUndefined();
+    } else {
+      expect(warning).toMatchObject({
+        code: "UNEXPECTED_POSITION_CHANGE",
+        severity: "warn",
+        protocol: "Blue",
+        event: "WithdrawCollateral",
+        marketId,
+        owner: OWNER,
+        chainId: 1,
+      });
+      expect(Object.isFrozen(warning)).toBe(true);
+      expect(warning).not.toBeInstanceOf(Error);
+    }
+    if (!report.ok) {
+      expect(report.failures[0]).toBeInstanceOf(InvalidSimulationResponseError);
+      expect(report.failures.map(({ code }) => code)).not.toContain(
+        "UNEXPECTED_POSITION_CHANGE",
+      );
+    }
+  };
+  test.each([false, true])(
+    "reports undeclared position warnings regardless of blocking malformed balance reads (%s)",
+    (malformed) => checkRefinanceMetadata({ malformed }),
+  );
+  test.each([false, true])(
+    "matches valid refinance metadata and warns on non-zero wrong-market responses (mismatched: %s)",
+    (mismatchedMarket) =>
+      checkRefinanceMetadata({ supplyCollateral: true, mismatchedMarket }),
+  );
+  test("warns instead of failing when a refinance market-parameter read fails", () =>
+    checkRefinanceMetadata({
+      supplyCollateral: true,
+      missingTargetMetadata: true,
+    }));
+  test("ignores an unused refinance route into an uncreated market", () =>
+    checkRefinanceMetadata({ supplyCollateral: true, unusedRoute: true }));
 
   test("error: a user-call count mismatch is an invalid response", async () => {
     const { methods } = stubFetch([]);
@@ -2826,4 +3642,395 @@ describe.sequential("simulate options", () => {
       expect(fetchFn).not.toHaveBeenCalled();
     },
   );
+});
+
+describe.sequential("runSimulation bundles retention", () => {
+  const bundles = getChainAddresses(1).bundles!.vaultBundlesV1!;
+  const weth = getAddress("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2");
+  const transferLog = (from: Address, to: Address): RawLog => ({
+    address: weth,
+    topics: [TRANSFER_TOPIC, padAddress(from), padAddress(to)],
+    data: encodeUint256(1_000_000n),
+  });
+  const malformedLog = (): RawLog => ({
+    ...transferLog(OWNER, bundles),
+    topics: [...transferLog(OWNER, bundles).topics, encodeUint256(1n)],
+  });
+  const forgedPair = [transferLog(OWNER, bundles), transferLog(bundles, OWNER)];
+  const run = (
+    retainedInState: bigint,
+    {
+      logs = forgedPair,
+      retentionReturnData,
+    }: { logs?: readonly RawLog[]; retentionReturnData?: Hex } = {},
+  ) => {
+    stubFetch([], "0x6000", 1);
+    const retentionIds: string[] = [];
+    mockExecutePlan.mockImplementationOnce(async ({ plan, stateBlock }) => {
+      const result = execution(plan, stateBlock);
+      return {
+        ...result,
+        calls: result.calls.map((call) => ({
+          ...call,
+          result: {
+            ...call.result,
+            logs: [...logs],
+          },
+        })),
+        stateReads: plan.calls.flatMap((planned) => {
+          if (planned.type !== "stateRead") {
+            return [];
+          }
+          const retained =
+            planned.phase === "after" &&
+            planned.read.id === `retention:${weth}:${bundles}`.toLowerCase();
+          if (planned.read.id.startsWith("retention:")) {
+            retentionIds.push(planned.read.id);
+          }
+          return [
+            {
+              phase: planned.phase,
+              read: planned.read,
+              returnData:
+                retentionReturnData !== undefined &&
+                planned.read.id.startsWith("retention:")
+                  ? retentionReturnData
+                  : encodeUint256(retained ? retainedInState : 0n),
+            },
+          ];
+        }),
+      };
+    });
+    const report = simulate(simulationClientFor(RPC_URL, 1), {
+      transactions: [TRANSACTION],
+      limits: {
+        operations: [
+          {
+            type: "vaultV2Withdraw",
+            vault: TARGET,
+            quote: { assetsReceived: 1n, sharesBurned: 1n },
+            slippageTolerance: 0n,
+          },
+        ],
+      },
+    });
+    return { report, retentionIds };
+  };
+  const retentionFailures = (report: Awaited<ReturnType<typeof simulate>>) =>
+    report.ok
+      ? []
+      : report.failures.filter(
+          (failure) => failure instanceof BlacklistViolationError,
+        );
+
+  test("error: BlacklistViolationError when in-block balances contradict logs that net to zero", async () => {
+    const { report, retentionIds } = run(1_000_000n);
+    const failures = retentionFailures(await report);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.assetChanges).toEqual([
+      { address: getAddress(bundles), token: weth, netRetained: 1_000_000n },
+    ]);
+    expect(retentionIds).toContain(
+      `retention:${weth}:${bundles}`.toLowerCase(),
+    );
+    expect(retentionIds.length % 2).toBe(0);
+  });
+
+  test.each([
+    { name: "the only inbound log", logs: [malformedLog()] },
+    {
+      name: "a log next to a forged pair",
+      logs: [...forgedPair, malformedLog()],
+    },
+  ])(
+    "error: BlacklistViolationError from state when a malformed Transfer log is $name",
+    async ({ logs }) => {
+      const report = await run(1_000_000n, { logs }).report;
+      expect(report.ok).toBe(false);
+      expect(report).not.toHaveProperty("verification");
+      expect(report.warnings).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ code: "MALFORMED_TRANSFER_LOG" }),
+        ]),
+      );
+      const failures = retentionFailures(report);
+      expect(failures).toHaveLength(1);
+      expect(failures[0]?.assetChanges).toEqual([
+        { address: getAddress(bundles), token: weth, netRetained: 1_000_000n },
+      ]);
+    },
+  );
+
+  test("behavior: an unreadable retention balance omits verification", async () => {
+    const { report: pending, retentionIds } = run(0n, {
+      retentionReturnData: "0x",
+    });
+    const report = await pending;
+    expect(report.ok).toBe(false);
+    expect(report).not.toHaveProperty("verification");
+    const unavailable = report.ok
+      ? []
+      : report.failures.filter(
+          (failure) => failure instanceof SlippageCheckUnavailableError,
+        );
+    expect(unavailable).toHaveLength(retentionIds.length / 2);
+  });
+
+  test("behavior: verification reports checked retention when every balance is read", async () => {
+    const report = await run(0n).report;
+    expect(report.verification).toEqual({ retention: "checked" });
+  });
+
+  test("behavior: no retention failure when balances confirm the pass-through", async () => {
+    expect(retentionFailures(await run(0n).report)).toEqual([]);
+  });
+});
+
+describe.sequential("runSimulation preflight overlap", () => {
+  const VAULT: Address = "0x4444444444444444444444444444444444444444";
+  const USDC: Address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+  const STOP = new Error("stop after preflight");
+  type Reply = () => Promise<Response>;
+  const ok =
+    (result: unknown): Reply =>
+    async () =>
+      rpc(result);
+  const later =
+    (reply: Reply, ms = 20): Reply =>
+    async () => {
+      await new Promise((resolve) => setTimeout(resolve, ms));
+      return reply();
+    };
+  const fails: Reply = async () => {
+    throw new TypeError("fetch failed");
+  };
+
+  function preflightFetch(replies: {
+    readonly code?: Reply;
+    readonly call?: Reply;
+    readonly blockNumber?: bigint;
+  }) {
+    const events: string[] = [];
+    const requests: { method: string; params: readonly unknown[] }[] = [];
+    let callStarted: () => void = () => undefined;
+    const callStart = new Promise<void>((resolve) => {
+      callStarted = resolve;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof globalThis.fetch>(async (_input, init) => {
+        const request = JSON.parse(String(init?.body)) as {
+          method: string;
+          params: readonly unknown[];
+        };
+        const { method } = request;
+        requests.push(request);
+        events.push(`start ${method}`);
+        if (method === "eth_call") callStarted();
+        const reply =
+          method === "eth_getBlockByNumber" || method === "eth_getBlockByHash"
+            ? ok({
+                number: numberToHex(replies.blockNumber ?? STATE_BLOCK),
+                hash: STATE_BLOCK_HASH,
+                timestamp: numberToHex(STATE_BLOCK_TIMESTAMP),
+              })
+            : method === "eth_getCode"
+              ? (replies.code ?? ok("0x6000"))
+              : method === "eth_call"
+                ? (replies.call ?? ok(padAddress(USDC)))
+                : fails;
+        try {
+          return await reply();
+        } finally {
+          events.push(`end ${method}`);
+        }
+      }),
+    );
+    return { events, requests, callStart };
+  }
+
+  const run = (
+    overrides: Partial<Parameters<typeof parseRequest>[0]> = {},
+    timeoutMs?: number,
+  ) =>
+    runOrThrow({
+      client: simulationClientFor(RPC_URL, 1),
+      options: { ...(timeoutMs === undefined ? {} : { timeoutMs }) },
+      request: parseRequest(
+        {
+          transactions: [TRANSACTION],
+          limits: {
+            operations: [
+              {
+                type: "vaultV2Deposit",
+                vault: VAULT,
+                assetPaid: USDC,
+                quote: { sharesMinted: 1n, assetsPaid: 1n },
+                slippageTolerance: 0n,
+              },
+            ],
+          },
+          ...overrides,
+        },
+        1,
+      ),
+    });
+  const count = (requests: readonly { method: string }[], method: string) =>
+    requests.filter((request) => request.method === method).length;
+
+  test("default: asset resolution starts before the contract-code check settles", async () => {
+    let releaseCode: () => void = () => undefined;
+    const codeReleased = new Promise<void>((resolve) => {
+      releaseCode = resolve;
+    });
+    const { events, requests, callStart } = preflightFetch({
+      code: async () => {
+        await Promise.race([
+          codeReleased,
+          new Promise((resolve) => setTimeout(resolve, 500)),
+        ]);
+        return rpc("0x6000");
+      },
+    });
+    void callStart.then(releaseCode);
+    mockExecutePlan.mockRejectedValueOnce(STOP);
+    await expect(run()).rejects.toBe(STOP);
+    expect(events.indexOf("start eth_call")).toBeLessThan(
+      events.indexOf("end eth_getCode"),
+    );
+    expect(mockExecutePlan).toHaveBeenCalledTimes(1);
+    expect(count(requests, "eth_chainId")).toBe(0);
+    expect(
+      requests
+        .filter(
+          ({ method }) => method === "eth_getCode" || method === "eth_call",
+        )
+        .map(({ params }) => params[1]),
+    ).toEqual([
+      { blockHash: STATE_BLOCK_HASH, requireCanonical: true },
+      { blockHash: STATE_BLOCK_HASH, requireCanonical: true },
+    ]);
+  });
+
+  test("behavior: a supplied block is verified before both preflight reads", async () => {
+    const supplied = STATE_BLOCK - 10n;
+    const { events, requests } = preflightFetch({ blockNumber: supplied });
+    mockExecutePlan.mockRejectedValueOnce(STOP);
+    await expect(
+      run({
+        block: {
+          number: supplied,
+          hash: STATE_BLOCK_HASH,
+          timestamp: STATE_BLOCK_TIMESTAMP,
+        },
+      }),
+    ).rejects.toBe(STOP);
+    expect(requests.map(({ method }) => method).sort()).toEqual([
+      "eth_call",
+      "eth_getBlockByHash",
+      "eth_getCode",
+    ]);
+    expect(requests[0]).toMatchObject({
+      method: "eth_getBlockByHash",
+      params: [STATE_BLOCK_HASH, false],
+    });
+    expect(
+      requests
+        .filter(
+          ({ method }) => method === "eth_getCode" || method === "eth_call",
+        )
+        .map(({ params }) => params[1]),
+    ).toEqual([
+      { blockHash: STATE_BLOCK_HASH, requireCanonical: true },
+      { blockHash: STATE_BLOCK_HASH, requireCanonical: true },
+    ]);
+    expect(events.indexOf("end eth_getBlockByHash")).toBeLessThan(
+      events.indexOf("start eth_call"),
+    );
+    expect(events.indexOf("end eth_getBlockByHash")).toBeLessThan(
+      events.indexOf("start eth_getCode"),
+    );
+    expect(mockExecutePlan.mock.calls[0]?.[0].stateBlock.number).toBe(supplied);
+  });
+
+  test.each([
+    { label: "code first", code: ok("0x"), call: later(fails) },
+    { label: "assets first", code: later(ok("0x")), call: fails },
+  ])(
+    "error: missing code outranks a concurrent asset failure ($label)",
+    async ({ code, call }) => {
+      const { requests } = preflightFetch({ code, call });
+      await expect(run()).rejects.toBeInstanceOf(SimulationValidationError);
+      expect(count(requests, "eth_chainId")).toBe(0);
+      expect(mockExecutePlan).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each([
+    { label: "code first", code: fails, call: later(ok(padAddress(USDC))) },
+    { label: "assets first", code: later(fails), call: ok(padAddress(USDC)) },
+  ])(
+    "error: a failed contract-code read blocks execution ($label)",
+    async ({ code, call }) => {
+      const { requests } = preflightFetch({ code, call });
+      await expect(run()).rejects.toBeInstanceOf(RpcTransportError);
+      expect(count(requests, "eth_chainId")).toBe(0);
+      expect(mockExecutePlan).not.toHaveBeenCalled();
+    },
+  );
+
+  test("error: missing code with resolved assets blocks execution", async () => {
+    const { requests } = preflightFetch({ code: ok("0x") });
+    await expect(run()).rejects.toBeInstanceOf(SimulationValidationError);
+    expect(count(requests, "eth_call")).toBe(1);
+    expect(count(requests, "eth_chainId")).toBe(0);
+    expect(mockExecutePlan).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    {
+      label: "zero vault asset",
+      call: ok(padAddress(zeroAddress)),
+      error: ApprovalCheckUnavailableError,
+    },
+    { label: "transport failure", call: fails, error: RpcTransportError },
+  ])(
+    "error: an asset failure after a passing code check blocks execution ($label)",
+    async ({ call, error }) => {
+      const { requests } = preflightFetch({ code: later(ok("0x6000")), call });
+      await expect(run()).rejects.toBeInstanceOf(error);
+      expect(count(requests, "eth_chainId")).toBe(0);
+      expect(mockExecutePlan).not.toHaveBeenCalled();
+    },
+  );
+
+  test("error: concurrent failures preserve code-error precedence without a chain probe", async () => {
+    const { requests } = preflightFetch({
+      code: ok("0x"),
+      call: ok(padAddress(zeroAddress)),
+    });
+    await expect(run()).rejects.toBeInstanceOf(SimulationValidationError);
+    expect(count(requests, "eth_chainId")).toBe(0);
+    expect(mockExecutePlan).not.toHaveBeenCalled();
+  });
+
+  test("error: missing code is diagnosed before a stalled asset read times out", async () => {
+    const hang: Reply = () => new Promise<never>(() => undefined);
+    const { requests } = preflightFetch({ code: ok("0x"), call: hang });
+    await expect(run({}, 200)).rejects.toBeInstanceOf(
+      SimulationValidationError,
+    );
+    expect(count(requests, "eth_call")).toBe(1);
+    expect(count(requests, "eth_chainId")).toBe(0);
+    expect(mockExecutePlan).not.toHaveBeenCalled();
+  });
+
+  test("error: the shared deadline bounds both pending preflight reads", async () => {
+    const hang: Reply = () => new Promise<never>(() => undefined);
+    const { requests } = preflightFetch({ code: hang, call: hang });
+    await expect(run({}, 50)).rejects.toBeInstanceOf(RpcTransportError);
+    expect(count(requests, "eth_getCode")).toBe(1);
+    expect(count(requests, "eth_call")).toBe(1);
+    expect(mockExecutePlan).not.toHaveBeenCalled();
+  });
 });

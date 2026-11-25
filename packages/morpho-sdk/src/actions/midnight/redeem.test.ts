@@ -23,9 +23,22 @@ import {
   MidnightZeroReceiverError,
   NonPositiveInputError,
 } from "../../types/index.js";
-import { midnightRedeem } from "./redeem.js";
+import { midnightRedeem, parseMidnightRedeem } from "./redeem.js";
 
 describe("midnightRedeem", () => {
+  test("parsed input owns and freezes static transaction values", () => {
+    const parsed = parseMidnightRedeem({
+      chainId: midnightChainId,
+      market: midnightMarket,
+      units: 1n,
+      onBehalf: midnightAddresses.taker,
+    });
+    expect(parsed.units).toBe(1n);
+    expect(parsed.market.id).toBe(midnightMarketId);
+    expect(Object.isFrozen(parsed)).toBe(true);
+    expect(Object.isFrozen(parsed.market.struct.collateralParams)).toBe(true);
+  });
+
   test("default", () => {
     const tx = midnightRedeem({
       chainId: midnightChainId,

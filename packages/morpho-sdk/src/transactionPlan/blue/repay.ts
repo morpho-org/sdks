@@ -5,12 +5,10 @@ import {
 } from "@morpho-org/blue-sdk";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
 import { type Client, maxUint256 } from "viem";
-import {
-  getBlueBundlesV1ReferralFeeAssets,
-  validateBlueBundlesV1NativeFunding,
-} from "../../actions/blue/common.js";
+import { getBlueBundlesV1ReferralFeeAssets } from "../../actions/blue/common.js";
 import { blueRepay } from "../../actions/blue/repay.js";
 import { validateClientChainId } from "../../actions/requirements/validateClientChainId.js";
+import { parseNativeFunding } from "../../helpers/parse.js";
 import { quoteBlueRepayFunding } from "../../helpers/quoteBlueRepay.js";
 import { validateReferralFee } from "../../helpers/validate.js";
 import { NonPositiveInputError } from "../../types/index.js";
@@ -177,7 +175,7 @@ export async function prepareBlueRepay(
       },
       args: { ...inputs, nativeAmount, userAddress: inputs.account },
     });
-    const native = validateBlueBundlesV1NativeFunding({
+    const native = parseNativeFunding({
       chainId: inputs.chainId,
       token: inputs.marketParams.loanToken,
       fundedAmount: maxRepayAssets,

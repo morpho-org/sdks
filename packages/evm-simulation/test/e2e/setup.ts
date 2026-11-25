@@ -12,6 +12,7 @@ import {
   getE2eAsset,
   getE2eRuns,
 } from "@morpho-org/morpho-test";
+import { ChainId } from "@morpho-org/morpho-ts";
 import type { AnvilTestClient } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
@@ -56,6 +57,7 @@ export const describeE2e = (
       const test = createViemTest(chain, {
         forkUrl: run.status === "run" ? run.forkUrl : undefined,
         forkBlockNumber,
+        hardfork: chainId === ChainId.ArbitrumMainnet ? "Osaka" : undefined,
         // HyperEVM small blocks cap gas at 3M.
         gasLimit: 60_000_000n,
         stepsTracing: false,
@@ -112,7 +114,7 @@ export const installE2eAsset = async (
 };
 
 /** Installs the fallback ERC-20 code and constructor storage at an arbitrary address. */
-const installE2eAssetAt = async (
+export const installE2eAssetAt = async (
   client: AnvilTestClient<Chain>,
   address: Address,
 ): Promise<void> => {
@@ -169,29 +171,46 @@ export const withE2eActor = (test: TestAPI<E2eTestContext>, actor: E2eActor) =>
   });
 
 /**
- * Creates a fresh Blue market with the registered wNative or a fork-installed test asset and a
- * fixed 1:1 oracle price, so every chain simulates against the same empty market.
+ * Creates a fresh Blue market whose oracle values one whole collateral token at one loan token.
  */
 export const createE2eMarket = async (
   client: AnvilTestClient<Chain>,
-  options: { readonly chainId: number; readonly collateralToken?: Address },
+  options: {
+    readonly chainId: number;
+    readonly loanToken?: Address;
+    readonly collateralToken?: Address;
+    readonly oracle?: Address;
+  },
 ) => {
   const { chainId } = options;
   const collateralAsset = options.collateralToken;
   const { blue, adaptiveCurveIrm } = getChainAddresses(chainId);
   const asset = getE2eAsset(chainId);
   await installE2eAsset(client, chainId);
-  if (collateralAsset !== undefined)
-    await installE2eAssetAt(client, collateralAsset);
-  // PUSH15 price; PUSH1 0; MSTORE; PUSH1 32; PUSH1 0; RETURN: answers `price()` with 1e36.
+  const loanToken = options.loanToken ?? asset.address;
+  const collateralToken = collateralAsset ?? loanToken;
+  const [loanDecimals, collateralDecimals] = await Promise.all(
+    [loanToken, collateralToken].map((address) =>
+      client.readContract({
+        address,
+        abi: erc20Abi,
+        functionName: "decimals",
+      }),
+    ),
+  );
+  const price =
+    (ORACLE_PRICE_SCALE * 10n ** BigInt(loanDecimals!)) /
+    10n ** BigInt(collateralDecimals!);
+  const oracle = options.oracle ?? E2E_ORACLE;
+  // PUSH32 price; PUSH1 0; MSTORE; PUSH1 32; PUSH1 0; RETURN.
   await client.setCode({
-    address: E2E_ORACLE,
-    bytecode: `0x6e${numberToHex(ORACLE_PRICE_SCALE, { size: 15 }).slice(2)}60005260206000f3`,
+    address: oracle,
+    bytecode: `0x7f${numberToHex(price, { size: 32 }).slice(2)}60005260206000f3`,
   });
   const market = new MarketParams({
-    loanToken: asset.address,
-    collateralToken: collateralAsset ?? asset.address,
-    oracle: E2E_ORACLE,
+    loanToken,
+    collateralToken,
+    oracle,
     irm: adaptiveCurveIrm,
     lltv: parseUnits("0.86", 18),
   });

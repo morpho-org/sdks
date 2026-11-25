@@ -13,6 +13,7 @@ import {
   zeroHash,
 } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
+import { parseDeadline } from "../../helpers/parse.js";
 import {
   validateDeadline,
   validateReferralFee,
@@ -118,10 +119,11 @@ const EMPTY_TOKEN_PERMIT: BundlesTokenPermit = {
 export const normalizeBundlesCommonParams = (
   params: BundlesCommonParams,
 ): NormalizedBundlesCommonParams => {
-  validateDeadline(params.deadline);
+  const { deadline } = params;
+  validateDeadline(deadline);
   const { referralFeePct, referralFeeRecipient } = validateReferralFee(params);
   return {
-    deadline: params.deadline,
+    deadline,
     referralFeePct,
     referralFeeRecipient,
   };
@@ -412,9 +414,26 @@ export const getBundlesSharesPermit = (params: {
   readonly amount?: bigint;
   readonly requirementSignature?: PermitRequirementSignature;
 }): BundleSharesPermit => {
+  return getParsedBundlesSharesPermit({
+    deadline: parseDeadline(params.deadline),
+    vault: params.vault,
+    owner: params.owner,
+    spender: params.spender,
+    amount: params.amount,
+    requirementSignature: params.requirementSignature,
+  });
+};
+
+/** Binds a fresh share signature to a complete operation's checked fallback deadline. @internal */
+export const getParsedBundlesSharesPermit = (params: {
+  readonly vault: Address;
+  readonly deadline: bigint;
+  readonly owner?: Address;
+  readonly spender?: Address;
+  readonly amount?: bigint;
+  readonly requirementSignature?: PermitRequirementSignature;
+}): BundleSharesPermit => {
   const { requirementSignature } = params;
-  // Require a positive uint256 for the fallback permit deadline.
-  validateDeadline(params.deadline);
   if (requirementSignature == null) {
     return {
       value: 0n,

@@ -13,11 +13,8 @@ import {
 import { getChainAddress, Time } from "@morpho-org/morpho-ts";
 import { ethAddress, isAddressEqual, maxUint256, parseEther } from "viem";
 import { expect } from "vitest";
-import {
-  E2eMidnightSimulationMismatchError,
-  sendE2eMidnightSimulated,
-} from "./midnight.js";
 import { describeE2e } from "./setup.js";
+import { E2eSimulationMismatchError, sendE2eSimulated } from "./simulate.js";
 
 const scenario: E2eScenario = {
   name: "midnightMultiWalletSimulation",
@@ -26,9 +23,9 @@ const scenario: E2eScenario = {
 
 describeE2e(scenario, (test, { chainId }) => {
   for (const mode of ["erc20", "native", "divergence"] as const) {
-    test(`${mode === "native" ? "native where fork fees are reconstructable" : mode}: both wallets' tracked changes match the entire simulated bundle`, async ({
-      client,
-    }) => {
+    test(`${mode === "native" ? "native where fork fees are reconstructable" : mode}: both wallets' tracked changes match the entire simulated bundle`, {
+      tags: mode === "erc20" ? ["nightly"] : [],
+    }, async ({ client }) => {
       const maker = E2E_MIDNIGHT_WALLETS.A;
       const taker = E2E_MIDNIGHT_WALLETS.B;
       const units = parseEther("1");
@@ -66,10 +63,10 @@ describeE2e(scenario, (test, { chainId }) => {
         marketData,
         collateralAssets,
       });
-      const supplied = await sendE2eMidnightSimulated(client, {
+      const supplied = await sendE2eSimulated(client, {
         chainId,
         account: maker,
-        output: supply,
+        output: { ...supply, buildTx: () => supply.buildTx() },
         wallets,
         tokens,
         limits: { market: MarketUtils.toStruct(params) },
@@ -103,10 +100,10 @@ describeE2e(scenario, (test, { chainId }) => {
         ...(trackNative ? { nativeAmount: units } : {}),
       });
       const send = () =>
-        sendE2eMidnightSimulated(client, {
+        sendE2eSimulated(client, {
           chainId,
           account: taker,
-          output: take,
+          output: { ...take, buildTx: () => take.buildTx() },
           wallets,
           tokens,
           gasPrice: mode === "native" ? 1n : undefined,
@@ -128,7 +125,7 @@ describeE2e(scenario, (test, { chainId }) => {
         });
       if (mode === "divergence") {
         await expect(send()).rejects.toMatchObject({
-          name: E2eMidnightSimulationMismatchError.name,
+          name: E2eSimulationMismatchError.name,
           mismatches: [
             {
               account: maker,

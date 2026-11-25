@@ -1,4 +1,4 @@
-import type { MarketId } from "@morpho-org/blue-sdk";
+import { type MarketId, MarketUtils } from "@morpho-org/blue-sdk";
 import { blueAbi, midnightAbi } from "@morpho-org/morpho-sdk/abis";
 import {
   type Address,
@@ -8,6 +8,7 @@ import {
   ethAddress,
   type Hex,
   isAddressEqual,
+  zeroAddress,
 } from "viem";
 import {
   InvalidSimulationResponseError,
@@ -20,7 +21,10 @@ import {
   QUOTE_FIELD_DIRECTION,
   type ScalarQuoteField,
 } from "../../limits.js";
-import type { ResolvedSlippageOperation } from "../backends/resolve-assets.js";
+import type {
+  ResolvedApprovalOperation,
+  ResolvedSlippageOperation,
+} from "../backends/resolve-assets.js";
 import {
   operationMeasurementPlan,
   positionBoundsMarketId,
@@ -79,6 +83,8 @@ type SlippageMeasurement = {
       readonly type: "native";
       readonly account: Address;
       readonly readId?: string;
+      /** Ignore wrapped credits for quote-only native Blue collateral payments. */
+      readonly wrappedDebitOnly?: boolean;
     }
   /** A scalar read: an ERC-20 balance or a Midnight collateral amount. */
   | {
@@ -133,6 +139,14 @@ export interface SlippageOperationReads {
   }[];
 }
 
+/** In-block source and target metadata observations for refinance authorization. @internal */
+export interface RefinanceMarketParamReads {
+  readonly sourceMarketId: MarketId;
+  readonly targetMarketId: MarketId;
+  readonly sourceReadId: string;
+  readonly targetReadId: string;
+}
+
 /** Scalar balance or the supply shares, borrow shares and collateral returned by Morpho.position. @internal */
 export type StateValue =
   | bigint
@@ -141,6 +155,33 @@ export type StateValue =
       readonly borrowShares: bigint;
       readonly collateral: bigint;
     };
+
+/** Blue market parameters returned by the in-block observation. @internal */
+export type MarketParamsState = NonNullable<
+  ResolvedSlippageOperation["marketParams"]
+>;
+
+function planMarketParamsRead(params: {
+  readonly reads: Map<string, StateRead>;
+  readonly morpho: Address;
+  readonly marketId: MarketId;
+}): string {
+  const { reads, morpho, marketId } = params;
+  const id = `market-params:${marketId}`.toLowerCase();
+  reads.set(id, {
+    kind: "morpho.marketParams",
+    id,
+    to: morpho,
+    morpho,
+    marketId,
+    data: encodeFunctionData({
+      abi: blueAbi,
+      functionName: "idToMarketParams",
+      args: [marketId],
+    }),
+  });
+  return id;
+}
 
 function planBalanceRead(params: {
   readonly reads: Map<string, StateRead>;
@@ -234,6 +275,7 @@ interface OperationReadContext {
   readonly limit: ResolvedSlippageOperation["limit"];
   readonly assetsPaid: ResolvedSlippageOperation["assetsPaid"];
   readonly assetsReceived: ResolvedSlippageOperation["assetsReceived"];
+  readonly approvalToken: ResolvedApprovalOperation["approvalToken"];
   readonly midnightMarket: ResolvedSlippageOperation["midnightMarket"];
   readonly midnightCollateralTokens: ResolvedSlippageOperation["midnightCollateralTokens"];
   readonly account: Address;
@@ -564,7 +606,7 @@ function planCollateralSupplyReads(ctx: OperationReadContext): {
         },
       );
     }
-    const quoted = limit.quote.collateralSupplies ?? [];
+    const quoted = limit.quote.collateralSupplies;
     const receiver = limit.receiver ?? params.owner;
     const grouped = new Map<
       string,
@@ -812,10 +854,20 @@ function planAssetMeasurement(
       ((limit.type === "midnightSupplyCollateral" ||
         limit.type === "midnightSupplyCollateralMakeBorrow") &&
         params.nativeValueSent === true));
+  const blueNativeCollateral =
+    field === "assetsPaid" &&
+    fieldIsNative &&
+    (limit.type === "blueSupplyCollateral" ||
+      limit.type === "blueSupplyCollateralBorrow") &&
+    params.wNative !== undefined &&
+    ctx.approvalToken !== undefined &&
+    isAddressEqual(ctx.approvalToken, params.wNative);
+  const wrappedToken = blueNativeCollateral ? params.wNative : token;
   const nativeAndWrapped =
     params.wNative !== undefined &&
-    isAddressEqual(token, params.wNative) &&
-    (typedNativeMeasurement || midnightNativePayment);
+    wrappedToken !== undefined &&
+    isAddressEqual(wrappedToken, params.wNative) &&
+    (typedNativeMeasurement || midnightNativePayment || blueNativeCollateral);
   if (isAddressEqual(token, ethAddress) || nativeAndWrapped) {
     return {
       field,
@@ -825,9 +877,12 @@ function planAssetMeasurement(
         ? {
             readId: planBalanceRead({
               reads,
-              token,
+              token: wrappedToken,
               account: holder,
             }),
+            ...(blueNativeCollateral && limit.inputs === undefined
+              ? { wrappedDebitOnly: true }
+              : {}),
           }
         : {}),
     };
@@ -972,7 +1027,7 @@ function planOperationReads(
     index,
   }: {
     readonly reads: Map<string, StateRead>;
-    readonly operation: ResolvedSlippageOperation;
+    readonly operation: ResolvedApprovalOperation;
     readonly index: number;
   },
 ): SlippageOperationReads {
@@ -980,6 +1035,7 @@ function planOperationReads(
     limit,
     assetsPaid,
     assetsReceived,
+    approvalToken,
     midnightMarket,
     midnightCollateralTokens,
     blueBuyCallback,
@@ -1009,6 +1065,7 @@ function planOperationReads(
     limit,
     assetsPaid,
     assetsReceived,
+    approvalToken,
     midnightMarket,
     midnightCollateralTokens,
     account,
@@ -1138,6 +1195,57 @@ function assertNoMidnightPositionOverlap(
   }
 }
 
+/** Reuse existing wallet funding coverage instead of adding a quote-only overlap. */
+function omitRedundantNativeCollateralReads(
+  operations: readonly SlippageOperationReads[],
+): readonly SlippageOperationReads[] {
+  const nativeCollateralQuotes = new Set(
+    operations.filter(
+      ({ limit }) =>
+        limit.inputs === undefined &&
+        (limit.type === "blueSupplyCollateral" ||
+          limit.type === "blueSupplyCollateralBorrow") &&
+        limit.assetPaid !== undefined &&
+        isAddressEqual(limit.assetPaid, ethAddress),
+    ),
+  );
+  const walletReads = new Set(
+    operations.flatMap((operation) => [
+      ...operation.measurements.flatMap((measurement) =>
+        ((measurement.field === "assetsPaid" &&
+          !nativeCollateralQuotes.has(operation)) ||
+          measurement.field === "assetsReceived") &&
+        (measurement.type === "balance" || measurement.type === "native") &&
+        measurement.readId !== undefined
+          ? [measurement.readId]
+          : [],
+      ),
+      ...(operation.walletBounds ?? []).map(({ readId }) => readId),
+    ]),
+  );
+  return operations.map((operation) => {
+    if (!nativeCollateralQuotes.has(operation)) {
+      return operation;
+    }
+    return {
+      ...operation,
+      measurements: operation.measurements.map<SlippageMeasurement>(
+        (measurement) =>
+          measurement.field === "assetsPaid" &&
+          measurement.type === "native" &&
+          measurement.readId !== undefined &&
+          walletReads.has(measurement.readId)
+            ? {
+                field: measurement.field,
+                type: "native",
+                account: measurement.account,
+              }
+            : measurement,
+      ),
+    };
+  });
+}
+
 /** Input-based wallet measurements must not overlap another operation's. */
 function assertNoWalletMeasurementOverlap(
   operations: readonly SlippageOperationReads[],
@@ -1242,6 +1350,14 @@ function assertNoWalletBoundOverlap(
  * Native deltas use transfer traces; `assetsPaid` quotes on wNative loan
  * tokens for Midnight takeLend, repayment, and Blue parking also read the
  * sender's wNative balance.
+ * Native-sentinel Blue collateral quotes add only the sender's net wNative debit
+ * to ETH payment when collateral is registered wNative; credits never reduce payment.
+ * If another operation already measures that wallet balance, its bound covers
+ * wNative funding instead; pre-existing native wallet overlap restrictions remain.
+ * If any operation's proceeds measure that same wNative balance, the quote's
+ * payment stays ETH-only, so borrow proceeds cannot offset ETH funding; the
+ * proceeds minimum covers extra wNative debits. Native quotes' combined payment
+ * reads do not cover one another. Typed same-token net measurements are unchanged.
  * @param params - Resolved caller operations, the transaction sender, and the
  *   Morpho Blue and Midnight addresses.
  * @returns Read calls and their mapping to each quoted amount; empty without limits.
@@ -1262,7 +1378,7 @@ function assertNoWalletBoundOverlap(
  * @internal
  */
 export function planStateReads(params: {
-  readonly operations: readonly ResolvedSlippageOperation[];
+  readonly operations: readonly ResolvedApprovalOperation[];
   readonly owner: Address;
   readonly morpho: Address;
   /** Registered wrapped-native token for the chain, when configured. */
@@ -1280,17 +1396,48 @@ export function planStateReads(params: {
 }): {
   readonly reads: readonly StateRead[];
   readonly operations: readonly SlippageOperationReads[];
+  readonly refinanceMarketParamReads?: readonly RefinanceMarketParamReads[];
 } {
   const reads = new Map<string, StateRead>();
-  const operations = params.operations.map((operation, index) =>
-    planOperationReads(params, { reads, operation, index }),
+  const operations = omitRedundantNativeCollateralReads(
+    params.operations.map((operation, index) =>
+      planOperationReads(params, { reads, operation, index }),
+    ),
   );
+  const refinanceMarketParamReads = params.operations.flatMap((operation) => {
+    if (
+      operation.limit.type !== "blueRefinance" ||
+      !isAddressEqual(operation.limit.account ?? params.owner, params.owner)
+    ) {
+      return [];
+    }
+    return [
+      {
+        sourceMarketId: operation.limit.sourceMarketId,
+        targetMarketId: operation.limit.targetMarketId,
+        sourceReadId: planMarketParamsRead({
+          reads,
+          morpho: params.morpho,
+          marketId: operation.limit.sourceMarketId,
+        }),
+        targetReadId: planMarketParamsRead({
+          reads,
+          morpho: params.morpho,
+          marketId: operation.limit.targetMarketId,
+        }),
+      },
+    ];
+  });
   // Each check throws a SimulationValidationError on an unmeasurable bundle.
   assertNativeValueMeasured(params, operations);
   assertNoMidnightPositionOverlap(operations);
   assertNoWalletMeasurementOverlap(operations, reads);
   assertNoWalletBoundOverlap(operations, reads);
-  return { reads: [...reads.values()], operations };
+  return {
+    reads: [...reads.values()],
+    operations,
+    ...(refinanceMarketParamReads.length > 0 && { refinanceMarketParamReads }),
+  };
 }
 
 /**
@@ -1352,6 +1499,54 @@ export function decodeStateRead(read: StateRead, data: Hex): StateValue {
     });
     return { supplyShares, borrowShares, collateral };
   } catch (cause) {
+    throw new InvalidSimulationResponseError(
+      `Cannot decode slippage observation "${read.id}". Check the selected contract and RPC response.`,
+      { cause },
+    );
+  }
+}
+
+/** Decode Blue market metadata, returning undefined for an uncreated market. @internal */
+export function decodeMarketParamsRead(
+  read: Extract<StateRead, { kind: "morpho.marketParams" }>,
+  data: Hex,
+): MarketParamsState | undefined {
+  if (data === "0x") {
+    throw new SlippageCheckUnavailableError(
+      `Cannot observe slippage read "${read.id}": the selected subject returned no data (likely not a contract).`,
+      { field: read.id, reason: "emptyData" },
+    );
+  }
+  try {
+    const [loanToken, collateralToken, oracle, irm, lltv] =
+      decodeFunctionResult({
+        abi: blueAbi,
+        functionName: "idToMarketParams",
+        data,
+      });
+    const marketParams = { loanToken, collateralToken, oracle, irm, lltv };
+    if (
+      isAddressEqual(loanToken, zeroAddress) &&
+      isAddressEqual(collateralToken, zeroAddress) &&
+      isAddressEqual(oracle, zeroAddress) &&
+      isAddressEqual(irm, zeroAddress) &&
+      lltv === 0n
+    ) {
+      return undefined;
+    }
+    if (
+      MarketUtils.getMarketId(marketParams).toLowerCase() !==
+      read.marketId.toLowerCase()
+    ) {
+      throw new InvalidSimulationResponseError(
+        `Market parameters do not match market "${read.marketId}". Check the RPC endpoint.`,
+      );
+    }
+    return marketParams;
+  } catch (cause) {
+    if (cause instanceof InvalidSimulationResponseError) {
+      throw cause;
+    }
     throw new InvalidSimulationResponseError(
       `Cannot decode slippage observation "${read.id}". Check the selected contract and RPC response.`,
       { cause },

@@ -38,13 +38,17 @@ import {
   EmptyMidnightGroupCancellationsError,
   InputExceedsMaxError,
   InvalidMidnightHexInputError,
+  InvalidMidnightNativeAmountTypeError,
   MidnightMarketAddressMismatchError,
   MidnightReplacementGroupCancelledError,
   NegativeInputError,
   NonPositiveInputError,
   UnsupportedMidnightAuthorizationTargetError,
 } from "../../types/index.js";
-import { midnightCancelAndMake } from "./cancelAndMake.js";
+import {
+  midnightCancelAndMake,
+  parseMidnightCancelAndMake,
+} from "./cancelAndMake.js";
 
 const midnightBundlesV2 = getChainAddress(midnightChainId, "midnightBundlesV2");
 const wNative = getChainAddress(midnightChainId, "wNative");
@@ -1487,6 +1491,14 @@ describe("midnightCancelAndMake without publication", () => {
 });
 
 describe("midnightCancelAndMake native funding validation", () => {
+  test("rejects numeric zero instead of disabling wrapping", () => {
+    expect(() =>
+      Reflect.apply(midnightCancelAndMake, undefined, [
+        { ...params, nativeAmount: 0 },
+      ]),
+    ).toThrow(InvalidMidnightNativeAmountTypeError);
+  });
+
   test("behavior: explicit zero native funding disables wrapping", () => {
     const tx = midnightCancelAndMake({ ...params, nativeAmount: 0n });
     expect(tx.value).toBe(0n);
@@ -1517,6 +1529,30 @@ describe("midnightCancelAndMake native funding validation", () => {
 });
 
 describe("midnightCancelAndMake malformed address", () => {
+  test.each([-1n, maxUint256 + 1n])(
+    "error: unencodable collateral maturity %s retains the entrypoint label",
+    (maturity) => {
+      expect(() =>
+        midnightCancelAndMake({
+          ...params,
+          publication: {
+            ...params.publication,
+            collateral: {
+              market: new MarketParams({ ...midnightMarket, maturity }),
+              supplies: [{ collateralIndex: 0n, assets: 1n }],
+            },
+          },
+        }),
+      ).toThrow(
+        expect.objectContaining({
+          name: "MidnightCalldataEncodingError",
+          input: "midnightBundlesV2CancelAndMake",
+          cause: expect.objectContaining({ name: "IntegerOutOfRangeError" }),
+        }),
+      );
+    },
+  );
+
   test("error: a malformed publication.ratifier throws a typed encoding error", () => {
     expect(() =>
       midnightCancelAndMake({
@@ -1555,6 +1591,238 @@ describe("midnightCancelAndMake malformed address", () => {
         name: "MidnightCalldataEncodingError",
         input: "token",
         cause: expect.objectContaining({ name: "InvalidAddressError" }),
+      }),
+    );
+  });
+});
+
+describe("parsed maker bundle", () => {
+  test.each([0n, maxUint128])(
+    "retains cancellation ceiling %s",
+    (maxConsumed) => {
+      const parsed = parseMidnightCancelAndMake({
+        ...params,
+        cancellations: [{ group: groupB, maxConsumed }],
+      });
+      expect(parsed.cancellations[0]!.maxConsumed).toBe(maxConsumed);
+      expect(Object.isFrozen(parsed)).toBe(true);
+    },
+  );
+  test.each([-1n, maxUint128 + 1n])("rejects ceiling %s", (maxConsumed) => {
+    expect(() =>
+      parseMidnightCancelAndMake({
+        ...params,
+        cancellations: [{ group: groupB, maxConsumed }],
+      }),
+    ).toThrow(maxConsumed < 0n ? NegativeInputError : InputExceedsMaxError);
+  });
+  test("rejects empty cancellation intent, malformed groups, duplicates and replacement exclusions", () => {
+    expect(() =>
+      parseMidnightCancelAndMake({
+        ...params,
+        publication: undefined,
+        cancellations: [],
+      }),
+    ).toThrow(EmptyMidnightGroupCancellationsError);
+    expect(() =>
+      parseMidnightCancelAndMake({
+        ...params,
+        cancellations: [{ group: "0x01", maxConsumed: 0n }],
+      }),
+    ).toThrow(InvalidMidnightHexInputError);
+    expect(() =>
+      parseMidnightCancelAndMake({
+        ...params,
+        cancellations: [
+          { group: groupB, maxConsumed: 0n },
+          { group: groupB, maxConsumed: 1n },
+        ],
+      }),
+    ).toThrow(DuplicateMidnightGroupCancellationError);
+    expect(() =>
+      parseMidnightCancelAndMake({
+        ...params,
+        cancellations: [{ group: groupA, maxConsumed: 0n }],
+      }),
+    ).toThrow(MidnightReplacementGroupCancelledError);
+  });
+  test("bounds configured collateral sums and rejects absent indexes", () => {
+    const collateral = {
+      market,
+      supplies: [
+        { collateralIndex: 0n, assets: maxUint128 },
+        { collateralIndex: 0n, assets: 1n },
+      ],
+    };
+    expect(() =>
+      parseMidnightCancelAndMake({
+        ...params,
+        publication: { ...params.publication, collateral },
+      }),
+    ).toThrow(InputExceedsMaxError);
+    expect(() =>
+      parseMidnightCancelAndMake({
+        ...params,
+        publication: {
+          ...params.publication,
+          collateral: {
+            market,
+            supplies: [{ collateralIndex: 99n, assets: 1n }],
+          },
+        },
+      }),
+    ).toThrow(UnknownCollateralIndexError);
+  });
+  test("owns collateral snapshots and native coverage", () => {
+    const supplies = [{ collateralIndex: 0n, assets: 10n }];
+    const parsed = parseMidnightCancelAndMake({
+      ...params,
+      nativeAmount: 5n,
+      publication: {
+        ...params.publication,
+        collateral: { market: wNativeMarket, supplies },
+      },
+    });
+    supplies[0]!.assets = 20n;
+    expect(parsed.publication!.collateral!.supplies[0]!.assets).toBe(10n);
+    expect(parsed.collateralPulls).toEqual([{ token: wNative, assets: 10n }]);
+    expect(parsed.nativeFunding.value).toBe(5n);
+    expect(() =>
+      parseMidnightCancelAndMake({
+        ...params,
+        nativeAmount: 11n,
+        publication: {
+          ...params.publication,
+          collateral: {
+            market: wNativeMarket,
+            supplies: [{ collateralIndex: 0n, assets: 10n }],
+          },
+        },
+      }),
+    ).toThrow(InputExceedsMaxError);
+  });
+  test.each([0n, -1n, maxUint128 + 1n])(
+    "rejects Blue parking amount %s",
+    (assets) => {
+      const blueMarket = {
+        loanToken: wNative,
+        collateralToken: zeroAddress,
+        oracle: zeroAddress,
+        irm: zeroAddress,
+        lltv: 0n,
+      };
+      expect(() =>
+        parseMidnightCancelAndMake({
+          ...params,
+          publication: {
+            ...params.publication,
+            blueSupply: { market: blueMarket, assets, callbackSalt: zeroHash },
+          },
+        }),
+      ).toThrow(assets <= 0n ? NonPositiveInputError : InputExceedsMaxError);
+    },
+  );
+  test("complete raw publication owns Blue funding and delegated signatures", () => {
+    const blueMarket = {
+      loanToken: wNative,
+      collateralToken: zeroAddress,
+      oracle: zeroAddress,
+      irm: zeroAddress,
+      lltv: 0n,
+    };
+    const blueSupply = {
+      market: blueMarket,
+      assets: maxUint128,
+      callbackSalt: zeroHash,
+    };
+    const signature = {
+      height: 3n,
+      nonce: 7n,
+      deadline: maxUint256,
+      v: 28,
+      r: root,
+      s: groupA,
+    };
+    const parsed = parseMidnightCancelAndMake({
+      ...params,
+      publication: {
+        ...params.publication,
+        rootSignature: signature,
+        blueSupply,
+      },
+    });
+    signature.nonce = 8n;
+    expect(parsed.publication!.rootSignature!.nonce).toBe(7n);
+    expect(parsed.publication!.blueSupply!.assets).toBe(maxUint128);
+    expect(() =>
+      parseMidnightCancelAndMake({
+        ...params,
+        publication: {
+          ...params.publication,
+          blueSupply: { market: blueMarket, assets: 1n, callbackSalt: "0x01" },
+        },
+      }),
+    ).toThrow(InvalidMidnightHexInputError);
+    expect(() =>
+      parseMidnightCancelAndMake({
+        ...params,
+        publication: {
+          ...params.publication,
+          rootSignature: { ...signature, r: "0x01" },
+        },
+      }),
+    ).toThrow(InvalidMidnightHexInputError);
+    expect(() =>
+      parseMidnightCancelAndMake({
+        ...params,
+        publication: {
+          ...params.publication,
+          rootSignature: { ...signature, v: 256 },
+        },
+      }),
+    ).toThrow(
+      expect.objectContaining({ name: "MidnightCalldataEncodingError" }),
+    );
+  });
+});
+
+describe("delegated signature parsed ABI bounds", () => {
+  const signature = {
+    height: maxUint256,
+    nonce: maxUint128,
+    deadline: maxUint256,
+    v: 255,
+    r: root,
+    s: groupA,
+  };
+  test("retains maximum ABI widths", () => {
+    const parsed = parseMidnightCancelAndMake({
+      ...params,
+      publication: { ...params.publication, rootSignature: signature },
+    });
+    expect(parsed.publication!.rootSignature).toEqual(signature);
+  });
+  test.each([
+    { height: -1n },
+    { height: maxUint256 + 1n },
+    { nonce: -1n },
+    { nonce: maxUint128 + 1n },
+    { deadline: -1n },
+    { deadline: maxUint256 + 1n },
+    { v: 256 },
+  ])("rejects %s before encoding", (invalid) => {
+    expect(() =>
+      parseMidnightCancelAndMake({
+        ...params,
+        publication: {
+          ...params.publication,
+          rootSignature: { ...signature, ...invalid },
+        },
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        name: "MidnightCalldataEncodingError",
+        input: "midnightBundlesV2CancelAndMake",
       }),
     );
   });

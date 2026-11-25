@@ -1,5 +1,23 @@
 # @morpho-org/midnight-sdk
 
+## 2.8.0
+
+### Minor Changes
+
+- Ratifier tree validation now throws `InvalidTreeError` instead of `TypeError` for malformed trees with missing leaves. Quote rounding and encoded offers are unchanged.
+- Price and Rate V1 ratifiers now reject snapshots with missing or null tree entries or leaf hashes with `InvalidTreeError`. These inputs could previously throw a `TypeError` or, for a missing padding entry, pass validation.
+- Standard Ecrecover and Setter trees reject standalone offers from the same maker that repeat an explicit group ID instead of silently giving each its own cap. Pass a `Group.create` result as one tree entry to share a cap.
+- Midnight offer, group, and tree builders now reject sell offers that direct proceeds to the zero address. Set a non-zero sell receiver or omit it when creating an offer to use the maker's address. Buy offers still require the zero address in the unused maker receiver field.
+
+  Ratifier helpers that rebuild a tree from raw leaves or offers also reject zero sell receivers. Previously saved tree snapshots can still be resumed, and existing proofs can still be verified.
+
+  In `@morpho-org/morpho-sdk`, maker flows reject a sell offer with a zero receiver in a tree creation request with `MidnightOfferSellerReceiverMismatchError` if the maker matches the account. This check now runs before offer-side validation, so it can take precedence over `MidnightOfferSideMismatchError` for an invalid sell offer passed to a buy-side flow such as `makeRepay`.
+
+### Patch Changes
+
+- Compare slippage quote guards on the API's fee-excluded tick-price surface so valid positive-settlement-fee quotes are not rejected. Preserve fee-adjusted absolute guards and bid settlement-fee validation. Document how to include settlement fees when deriving bundle spend and proceeds limits from slippage quotes.
+- Reject takeable offers whose units are not non-negative uint256 decimal strings with `InvalidMidnightApiResponseError`, preventing negative units from bypassing quote price guards.
+
 ## 2.7.0
 
 ### Minor Changes

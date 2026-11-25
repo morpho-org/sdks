@@ -38,8 +38,8 @@ export interface VaultV1DepositPlanParams
 /**
  * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
  * Prepares a Vault V1 (MetaMorpho) deposit plan through VaultBundlesV1 from caller intent and a
- * vault snapshot, reading the token prerequisites directly. The built deposit matches the
- * `vaultV1(...).deposit(...)` handle's `buildTx()` for the same inputs. The quote is fixed on the deposit step at preparation, so the returned plan is static:
+ * vault snapshot, reading the token prerequisites directly. The quote is fixed on the
+ * deposit step at preparation, so the returned plan is static:
  * only signatures are added before building.
  * @param client - Viem client for `params.chainId`, used for allowance and permit metadata reads only.
  * @param params.vault - Caller-fetched AccrualVault snapshot used for the quote; its address identifies the vault.

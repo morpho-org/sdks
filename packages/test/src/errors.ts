@@ -86,6 +86,31 @@ export class AnvilCleanupError extends Error {
 }
 
 /**
+ * Error thrown when a test calls a reusable Anvil after its test has finished.
+ *
+ * @example
+ * ```ts
+ * import { AnvilLeaseClosedError } from "@morpho-org/test";
+ *
+ * const ignoreLateCall = (error: unknown) => {
+ *   if (!(error instanceof AnvilLeaseClosedError)) throw error;
+ * };
+ * ```
+ */
+export class AnvilLeaseClosedError extends Error {
+  /**
+   * Creates an Anvil lease closed error.
+   *
+   * @param message Actionable description of the rejected call.
+   * @param options Standard error options, including the original cause.
+   */
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "AnvilLeaseClosedError";
+  }
+}
+
+/**
  * Error thrown when writing Tempo's pathUSD fee-token balance does not produce the expected balance.
  *
  * @example

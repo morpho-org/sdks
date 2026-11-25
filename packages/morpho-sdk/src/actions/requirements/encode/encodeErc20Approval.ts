@@ -1,6 +1,6 @@
-import type { Address } from "@morpho-org/blue-sdk";
+import { type Address, MathLib } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import { encodeFunctionData, erc20Abi } from "viem";
+import { encodeFunctionData, erc20Abi, maxUint256 } from "viem";
 import { capTokenApproval } from "../../../helpers/tokenApproval.js";
 import { validateRequirementSpender } from "../../../helpers/validateRequirementSpender.js";
 import type { ERC20ApprovalAction, Transaction } from "../../../types/index.js";
@@ -12,6 +12,41 @@ interface EncodeErc20ApprovalParams {
   amount: bigint;
   chainId: number;
 }
+
+declare const erc20ApprovalInput: unique symbol;
+/** Complete checked approval and its token-specific cap. @internal */
+export type Erc20ApprovalInput = Readonly<EncodeErc20ApprovalParams> & {
+  readonly maxApproval: bigint;
+  readonly [erc20ApprovalInput]: true;
+};
+
+/** Checks the complete standalone approval before encoding. @internal */
+export const parseErc20Approval = (
+  params: EncodeErc20ApprovalParams,
+): Erc20ApprovalInput => {
+  const input = {
+    token: params.token,
+    spender: params.spender,
+    amount: params.amount,
+    chainId: params.chainId,
+  };
+  validateRequirementSpender({
+    chainId: input.chainId,
+    spender: input.spender,
+    allowed: [
+      "permit2",
+      "midnight",
+      "midnightBundlesV2",
+      "vaultExitBundlesV1",
+      "vaultBundlesV1",
+      "blueBundlesV1",
+    ],
+  });
+  return {
+    ...input,
+    maxApproval: capTokenApproval({ ...input, amount: maxUint256 }),
+  } as Erc20ApprovalInput;
+};
 
 /**
  * Encodes a deep-frozen ERC-20 approval transaction for a supported SDK spender.
@@ -45,22 +80,15 @@ interface EncodeErc20ApprovalParams {
 export const encodeErc20Approval = (
   params: EncodeErc20ApprovalParams,
 ): Transaction<ERC20ApprovalAction> => {
-  const { token, spender, chainId } = params;
-  // Reject approval targets outside the SDK's registered protocol spenders.
-  validateRequirementSpender({
-    chainId,
-    spender,
-    allowed: [
-      "permit2",
-      "midnight",
-      "midnightBundlesV2",
-      "vaultExitBundlesV1",
-      "vaultBundlesV1",
-      "blueBundlesV1",
-    ],
-  });
+  return encodeParsedErc20Approval(parseErc20Approval(params));
+};
 
-  const amountValue = capTokenApproval(params);
+/** Encodes the complete checked approval without repeating static checks. @internal */
+export const encodeParsedErc20Approval = (
+  params: Erc20ApprovalInput,
+): Transaction<ERC20ApprovalAction> => {
+  const { token, spender, amount, maxApproval } = params;
+  const amountValue = MathLib.min(amount, maxApproval);
 
   return deepFreeze({
     to: token,

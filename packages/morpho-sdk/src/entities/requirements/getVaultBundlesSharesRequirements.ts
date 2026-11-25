@@ -8,7 +8,10 @@ import {
   encodeErc20Approval,
   encodeVaultSharesPermit,
 } from "../../actions/index.js";
-import { validateClientChainId } from "../../actions/requirements/validateClientChainId.js";
+import {
+  type ChainCheck,
+  createChainCheck,
+} from "../../actions/requirements/chainCheck.js";
 import { validateChainId } from "../../helpers/index.js";
 import { validateDeadline } from "../../helpers/validate.js";
 import {
@@ -19,6 +22,34 @@ import {
   type Requirement,
   type Transaction,
 } from "../../types/index.js";
+
+declare const vaultBundlesSharesRequirementsInput: unique symbol;
+/** Complete checked vault-share resolver invocation. @internal */
+export type VaultBundlesSharesRequirementsInput = Readonly<
+  Parameters<typeof getVaultBundlesSharesRequirements>[1]
+> & {
+  readonly [vaultBundlesSharesRequirementsInput]: true;
+};
+
+/** Owns declared-chain and deadline checks before state is read. @internal */
+export const parseVaultBundlesSharesRequirements = (
+  viemClient: Client,
+  params: Parameters<typeof getVaultBundlesSharesRequirements>[1],
+): VaultBundlesSharesRequirementsInput => {
+  const input = {
+    vaultData: params.vaultData,
+    version: params.version,
+    owner: params.owner,
+    chainId: params.chainId,
+    requiredShareAllowance: params.requiredShareAllowance,
+    deadline: params.deadline,
+    supportSignature: params.supportSignature,
+    now: params.now,
+  };
+  validateChainId(viemClient.chain?.id, input.chainId);
+  validateDeadline(input.deadline);
+  return { ...input } as VaultBundlesSharesRequirementsInput;
+};
 
 /**
  * Resolves the vault-share approval or ERC-2612 requirement for a VaultBundlesV1 exit.
@@ -56,14 +87,27 @@ export const getVaultBundlesSharesRequirements = async (
     | Requirement<PermitRequirementSignature>
   )[]
 > => {
-  validateChainId(viemClient.chain?.id, params.chainId);
-  // Reject deadlines outside the positive uint256 range before reading state.
-  validateDeadline(params.deadline);
+  return getParsedVaultBundlesSharesRequirements(
+    { viemClient },
+    parseVaultBundlesSharesRequirements(viemClient, params),
+  );
+};
+
+/** Consumes the complete invocation without repeating static validation. @internal */
+export const getParsedVaultBundlesSharesRequirements = async (
+  {
+    viemClient,
+    chainCheck: providedChainCheck,
+  }: { readonly viemClient: Client; readonly chainCheck?: ChainCheck },
+  params: VaultBundlesSharesRequirementsInput,
+): ReturnType<typeof getVaultBundlesSharesRequirements> => {
+  const chainCheck =
+    providedChainCheck ?? createChainCheck(viemClient, params.chainId);
   const now = params.now ?? Time.timestamp();
   if (params.deadline <= now) {
     throw new ExpiredDeadlineError(params.deadline, now);
   }
-  await validateClientChainId(viemClient, params.chainId);
+  await chainCheck();
   const spender = getChainAddress(params.chainId, "bundles.vaultBundlesV1");
   // The allowance is trusted as returned by the RPC. See THREAT_MODEL.md, RPC.
   const allowance = await readContract(viemClient, {

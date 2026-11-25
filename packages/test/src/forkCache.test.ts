@@ -335,23 +335,42 @@ describe.sequential("isolateForkCache", () => {
     },
   );
 
-  test.each(["slots", "accounts"])(
-    "behavior: skips conflicting %s",
-    async (kind) => {
-      const shared = await setup();
-      const original = snapshot({ account: { "0x1": "0x11" } });
-      await write(shared, original);
-      const cache = await isolate(shared);
-      const incoming = snapshot({ account: { "0x1": "0x22" } });
-      const value =
-        kind === "slots"
-          ? incoming
-          : { ...original, accounts: { account: { balance: "0x2" } } };
-      await write(cache.rpc, value);
-      await expect(cache.close()).resolves.toBeUndefined();
-      expect(await read(shared)).toEqual(original);
-    },
-  );
+  test("behavior: keeps shared conflicting slots and merges the rest", async () => {
+    const shared = await setup();
+    await write(
+      shared,
+      snapshot({ account: { "0x1": "0x11", "0x3": "0x33" } }),
+    );
+    const cache = await isolate(shared);
+    await write(
+      cache.rpc,
+      snapshot({ account: { "0x1": "0x22", "0x2": "0x22" } }),
+    );
+    await expect(cache.close()).resolves.toBeUndefined();
+    expect((await read(shared)).storage).toEqual({
+      account: { "0x1": "0x11", "0x2": "0x22", "0x3": "0x33" },
+    });
+  });
+
+  test("behavior: keeps shared conflicting accounts and merges the rest", async () => {
+    const shared = await setup();
+    await write(shared, snapshot());
+    const cache = await isolate(shared);
+    await write(cache.rpc, {
+      ...snapshot({ account: { "0x2": "0x22" } }),
+      accounts: {
+        account: { balance: "0x2", nonce: 0 },
+        other: { balance: "0x3", nonce: 0 },
+      },
+    });
+    await expect(cache.close()).resolves.toBeUndefined();
+    const merged = await read(shared);
+    expect(merged.accounts).toEqual({
+      account: { balance: "0x1", nonce: 0 },
+      other: { balance: "0x3", nonce: 0 },
+    });
+    expect(merged.storage).toEqual({ account: { "0x2": "0x22" } });
+  });
 
   test("behavior: fails open when the shared destination is not a directory", async () => {
     const file = join(await setup(), "file");

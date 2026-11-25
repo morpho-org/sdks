@@ -44,6 +44,12 @@ export namespace MathLib {
    * @param nBits - Nibble-aligned bit length.
    * @returns Maximum unsigned integer for the bit length.
    * @throws InvalidBitLengthError when `nBits` is not positive or not divisible by four.
+   * @example
+   * ```ts
+   * import { MathLib } from "@morpho-org/morpho-ts";
+   *
+   * console.log(MathLib.maxUint(8)); // 255n
+   * ```
    */
   export function maxUint(nBits: number) {
     if (nBits <= 0 || nBits % 4 !== 0) {
@@ -59,6 +65,12 @@ export namespace MathLib {
    * @param a - The number accepted by `BigInt`.
    * @returns The absolute value.
    * @throws When `BigInt` cannot convert the input.
+   * @example
+   * ```ts
+   * import { MathLib } from "@morpho-org/morpho-ts";
+   *
+   * console.log(MathLib.abs("-42")); // 42n
+   * ```
    */
   export function abs(a: BigIntish) {
     const normalized = BigInt(a);
@@ -72,6 +84,12 @@ export namespace MathLib {
    * @param xs - The numbers accepted by `BigInt`.
    * @returns The minimum value.
    * @throws When `BigInt` cannot convert an input.
+   * @example
+   * ```ts
+   * import { MathLib } from "@morpho-org/morpho-ts";
+   *
+   * console.log(MathLib.min(7n, 2n, 5n)); // 2n
+   * ```
    */
   export function min(...xs: BigIntish[]) {
     return xs.map(BigInt).reduce((x, y) => (x <= y ? x : y));
@@ -83,6 +101,12 @@ export namespace MathLib {
    * @param xs - The numbers accepted by `BigInt`.
    * @returns The maximum value.
    * @throws When `BigInt` cannot convert an input.
+   * @example
+   * ```ts
+   * import { MathLib } from "@morpho-org/morpho-ts";
+   *
+   * console.log(MathLib.max(7n, 2n, 5n)); // 7n
+   * ```
    */
   export function max(...xs: BigIntish[]) {
     return xs.map(BigInt).reduce((x, y) => (x <= y ? y : x));
@@ -95,6 +119,12 @@ export namespace MathLib {
    * @param y - Subtrahend accepted by `BigInt`.
    * @returns The non-negative difference.
    * @throws When `BigInt` cannot convert an input.
+   * @example
+   * ```ts
+   * import { MathLib } from "@morpho-org/morpho-ts";
+   *
+   * console.log(MathLib.zeroFloorSub(3n, 5n)); // 0n
+   * ```
    */
   export function zeroFloorSub(x: BigIntish, y: BigIntish) {
     const normalizedX = BigInt(x);
@@ -111,6 +141,12 @@ export namespace MathLib {
    * @param y - The second number accepted by `BigInt`.
    * @returns The rounded-down WAD product.
    * @throws When `BigInt` cannot convert an input.
+   * @example
+   * ```ts
+   * import { MathLib } from "@morpho-org/morpho-ts";
+   *
+   * console.log(MathLib.wMulDown(3n, MathLib.WAD / 2n)); // 1n
+   * ```
    */
   export function wMulDown(x: BigIntish, y: BigIntish) {
     return MathLib.wMul(x, y, "Down");
@@ -124,6 +160,12 @@ export namespace MathLib {
    * @param y - The second number accepted by `BigInt`.
    * @returns The rounded-up WAD product.
    * @throws When `BigInt` cannot convert an input.
+   * @example
+   * ```ts
+   * import { MathLib } from "@morpho-org/morpho-ts";
+   *
+   * console.log(MathLib.wMulUp(3n, MathLib.WAD / 2n)); // 2n
+   * ```
    */
   export function wMulUp(x: BigIntish, y: BigIntish) {
     return MathLib.wMul(x, y, "Up");
@@ -138,6 +180,12 @@ export namespace MathLib {
    * @param rounding - Rounding direction.
    * @returns The rounded WAD product.
    * @throws When `BigInt` cannot convert an input.
+   * @example
+   * ```ts
+   * import { MathLib } from "@morpho-org/morpho-ts";
+   *
+   * console.log(MathLib.wMul(3n, MathLib.WAD / 2n, "Up")); // 2n
+   * ```
    */
   // biome-ignore lint/complexity/useMaxParams: Mirrors Solidity MathLib helper shape.
   export function wMul(
@@ -157,6 +205,12 @@ export namespace MathLib {
    * @returns The rounded-down WAD quotient.
    * @throws DivisionByZeroError when `y` is zero.
    * @throws When `BigInt` cannot convert an input.
+   * @example
+   * ```ts
+   * import { MathLib } from "@morpho-org/morpho-ts";
+   *
+   * console.log(MathLib.wDivDown(1n, 3n)); // 333333333333333333n
+   * ```
    */
   export function wDivDown(x: BigIntish, y: BigIntish) {
     return MathLib.wDiv(x, y, "Down");
@@ -171,6 +225,12 @@ export namespace MathLib {
    * @returns The rounded-up WAD quotient.
    * @throws DivisionByZeroError when `y` is zero.
    * @throws When `BigInt` cannot convert an input.
+   * @example
+   * ```ts
+   * import { MathLib } from "@morpho-org/morpho-ts";
+   *
+   * console.log(MathLib.wDivUp(1n, 3n)); // 333333333333333334n
+   * ```
    */
   export function wDivUp(x: BigIntish, y: BigIntish) {
     return MathLib.wDiv(x, y, "Up");
@@ -186,6 +246,12 @@ export namespace MathLib {
    * @returns The rounded WAD quotient.
    * @throws DivisionByZeroError when `y` is zero.
    * @throws When `BigInt` cannot convert an input.
+   * @example
+   * ```ts
+   * import { MathLib } from "@morpho-org/morpho-ts";
+   *
+   * console.log(MathLib.wDiv(1n, 3n, "Down")); // 333333333333333333n
+   * ```
    */
   // biome-ignore lint/complexity/useMaxParams: Mirrors Solidity MathLib helper shape.
   export function wDiv(
@@ -207,6 +273,12 @@ export namespace MathLib {
    * @returns The rounded-down quotient.
    * @throws DivisionByZeroError when `denominator` is zero.
    * @throws When `BigInt` cannot convert an input.
+   * @example
+   * ```ts
+   * import { MathLib } from "@morpho-org/morpho-ts";
+   *
+   * console.log(MathLib.mulDivDown(5n, 2n, 3n)); // 3n
+   * ```
    */
   // biome-ignore lint/complexity/useMaxParams: Mirrors Solidity MathLib helper shape.
   export function mulDivDown(
@@ -236,6 +308,12 @@ export namespace MathLib {
    * @returns The rounded-up quotient.
    * @throws DivisionByZeroError when `denominator` is zero.
    * @throws When `BigInt` cannot convert an input.
+   * @example
+   * ```ts
+   * import { MathLib } from "@morpho-org/morpho-ts";
+   *
+   * console.log(MathLib.mulDivUp(5n, 2n, 3n)); // 4n
+   * ```
    */
   // biome-ignore lint/complexity/useMaxParams: Mirrors Solidity MathLib helper shape.
   export function mulDivUp(x: BigIntish, y: BigIntish, denominator: BigIntish) {
@@ -264,6 +342,12 @@ export namespace MathLib {
    * @returns The rounded quotient.
    * @throws DivisionByZeroError when `denominator` is zero.
    * @throws When `BigInt` cannot convert an input.
+   * @example
+   * ```ts
+   * import { MathLib } from "@morpho-org/morpho-ts";
+   *
+   * console.log(MathLib.mulDiv(5n, 2n, 3n, "Up")); // 4n
+   * ```
    */
   // biome-ignore lint/complexity/useMaxParams: Mirrors Solidity MathLib helper shape.
   export function mulDiv(
@@ -279,10 +363,16 @@ export namespace MathLib {
    * Approximates a continuously compounded interest rate using Taylor expansion.
    * Requires non-negative `x` and `n` for the rounding assumptions of the fixed-point helpers.
    *
-   * @param x - The base of the exponent accepted by `BigInt`.
-   * @param n - The exponent accepted by `BigInt`.
+   * @param x - Non-negative WAD-scaled rate per time unit, accepted by `BigInt`.
+   * @param n - Non-negative elapsed time in the same unit as the rate, accepted by `BigInt`.
    * @returns The WAD-scaled compounded rate approximation.
    * @throws When `BigInt` cannot convert an input.
+   * @example
+   * ```ts
+   * import { MathLib } from "@morpho-org/morpho-ts";
+   *
+   * console.log(MathLib.wTaylorCompounded(MathLib.WAD / 10n, 2n)); // 221333333333333333n
+   * ```
    */
   export function wTaylorCompounded(x: BigIntish, n: BigIntish) {
     const firstTerm = BigInt(x) * BigInt(n);
@@ -306,6 +396,12 @@ export namespace MathLib {
    * @param x - The WAD-based quantity accepted by `BigInt`.
    * @returns The RAY-based quantity.
    * @throws When `BigInt` cannot convert the input.
+   * @example
+   * ```ts
+   * import { MathLib } from "@morpho-org/morpho-ts";
+   *
+   * console.log(MathLib.wToRay(MathLib.WAD) === MathLib.RAY); // true
+   * ```
    */
   export function wToRay(x: BigIntish) {
     return BigInt(x) * 1_000000000n;

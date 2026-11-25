@@ -3,7 +3,7 @@ import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData } from "viem";
 import { vaultExitBundlesV1Abi } from "../../abis.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
-import { validateDeadline } from "../../helpers/validate.js";
+import { parseDeadline } from "../../helpers/parse.js";
 import {
   type Metadata,
   NonPositiveInputError,
@@ -11,7 +11,7 @@ import {
   type Transaction,
   type VaultV2InKindRedeemAction,
 } from "../../types/index.js";
-import { getBundlesSharesPermit } from "../bundles/common.js";
+import { getParsedBundlesSharesPermit } from "../bundles/common.js";
 
 /** Parameters for {@link vaultV2InKindRedeem}. */
 export interface VaultV2InKindRedeemParams {
@@ -26,6 +26,19 @@ export interface VaultV2InKindRedeemParams {
   };
   readonly metadata?: Metadata;
 }
+
+declare const vaultV2InKindRedeemInput: unique symbol;
+/** Checked static in-kind fields; signatures and snapshots remain untrusted. @internal */
+export type VaultV2InKindRedeemInput = {
+  readonly vault: Readonly<VaultV2InKindRedeemParams["vault"]>;
+  readonly args: Omit<
+    VaultV2InKindRedeemParams["args"],
+    "requirementSignature" | "amount" | "deadline"
+  > & { readonly amount: bigint; readonly deadline: bigint };
+  readonly metadata?: Metadata;
+  readonly requirementSignature?: VaultV2InKindRedeemParams["args"]["requirementSignature"];
+  readonly [vaultV2InKindRedeemInput]: true;
+};
 
 /**
  * Prepares a Vault V2 in-kind redemption into idle assets and Morpho Blue supply positions.
@@ -66,26 +79,54 @@ export interface VaultV2InKindRedeemParams {
  * // tx satisfies Readonly<Transaction<VaultV2InKindRedeemAction>>
  * ```
  */
-export const vaultV2InKindRedeem = ({
-  vault,
-  args,
-  metadata,
-}: VaultV2InKindRedeemParams): Readonly<
-  Transaction<VaultV2InKindRedeemAction>
-> => {
-  if (args.amount <= 0n) {
-    throw new NonPositiveInputError("amount", args.amount);
+export const vaultV2InKindRedeem = (
+  params: VaultV2InKindRedeemParams,
+): Readonly<Transaction<VaultV2InKindRedeemAction>> =>
+  buildVaultV2InKindRedeem(parseVaultV2InKindRedeem(params));
+
+/** Constructs a complete in-kind operation, owning the ordered market tuples. @internal */
+export const parseVaultV2InKindRedeem = (
+  params: VaultV2InKindRedeemParams,
+): VaultV2InKindRedeemInput => {
+  const amount = params.args.amount;
+  if (amount <= 0n) {
+    throw new NonPositiveInputError("amount", amount);
   }
-  validateDeadline(args.deadline);
+  const deadline = parseDeadline(params.args.deadline);
+  const marketParamsList = params.args.marketParamsList.map(
+    ({ loanToken, collateralToken, oracle, irm, lltv }) =>
+      Object.freeze({ loanToken, collateralToken, oracle, irm, lltv }),
+  );
+  return {
+    vault: { chainId: params.vault.chainId, address: params.vault.address },
+    args: {
+      adapter: params.args.adapter,
+      userAddress: params.args.userAddress,
+      amount,
+      deadline,
+      marketParamsList: Object.freeze(marketParamsList),
+    },
+    metadata: params.metadata,
+    requirementSignature: params.args.requirementSignature,
+  } as VaultV2InKindRedeemInput;
+};
+
+/** Encodes parsed fields and independently binds a fresh share permit. @internal */
+export const buildVaultV2InKindRedeem = (
+  parsed: VaultV2InKindRedeemInput,
+  signatures: Pick<
+    VaultV2InKindRedeemParams["args"],
+    "requirementSignature"
+  > = parsed,
+): Readonly<Transaction<VaultV2InKindRedeemAction>> => {
+  const { vault, metadata } = parsed;
+  const args = {
+    ...parsed.args,
+    requirementSignature: signatures.requirementSignature,
+  };
   const to = getChainAddress(vault.chainId, "bundles.vaultExitBundlesV1");
-  const marketParamsList = args.marketParamsList.map((marketParams) => ({
-    loanToken: marketParams.loanToken,
-    collateralToken: marketParams.collateralToken,
-    oracle: marketParams.oracle,
-    irm: marketParams.irm,
-    lltv: marketParams.lltv,
-  }));
-  const sharesPermit = getBundlesSharesPermit({
+  const marketParamsList = args.marketParamsList;
+  const sharesPermit = getParsedBundlesSharesPermit({
     vault: vault.address,
     deadline: args.deadline,
     owner: args.userAddress,

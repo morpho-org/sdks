@@ -47,6 +47,14 @@ Borrow, collateral-withdraw, and migration legs enforce a buffer below LLTV:
 The entity throws the existing typed health and market-price errors before encoding when the
 required snapshot cannot prove the buffered position safe.
 
+Each public write passes its whole raw params object to a private `parse*Params` constructor.
+That constructor owns common validation, snapshot and health checks, allocation normalization,
+funding and bounds in the established order; repay derives its cap from the supplied snapshot.
+The private `*Prepared` implementation consumes only the completed operation object, never raw
+params or separately validated fragments. ABI bounds and zero-derived-debt funding failures are
+eager and can precede failures available only from later clock, RPC, requirement checks, or fresh
+signatures supplied to `buildTx()`. Expiry and RPC facts remain checks at their own boundaries.
+
 ## Requirements
 
 `getRequirements()` returns only prerequisites used by the selected legs:
@@ -84,8 +92,8 @@ signed-authorization structs. It stays synchronous and performs no reads.
 ## Reallocations
 
 `borrow`, `supplyCollateralBorrow`, `withdraw`, and `refinance` accept only
-`VaultV2BlueReallocation` inputs. The entity validates and normalizes them before the lazy output is
-returned. BlueBundlesV1 executes their `PublicAllocations` unconditionally; allocator penalties are
+`VaultV2BlueReallocation` inputs. The entity parses them once before the lazy output is returned and retains the parsed contract
+structs for the internal encoder; `buildTx` does not normalize them again. BlueBundlesV1 executes their `PublicAllocations` unconditionally; allocator penalties are
 accounted for in contract proceeds or destination debt. Penalties add no native value, but
 BlueBundlesV1 flash-loans the aggregate penalty from Blue, so Blue's loan-token balance must cover
 the operation transfer and any earlier market-leg withdrawals while that loan is outstanding;

@@ -1,15 +1,14 @@
 import type { Address } from "@morpho-org/blue-sdk";
 import { getPermit2TransferFromTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, getChainAddress, Time } from "@morpho-org/morpho-ts";
-import type { WalletClient } from "viem";
+import { maxUint256, type WalletClient } from "viem";
 import { signAndVerifyTypedData } from "../../../helpers/signAndVerifyTypedData.js";
-import {
-  validateDeadline,
-  validateUint256Field,
-} from "../../../helpers/validate.js";
+import { validateUint256Field } from "../../../helpers/validate.js";
 import { validateRequirementSpender } from "../../../helpers/validateRequirementSpender.js";
 import {
   ExpiredDeadlineError,
+  InputExceedsMaxError,
+  NonPositiveInputError,
   type Permit2SignatureTransferRequirementSignature,
   type ReferenceTimestampParams,
   type Requirement,
@@ -34,6 +33,58 @@ export interface EncodeErc20Permit2SignatureTransferParams
   /** Signature expiration timestamp in seconds. */
   readonly deadline: bigint;
 }
+
+declare const erc20Permit2SignatureTransferInput: unique symbol;
+/** Complete checked legacy SignatureTransfer invocation. @internal */
+export type Erc20Permit2SignatureTransferInput =
+  Readonly<EncodeErc20Permit2SignatureTransferParams> & {
+    readonly [erc20Permit2SignatureTransferInput]: true;
+  };
+
+/** Shared pure bounds check; the public boundary calls this before observing its legacy clock. */
+const validateTransferQuantities = (
+  params: EncodeErc20Permit2SignatureTransferParams,
+): void => {
+  validateUint256Field("amount", params.amount);
+  validateUint256Field("nonce", params.nonce);
+  if (params.deadline <= 0n) {
+    throw new NonPositiveInputError("deadline", params.deadline);
+  }
+  if (params.deadline > maxUint256) {
+    throw new InputExceedsMaxError({
+      field: "deadline",
+      value: params.deadline,
+      max: maxUint256,
+    });
+  }
+};
+
+/** Checks the complete legacy invocation without reading a clock. @internal */
+export const parseErc20Permit2SignatureTransfer = (
+  params: EncodeErc20Permit2SignatureTransferParams,
+): Erc20Permit2SignatureTransferInput => {
+  const input = {
+    token: params.token,
+    spender: params.spender,
+    amount: params.amount,
+    chainId: params.chainId,
+    nonce: params.nonce,
+    deadline: params.deadline,
+    now: params.now,
+  };
+  validateTransferQuantities(input);
+  // An explicit reference time preserves expiry-before-spender precedence without I/O.
+  if (input.now != null && input.deadline <= input.now) {
+    throw new ExpiredDeadlineError(input.deadline, input.now);
+  }
+  validateRequirementSpender({
+    chainId: input.chainId,
+    spender: input.spender,
+    allowed: ["vaultBundlesV1", "blueBundlesV1"],
+  });
+  getChainAddress(input.chainId, "permit2"); // Reject missing canonical deployment before constructing typed data.
+  return { ...input } as Erc20Permit2SignatureTransferInput;
+};
 
 /**
  * Builds a Permit2 SignatureTransfer requirement for a direct fixed-bundles token pull.
@@ -87,33 +138,34 @@ export interface EncodeErc20Permit2SignatureTransferParams
 export const encodeErc20Permit2SignatureTransfer = (
   params: EncodeErc20Permit2SignatureTransferParams,
 ): Requirement<Permit2SignatureTransferRequirementSignature> => {
+  const input = {
+    token: params.token,
+    spender: params.spender,
+    amount: params.amount,
+    chainId: params.chainId,
+    nonce: params.nonce,
+    deadline: params.deadline,
+    now: params.now,
+  };
+  // Keep invalid quantities ahead of the deprecated clock observation and expiry ahead of spender errors.
+  validateTransferQuantities(input);
+  const now = input.now ?? Time.timestamp();
+  return encodeParsedErc20Permit2SignatureTransfer(
+    parseErc20Permit2SignatureTransfer({ ...input, now }),
+  );
+};
+
+/** Encodes the complete checked legacy SignatureTransfer. @internal */
+export const encodeParsedErc20Permit2SignatureTransfer = (
+  params: Erc20Permit2SignatureTransferInput,
+): Requirement<Permit2SignatureTransferRequirementSignature> => {
   const { token, spender, amount, chainId, nonce, deadline } = params;
-  // Bound every uint256 field before signing: getPermit2TransferFromTypedData silently clamps an
-  // oversized allowance to maxUint256, which would desync the signed value from the requirement
-  // metadata that blueSupply verifies. Direct callers bypass the token-requirement resolver, so
-  // this public encoder must reject the same out-of-range inputs itself.
-  validateUint256Field("amount", amount);
-  validateUint256Field("nonce", nonce);
-  // Reject deadlines outside the positive uint256 range before signing.
-  validateDeadline(deadline);
-  // Reject an already-expired deadline before signing so a direct caller is never walked through a
-  // wallet EIP-712 prompt for a SignatureTransfer that Permit2 would revert with `SignatureExpired`.
-  // The sibling encodeErc20Permit and the token-requirement resolver enforce the same guard.
+
+  // Nested callers retain this dynamic freshness check after their ordered approval preparation.
   const timestamp = params.now ?? Time.timestamp();
   if (deadline <= timestamp) {
     throw new ExpiredDeadlineError(deadline, timestamp);
   }
-  validateRequirementSpender({
-    chainId,
-    spender,
-    allowed: ["vaultBundlesV1", "blueBundlesV1"],
-  });
-  // getPermit2TransferFromTypedData derives its EIP-712 domain's verifyingContract from
-  // getChainAddresses(chainId).permit2. A chain that registers BlueBundlesV1 but no canonical Permit2
-  // leaves that undefined, and viem drops the undefined field from the domain — the wallet would then
-  // sign a domain-less separator that Permit2 can never accept. The resolver gates on permit2 != null;
-  // this exported encoder is reachable directly, so it must reject the same unsupported chain itself.
-  getChainAddress(chainId, "permit2"); // throws UnknownAddressError when Permit2 is unregistered
 
   // Permit2 SignatureTransfer signs over `PermitTransferFrom` (permitted, spender, nonce,
   // deadline), which does not include the owner, so the payload is fully determined at build time.

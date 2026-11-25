@@ -8,7 +8,7 @@ import {
   encodeErc20Approval,
   encodeVaultSharesPermit,
 } from "../../actions/index.js";
-import { validateClientChainId } from "../../actions/requirements/validateClientChainId.js";
+import { createChainCheck } from "../../actions/requirements/chainCheck.js";
 import {
   type ActionRequirement,
   ExpiredDeadlineError,
@@ -51,13 +51,19 @@ export async function getVaultV2ForceWithdrawRequirements(
   if (deadline <= requirementsTimestamp) {
     throw new ExpiredDeadlineError(deadline, requirementsTimestamp);
   }
-  await validateClientChainId(client, chainId);
-  await assertRegistryTargetsHaveCode(client, chainId, [
-    {
-      role: "bundles.vaultExitBundlesV1",
-      address: getChainAddress(chainId, "bundles.vaultExitBundlesV1"),
-    },
-  ]);
+  const chainCheck = createChainCheck(client, chainId);
+  await chainCheck();
+  await assertRegistryTargetsHaveCode(
+    client,
+    chainId,
+    [
+      {
+        role: "bundles.vaultExitBundlesV1",
+        address: getChainAddress(chainId, "bundles.vaultExitBundlesV1"),
+      },
+    ],
+    chainCheck,
+  );
   // Vault gates are intentionally left to the final transaction: the receive-assets gate may
   // inspect VaultExitBundlesV1's transient `initiator`, and a send-shares gate is arbitrary
   // external code re-evaluated after each intermediate penalty burn, so neither is

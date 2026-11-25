@@ -13,7 +13,6 @@ import {
   parseEther,
   zeroAddress,
 } from "viem";
-import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { base } from "viem/chains";
 import { describe, expect } from "vitest";
 import { midnightRedeem, morphoViemExtension } from "../../../src/index.js";
@@ -85,12 +84,13 @@ const isUnauthorizedRevert = async (call: Promise<unknown>) => {
   return revert?.data === unauthorizedRevert;
 };
 
+const other = "0x9000000000000000000000000000000000000000" as Address;
+
 describe("Midnight transaction sender", () => {
   test("behavior: supplyCollateral sent by another account reverts Unauthorized", async ({
     client,
   }) => {
     const accountAddress = client.account.address;
-    const other = privateKeyToAccount(generatePrivateKey()).address;
     await client.setBalance({ address: other, value: parseEther("1") });
     for (const account of [accountAddress, other]) {
       await client.deal({ erc20: wNative, amount: collateralAssets, account });
@@ -129,7 +129,6 @@ describe("Midnight transaction sender", () => {
   test("behavior: redeem sent by another account reverts Unauthorized", async ({
     client,
   }) => {
-    const other = privateKeyToAccount(generatePrivateKey()).address;
     const tx = midnightRedeem({
       chainId: base.id,
       market: marketData.params,

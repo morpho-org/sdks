@@ -1,6 +1,7 @@
 export * from "./actions/index.js";
 export { validateClientChainId } from "./actions/requirements/validateClientChainId.js";
 export * from "./client/index.js";
+export type { SupplyCollateralWithNativeParams } from "./entities/midnight/types.js";
 export * from "./entities/requirements/index.js";
 export * from "./helpers/index.js";
 export type {

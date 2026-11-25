@@ -14,7 +14,9 @@ import { gunzipSync, gzipSync } from "node:zlib";
 import { describe, expect, test } from "vitest";
 
 import {
+  ForbiddenTarballHeaderError,
   foldEntryPath,
+  IgnoredTarballEntryError,
   listTarballEntries,
   loadBundledTar,
   main,
@@ -40,12 +42,13 @@ async function withTempDir<T>(fn: (dir: string) => T | Promise<T>): Promise<T> {
 
 interface TarballOptions {
   readonly entries: readonly string[];
+  readonly contents?: Readonly<Record<string, string>>;
   readonly format?: "pax" | "ustar";
   readonly symlinks?: Readonly<Record<string, string>>;
 }
 
 function buildTarball(dir: string, options: TarballOptions): string {
-  const { entries, format = "ustar", symlinks = {} } = options;
+  const { entries, contents = {}, format = "ustar", symlinks = {} } = options;
   for (const entry of entries) {
     const target = join(dir, entry);
     if (entry.endsWith("/")) {
@@ -53,7 +56,7 @@ function buildTarball(dir: string, options: TarballOptions): string {
       continue;
     }
     mkdirSync(dirname(target), { recursive: true });
-    writeFileSync(target, `{"entry":"${entry}"}`);
+    writeFileSync(target, contents[entry] ?? `{"entry":"${entry}"}`);
   }
   for (const [entry, target] of Object.entries(symlinks)) {
     const link = join(dir, entry);
@@ -69,6 +72,7 @@ function buildTarball(dir: string, options: TarballOptions): string {
     dir,
     `--format=${format}`,
     "--no-recursion",
+    "--hard-dereference",
     ...entries,
     ...Object.keys(symlinks),
   ]);
@@ -173,6 +177,20 @@ function corruptSecondHeaderChecksum(tgz: string): void {
   const tar = gunzipSync(readFileSync(tgz));
   tar.fill(0, 512 + 148, 512 + 156);
   writeFileSync(tgz, gzipSync(tar));
+}
+
+function changeTypeflag(
+  tgz: string,
+  { offset, path, flag }: { offset: number; path: string; flag: string },
+): void {
+  const tar = gunzipSync(readFileSync(tgz));
+  const header = tar.subarray(offset, offset + 512);
+  expect(header.toString("utf8", 0, path.length + 1)).toBe(`${path}\0`);
+  header[156] = flag.charCodeAt(0);
+  header.fill(" ", 148, 156);
+  const checksum = header.reduce((sum, byte) => sum + byte, 0);
+  header.write(`${checksum.toString(8).padStart(6, "0")}\0 `, 148);
+  writeFileSync(tgz, gzipSync(tar, { level: 0 }));
 }
 
 function tarReader() {
@@ -695,7 +713,7 @@ describe("verifyTarballEntries", () => {
   test("error: wraps lister failures with their cause", async () => {
     await expect(
       listTarballEntries("missing.tgz", {
-        list: async () => {
+        list: () => {
           throw new Error("broken");
         },
       }),
@@ -717,6 +735,72 @@ describe("verifyTarballEntries", () => {
       );
     });
   });
+
+  test("error: rejects an unknown-type member after a regular file at the exported path", async () => {
+    await withTempDir(async (dir) => {
+      const path = "package/index.js";
+      const tgz = buildTarball(dir, {
+        entries: ["package/package.json", path, path],
+        contents: { "package/package.json": '{"exports":"./index.js"}' },
+      });
+      changeTypeflag(tgz, { offset: 2048, path, flag: "Q" });
+
+      const result = listTarballEntries(tgz, tarReader());
+      await expect(result).rejects.toBeInstanceOf(IgnoredTarballEntryError);
+      await expect(result).rejects.toMatchObject({
+        message: expect.stringContaining(`"${path}"`),
+      });
+    });
+  });
+
+  test("error: rejects an extended path header too large for node-tar to apply", async () => {
+    await withTempDir(async (dir) => {
+      const path = "package/pax-header";
+      const tgz = buildTarball(dir, {
+        entries: ["package/package.json", path, "package/index.js"],
+        contents: {
+          [path]: `25 path=package/other.js\n${" ".repeat(1024 ** 2)}`,
+        },
+      });
+      changeTypeflag(tgz, { offset: 1024, path, flag: "x" });
+
+      await expect(listTarballEntries(tgz, tarReader())).rejects.toBeInstanceOf(
+        IgnoredTarballEntryError,
+      );
+    });
+  });
+
+  test.each([
+    { flag: "N", type: "OldGnuLongPath", payload: "package/other.js\0" },
+    {
+      flag: "g",
+      type: "GlobalExtendedHeader",
+      payload: "25 path=package/other.js\n",
+    },
+    { flag: "N", type: "OldGnuLongPath", payload: "" },
+    { flag: "g", type: "GlobalExtendedHeader", payload: "" },
+  ])(
+    "error: rejects a $type header with payload %j",
+    async ({ flag, type, payload }) => {
+      await withTempDir(async (dir) => {
+        const path = "package/path-header";
+        const tgz = buildTarball(dir, {
+          entries: ["package/package.json", path, "package/index.js"],
+          contents: { [path]: payload },
+        });
+        changeTypeflag(tgz, { offset: 1024, path, flag });
+
+        const result = listTarballEntries(tgz, tarReader());
+        await expect(result).rejects.toBeInstanceOf(
+          ForbiddenTarballHeaderError,
+        );
+        await expect(result).rejects.toHaveProperty(
+          "message",
+          `Tarball "${tgz}" contains forbidden "${flag}" ${type} header "${path}"${payload === "" ? "" : ' (affected path "package/other.js")'}.`,
+        );
+      });
+    },
+  );
 
   test("error: rejects a case collision resolved from a PAX archive", async () => {
     await withTempDir(async (dir) => {

@@ -1,5 +1,4 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
-import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
 import type {
   AuthorizationRequirementSignature,
@@ -7,7 +6,10 @@ import type {
   Metadata,
   Transaction,
 } from "../../types/index.js";
-import { blueRepayWithdrawCollateral } from "./repayWithdrawCollateral.js";
+import {
+  buildBlueWithdrawCollateral,
+  parseBlueWithdrawCollateral,
+} from "./withdrawCollateral.internal.js";
 
 /** Parameters for {@link blueWithdrawCollateral}. */
 export interface BlueWithdrawCollateralParams {
@@ -86,19 +88,5 @@ export interface BlueWithdrawCollateralParams {
  */
 export const blueWithdrawCollateral = (
   params: BlueWithdrawCollateralParams,
-): Readonly<Transaction<BlueWithdrawCollateralAction>> => {
-  const transaction = blueRepayWithdrawCollateral({
-    ...params,
-    args: {
-      ...params.args,
-      repayAssets: 0n,
-      repayShares: 0n,
-      maxRepayAssets: 0n,
-    },
-  });
-
-  return deepFreeze({
-    ...transaction,
-    action: { ...transaction.action, type: "blueWithdrawCollateral" },
-  });
-};
+): Readonly<Transaction<BlueWithdrawCollateralAction>> =>
+  buildBlueWithdrawCollateral(parseBlueWithdrawCollateral(params));

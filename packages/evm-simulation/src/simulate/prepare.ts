@@ -1,7 +1,6 @@
 import { blueAbi, midnightAbi } from "@morpho-org/morpho-sdk/abis";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData, erc20Abi, getAddress } from "viem";
-import type { SimulationAuthorization } from "../authorizations.js";
 import { SimulationValidationError } from "../errors.js";
 import type { SimulationTransaction } from "../types.js";
 import type { SimulationExecution } from "./backends/parse-response.js";
@@ -10,6 +9,7 @@ import {
   TRANSFER_TOPIC,
   WITHDRAWAL_TOPIC,
 } from "./parsing/transfers.js";
+import type { ParsedRequest } from "./request/parse-request.js";
 
 // biome-ignore lint/complexity/useMaxParams: lookup helpers read clearest with positional arguments
 const approvalTx = (
@@ -18,8 +18,8 @@ const approvalTx = (
   spender: Address,
   amount: bigint,
 ): Readonly<SimulationTransaction & { readonly value: bigint }> => ({
-  from: getAddress(owner),
-  to: getAddress(token),
+  from: owner,
+  to: token,
   data: encodeFunctionData({
     abi: erc20Abi,
     functionName: "approve",
@@ -56,8 +56,8 @@ export interface PlannedPreparation {
  * @internal
  */
 export function prepareAuthorizations(params: {
-  readonly authorizations: readonly SimulationAuthorization[];
-  readonly owner: Address;
+  readonly authorizations: ParsedRequest["authorizations"];
+  readonly owner: ParsedRequest["owner"];
   readonly morpho: Address;
   readonly midnight: Address;
 }): readonly PlannedPreparation[] {
@@ -101,7 +101,7 @@ export function prepareAuthorizations(params: {
         const { authorized, isAuthorized } =
           auth.type === "blueAuthorization" ? auth : auth.typedData.message;
         calls.push({
-          from: getAddress(owner),
+          from: owner,
           to: getAddress(morpho),
           data: encodeFunctionData({
             abi: blueAbi,
@@ -115,7 +115,7 @@ export function prepareAuthorizations(params: {
       case "midnightAuthorizationSignature": {
         const { authorized, isAuthorized } = auth.typedData.message;
         calls.push({
-          from: getAddress(owner),
+          from: owner,
           to: getAddress(midnight),
           data: encodeFunctionData({
             abi: midnightAbi,

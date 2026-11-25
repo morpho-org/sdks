@@ -36,6 +36,7 @@ import {
   missingInKindProceeds,
   requiredQuoteGroups,
 } from "../simulate/request/parse-request.js";
+import { deriveControlEffect } from "./effects.js";
 
 type QuoteField = ScalarQuoteField;
 
@@ -506,10 +507,9 @@ const deriveQuote = (action: TransactionAction): DerivedLimit | undefined => {
     case "blueRepayWithdrawCollateral":
       return deriveBlueRepayQuote(action, nativeAssetPaid);
     case "midnightSupplyCollateral":
-      // Midnight pulls exactly `assets` from msg.sender and credits them to
-      // `onBehalf`'s collateral at `collateralIndex`.
+    case "midnightSupplyCollateralWithNative":
       return {
-        type: action.type,
+        type: "midnightSupplyCollateral",
         requiredExpected: [],
         quote: {
           assetsPaid: action.args.assets,
@@ -629,11 +629,17 @@ const missingQuote = (
  * UI's quote through `expected` except exact `collateralSupplies`, which cannot be overridden.
  * The helper is pure and synchronous: no RPC reads, no decoding — it only reads `action.args`,
  * which morpho-sdk normalized when it encoded the call.
+ * Approval, Blue/Midnight authorization and direct Midnight cancellation derive `effects`
+ * with empty `operations`. Effects bind to the last caller transaction unless `txIdx` is
+ * supplied. ERC-20 approval requires `token` (the transaction's `to` address).
  *
  * `midnightSupplyCollateralBatch` quotes every collateral supply exactly and sums wallet
  * pull caps by token. Its encoded `onBehalf` and `options.onBehalf` must equal `owner`.
  * `midnightWithdrawCollateralBatch` quotes every collateral withdrawal and measures each
  * token's delivery to `receiver`.
+ * `midnightWithdrawCollateral` normalizes to a one-entry withdrawal batch with the same
+ * receiver and tolerance checks. Its encoded `onBehalf` must equal `owner`: batch
+ * verification measures the sender, so delegated withdrawals are rejected.
  *
  * `midnightSupplyBlueMakeLend` checks the sender's exact debit of the full parked amount and the
  * callback's Blue supply shares; `expected.sharesMinted` must quote the expected position increase.
@@ -765,13 +771,25 @@ const missingQuote = (
  * @param action - The action metadata (`tx.action`) of the transaction to limit.
  * @param options - Limit options.
  * @param options.owner - The connected account: position/share owner and default asset receiver.
- * @param options.onBehalf - Callback for `blueWithdrawBuyCallback`, collateral owner for a direct
- *   `midnightSupplyCollateral` or credit owner for `midnightRedeem`; defaults to `owner`. For every other action, including
- *   `midnightSupplyCollateralBatch` and maker bundles, a value different from `owner` throws
- *   {@link LimitAccountMismatchError}. The supply batch's encoded `args.onBehalf` must equal `owner`.
+ * @param options.token - Approval transaction's `to` address; required for `erc20Approval`,
+ *   whose action metadata omits the token. Ignored for other actions.
+ * @param options.txIdx - Optional caller transaction index copied into derived control effects;
+ *   omitted effects bind to the last caller transaction, excluding preparations. The simulation
+ *   request parser rejects out-of-range indices.
+ *   Effects-only requests require an effect for every caller transaction, excluding preparations.
+ *   Derive indexed effects for requirement transactions too, or simulate them separately.
+ *   Control effects require owner-matching `receiver` and `onBehalf` options and reject encoded
+ *   Midnight `onBehalf` different from `owner`, just like other owner-only Midnight actions.
+ *   `expected`, `slippageTolerance` and `market` are ignored for control actions: their effects
+ *   are exact and have no economic quote or tolerance.
+ * @param options.onBehalf - Defaults to `owner`. Only `blueWithdrawBuyCallback`,
+ *   `midnightRedeem`, and direct ERC-20 `midnightSupplyCollateral` accept a different account,
+ *   which must match `args.onBehalf` when encoded. Native collateral supplies must name the
+ *   sender (`owner`), and the supply batch's encoded `args.onBehalf` must equal `owner`.
+ *   A mismatch throws {@link LimitAccountMismatchError}.
  * @param options.receiver - Asset receiver; applies to `vaultV2ForceRedeem` and Midnight redeem
  *   and sell actions, including `midnightSupplyCollateralTakeBorrow`, which must match the encoded
- *   `args.receiver`; also accepts a non-owner receiver for `midnightWithdrawCollateralBatch`
+ *   `args.receiver`; also accepts a non-owner receiver for `midnightWithdrawCollateral` and `midnightWithdrawCollateralBatch`
  *   when it matches `args.receiver`, and applies to `collateralReceiver` when
  *   `midnightRepayWithdrawCollateral` or `midnightTakeRepayWithdrawCollateral` withdraws collateral.
  *   Defaults to `owner`.
@@ -787,17 +805,18 @@ const missingQuote = (
  *   operation per distinct collateral index for an eligible maker action.
  * @throws {LimitAccountMismatchError} when an encoded recipient differs from the requested
  *   `receiver` (`args.receiver`, `redeem.recipient`, or `args.collateralReceiver`), when
- *   `receiver` differs from `owner` outside `vaultV2ForceRedeem`, Midnight redeem/sell, or
- *   repay-withdraw with collateral withdrawals, or when encoded or requested `onBehalf` differs
+ *   `receiver` differs from `owner` outside `vaultV2ForceRedeem`, Midnight redeem/sell,
+ *   `midnightWithdrawCollateral`, `midnightWithdrawCollateralBatch`, or repay-withdraw with
+ *   collateral withdrawals, or when encoded or requested `onBehalf` differs
  *   from its permitted account.
  * @throws {MissingExpectedQuoteError} when a required quote side is neither derivable nor supplied.
  * @throws {AmbiguousExpectedQuoteError} when `expected` has any defined field for a maker action
  *   supplying collateral at multiple indices.
  * @throws {SimulationValidationError} when `expected.collateralSupplies` is
  *   supplied, expected collateral withdrawals are invalid, or a supplied
- *   Midnight market struct cannot be converted.
- * @throws {UnsupportedLimitActionError} when the action type has no operation limit (including
- *   `midnightCancelOffers`, a direct offer cancellation), or `midnightCancelAndMake` has no
+ *   Midnight market struct cannot be converted, or an ERC-20 approval has no `token` option.
+ * @throws {UnsupportedLimitActionError} when the action type has no operation or control effect,
+ *   or `midnightCancelAndMake` has no
  *   `blueSupply` and no collateral supplies, or combines Blue parking with collateral supplies.
  * @example
  * ```ts
@@ -1046,13 +1065,23 @@ export const toSimulationLimits = (
   options: {
     /** The connected account: position/share owner and default asset receiver. */
     readonly owner: Address;
-    /** Callback on `blueWithdrawBuyCallback`, collateral owner on `midnightSupplyCollateral`, or credit owner on `midnightRedeem`. Any other action, including `midnightSupplyCollateralBatch` and Midnight sells, throws when it differs from `owner`. The supply batch's encoded `args.onBehalf` must equal `owner`. Defaults to `owner`. */
+    /** Approval token (transaction `to`); required for `erc20Approval`, absent from SDK action metadata. */
+    readonly token?: Address;
+    /** Effect transaction index; omitted effects bind to the last caller transaction, after requirements. */
+    readonly txIdx?: number;
+    /**
+     * Defaults to `owner`. Only `blueWithdrawBuyCallback`, `midnightRedeem`, and direct ERC-20
+     * `midnightSupplyCollateral` accept a different account, which must match `args.onBehalf`
+     * when encoded. Native collateral supplies must name the sender (`owner`), and the supply
+     * batch's encoded `args.onBehalf` must equal `owner`. A mismatch throws
+     * {@link LimitAccountMismatchError}.
+     */
     readonly onBehalf?: Address;
     /**
      * Asset receiver for `vaultV2ForceRedeem`, Midnight redeem and sell actions,
      * including `midnightSupplyCollateralTakeBorrow`, where it must match the
      * encoded `args.receiver`; also accepts a non-owner receiver for
-     * `midnightWithdrawCollateralBatch` when it matches `args.receiver`; and
+     * `midnightWithdrawCollateral` and `midnightWithdrawCollateralBatch` when it matches `args.receiver`; and
      * `collateralReceiver` when
      * `midnightRepayWithdrawCollateral` or `midnightTakeRepayWithdrawCollateral`
      * withdraws collateral. Every other action pays `msg.sender`, and a non-`owner`
@@ -1067,8 +1096,40 @@ export const toSimulationLimits = (
     readonly expected?: Partial<Omit<SlippageQuote, "collateralSupplies">>;
   },
 ): SimulationLimits & { readonly operations: readonly OperationLimit[] } => {
+  const effect = deriveControlEffect(action, options);
+  if (effect !== undefined) {
+    // Validate account intent even when no operation quote is needed.
+    resolveLimitAccount(action, { options, owner: options.owner });
+    if (
+      options.receiver !== undefined &&
+      !isAddressEqual(options.receiver, options.owner)
+    ) {
+      throw new LimitAccountMismatchError({
+        field: "receiver",
+        expected: options.owner,
+        actual: options.receiver,
+      });
+    }
+    return deepFreeze({ operations: [], effects: [effect] });
+  }
+  if (action.type === "midnightWithdrawCollateral") {
+    const { market, collateralIndex, assets, onBehalf, receiver } = action.args;
+    return toSimulationLimits(
+      {
+        type: "midnightWithdrawCollateralBatch",
+        args: {
+          market,
+          onBehalf,
+          receiver,
+          collateralWithdrawals: [{ collateralIndex, assets }],
+        },
+      },
+      options,
+    );
+  }
   const { owner } = options;
   const supportsMarket =
+    action.type === "midnightSupplyCollateralWithNative" ||
     MIDNIGHT_MARKET_INPUT_OPERATION_TYPES.some(
       (acceptedType) => acceptedType === action.type,
     ) ||
@@ -1271,6 +1332,17 @@ const resolveLimitAccount = (
     action.type === "blueWithdrawBuyCallback"
       ? (options.onBehalf ?? owner)
       : owner;
+
+  if (
+    action.type === "midnightSupplyCollateralWithNative" &&
+    !isAddressEqual(action.args.accountAddress, owner)
+  ) {
+    throw new LimitAccountMismatchError({
+      field: "args.accountAddress",
+      expected: owner,
+      actual: action.args.accountAddress,
+    });
+  }
 
   if (
     "onBehalf" in action.args &&
@@ -1526,12 +1598,13 @@ const limitSubject = (
         marketId: limitAction.args.market as MarketId,
       };
     case "midnightSupplyCollateral":
+    case "midnightSupplyCollateralWithNative":
       return {
         type:
           action.type === "midnightCancelAndMake" &&
           action.args.root !== zeroHash
             ? ("midnightSupplyCollateralMakeBorrow" as const)
-            : limitAction.type,
+            : ("midnightSupplyCollateral" as const),
         marketId: limitAction.args.market,
         collateralIndex: limitAction.args.collateralIndex,
       };

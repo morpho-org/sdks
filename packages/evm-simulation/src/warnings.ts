@@ -14,6 +14,13 @@ export type SimulationWarning = {
       readonly recipients: readonly Address[];
     }
   | {
+      readonly code: "UNEXPECTED_POSITION_CHANGE";
+      readonly protocol: "Blue" | "Midnight";
+      readonly event: string;
+      readonly marketId?: Hex;
+      readonly owner: Address;
+    }
+  | {
       readonly code: "RETENTION_CHECK_SKIPPED";
       readonly reason: "unsupported-chain" | "missing-restricted-addresses";
     }

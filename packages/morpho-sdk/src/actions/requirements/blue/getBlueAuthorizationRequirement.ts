@@ -21,8 +21,47 @@ import {
   type Transaction,
   UnsupportedAuthorizationOperatorError,
 } from "../../../types/index.js";
-import { encodeBlueSignatureAuthorization } from "../encode/encodeBlueSignatureAuthorization.js";
-import { validateClientChainId } from "../validateClientChainId.js";
+import { type ChainCheck, createChainCheck } from "../chainCheck.js";
+import {
+  encodeParsedBlueSignatureAuthorization,
+  parseBlueSignatureAuthorization,
+} from "../encode/encodeBlueSignatureAuthorization.js";
+
+declare const blueAuthorizationRequirementInput: unique symbol;
+/** Complete checked authorization resolver invocation. @internal */
+export type BlueAuthorizationRequirementInput = Readonly<
+  Parameters<typeof getBlueAuthorizationRequirement>[0]
+> & {
+  readonly authorized: Address;
+  readonly morpho: Address;
+  readonly [blueAuthorizationRequirementInput]: true;
+};
+
+/** Owns operator defaults and static checks for this complete resolver call. @internal */
+export const parseBlueAuthorizationRequirement = (
+  params: Parameters<typeof getBlueAuthorizationRequirement>[0],
+): BlueAuthorizationRequirementInput => {
+  const input = {
+    viemClient: params.viemClient,
+    chainId: params.chainId,
+    userAddress: params.userAddress,
+    supportSignature: params.supportSignature,
+    authorized: params.authorized,
+    deadline: params.deadline,
+    now: params.now,
+  };
+  validateChainId(input.viemClient.chain?.id, input.chainId);
+  const { blue: morpho } = getChainAddresses(input.chainId);
+  const blueBundlesV1 = getChainAddress(input.chainId, "bundles.blueBundlesV1");
+  const authorized = input.authorized ?? blueBundlesV1;
+  if (!isAddressEqual(blueBundlesV1, authorized)) {
+    throw new UnsupportedAuthorizationOperatorError(authorized, input.chainId);
+  }
+  if (input.supportSignature && input.deadline != null) {
+    validateDeadline(input.deadline);
+  }
+  return { ...input, authorized, morpho } as BlueAuthorizationRequirementInput;
+};
 
 /**
  * Resolves whether a supported operator needs Blue authorization for the given user, and returns
@@ -93,20 +132,28 @@ export const getBlueAuthorizationRequirement = async (
   | Requirement<AuthorizationRequirementSignature>
   | null
 > => {
-  const { viemClient, chainId, userAddress, supportSignature } = params;
+  return getParsedBlueAuthorizationRequirement(
+    parseBlueAuthorizationRequirement(params),
+  );
+};
 
-  validateChainId(viemClient.chain?.id, chainId);
-
-  const { blue: morpho } = getChainAddresses(chainId);
-
-  const blueBundlesV1 = getChainAddress(chainId, "bundles.blueBundlesV1");
-  const authorized = params.authorized ?? blueBundlesV1;
-  // The SDK only ever authorizes the chain's registered BlueBundlesV1 operator;
-  // reject any other override so a misconfigured `authorized` cannot grant an arbitrary address
-  // control over the user's Morpho positions.
-  if (!isAddressEqual(blueBundlesV1, authorized)) {
-    throw new UnsupportedAuthorizationOperatorError(authorized, chainId);
-  }
+/** Reads authorization from the complete checked invocation, preserving RPC order. @internal */
+export const getParsedBlueAuthorizationRequirement = async (
+  params: BlueAuthorizationRequirementInput,
+  chainCheck: ChainCheck = createChainCheck(params.viemClient, params.chainId),
+): Promise<
+  | Readonly<Transaction<BlueAuthorizationAction>>
+  | Requirement<AuthorizationRequirementSignature>
+  | null
+> => {
+  const {
+    viemClient,
+    chainId,
+    userAddress,
+    supportSignature,
+    morpho,
+    authorized,
+  } = params;
   const pc = viemClient.extend(publicActions);
 
   if (supportSignature) {
@@ -114,13 +161,12 @@ export const getBlueAuthorizationRequirement = async (
     // one before the RPC reads so the caller never signs an authorization that cannot be encoded
     // or would revert on-chain. An omitted deadline defaults downstream to two hours from now.
     if (params.deadline != null) {
-      validateDeadline(params.deadline);
       const timestamp = params.now ?? Time.timestamp();
       if (params.deadline <= timestamp) {
         throw new ExpiredDeadlineError(params.deadline, timestamp);
       }
     }
-    await validateClientChainId(viemClient, chainId);
+    await chainCheck();
     // The signable path needs the user's Morpho nonce; fetch it alongside the
     // authorization status so both reads share a round-trip (batched into a
     // single multicall when the client enables batching) instead of
@@ -144,17 +190,21 @@ export const getBlueAuthorizationRequirement = async (
       return null;
     }
 
-    return encodeBlueSignatureAuthorization(viemClient, {
-      owner: userAddress,
-      authorized,
-      chainId,
-      nonce,
-      deadline: params.deadline,
-      now: params.now,
-    });
+    // Construct the complete child operation with the fresh nonce; its encoder rechecks expiry now.
+    return encodeParsedBlueSignatureAuthorization(
+      parseBlueSignatureAuthorization(viemClient, {
+        owner: userAddress,
+        authorized,
+        chainId,
+        nonce,
+        deadline: params.deadline,
+        now: params.now,
+        isAuthorized: true,
+      }),
+    );
   }
 
-  await validateClientChainId(viemClient, chainId);
+  await chainCheck();
   const isAuthorized = await pc.readContract({
     address: morpho,
     abi: blueAbi,

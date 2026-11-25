@@ -1,6 +1,10 @@
-import { type AccrualVaultV2, Token } from "@morpho-org/blue-sdk";
+import {
+  type AccrualVaultV2,
+  DEFAULT_SLIPPAGE_TOLERANCE,
+  Token,
+} from "@morpho-org/blue-sdk";
 import { getPermitTypedData } from "@morpho-org/blue-sdk-viem";
-import { getChainAddress } from "@morpho-org/morpho-ts";
+import { getChainAddress, Time } from "@morpho-org/morpho-ts";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import { erc20Abi, maxUint256, toHex, zeroAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -13,7 +17,8 @@ import {
   inKindVaultV2Data,
 } from "../../../test/fixtures/inKindRedeem.js";
 import { withChainTimestamp } from "../../../test/helpers/time.js";
-import { morphoViemExtension } from "../../client/index.js";
+import { vaultV1MigrateToV2 } from "../../actions/vaultV1/migrateToV2.js";
+import { computeVaultV1MigrateToV2Quote } from "../../entities/vaultV1/migrateToV2Quote.js";
 import {
   AmountAndSharesExclusiveError,
   ExpiredDeadlineError,
@@ -169,21 +174,34 @@ describe("Vault V1 migration plans", () => {
         sourceVault: sourceVault.address,
         targetVault: targetVault.address,
       });
-      const entity = handle.client
-        .extend(morphoViemExtension())
-        .morpho.vaultV1(sourceVault.address, 1)
-        .migrateToV2({
-          sourceVault,
-          targetVault,
+      const entity = vaultV1MigrateToV2({
+        vault: {
+          address: sourceVault.address,
+          chainId: 1,
+          asset: sourceVault.asset,
+        },
+        args: {
+          targetVault: targetVault.address,
+          targetAsset: targetVault.asset,
+          maxSharePriceVaultV2: computeVaultV1MigrateToV2Quote({
+            sourceVault,
+            targetVault,
+            ...amount,
+            referralFeePct: 0n,
+            slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
+            deadline: BigInt(prepared.expiresAt),
+            now: Time.timestamp(),
+          }).maxSharePriceVaultV2,
           userAddress: IN_KIND_USER,
           deadline: BigInt(prepared.expiresAt),
           ...amount,
-        });
+        },
+      });
       expect(
         buildTransactions(
           parseTransactionPlan(serializeTransactionPlan(prepared)),
         ),
-      ).toEqual([entity.buildTx()]);
+      ).toEqual([entity]);
     },
   );
 

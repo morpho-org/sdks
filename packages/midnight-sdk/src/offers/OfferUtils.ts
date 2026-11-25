@@ -34,6 +34,7 @@ import {
   Offer,
   type OfferStruct,
 } from "./Offer.js";
+import { assertNonzeroSellReceiver } from "./offerReceiverInternal.js";
 
 const takeOfferParam = getAbiItem({ abi: midnightAbi, name: "take" }).inputs[0];
 
@@ -623,9 +624,9 @@ export namespace OfferUtils {
    *
    * @param params.buy - Whether the maker buys loan assets.
    * @param params.maker - Maker address used as the default sell-side receiver.
-   * @param params.receiverIfMakerIsSeller - Optional receiver used when maker is seller.
+   * @param params.receiverIfMakerIsSeller - Sell proceeds receiver; defaults to the maker on sells and the zero address on buys.
    * @returns Receiver address to put on the offer.
-   * @throws {InvalidOfferParameterError} when a buy offer sets a non-zero maker-seller receiver.
+   * @throws {InvalidOfferParameterError} when a buy offer sets a non-zero receiver or a sell offer resolves to the zero address.
    * @example
    * ```ts
    * import { OfferUtils } from "@morpho-org/midnight-sdk";
@@ -654,6 +655,8 @@ export namespace OfferUtils {
       });
     }
 
+    // Reject sell offers that would route proceeds to the zero address.
+    assertNonzeroSellReceiver({ buy: params.buy, receiverIfMakerIsSeller });
     return receiverIfMakerIsSeller;
   }
 
@@ -673,7 +676,7 @@ export namespace OfferUtils {
    * @param params.continuousFeeCap - Optional maximum market continuous fee accepted by this offer; defaults to zero.
    * @param params.start - Optional offer start timestamp; defaults to zero.
    * @param params.expiry - Offer expiry timestamp.
-   * @param params.receiverIfMakerIsSeller - Optional receiver used when maker is seller.
+   * @param params.receiverIfMakerIsSeller - Sell proceeds receiver; defaults to the maker on sells and the zero address on buys.
    * @returns Normalized deterministic offer parameters.
    * @throws {InvalidOfferParameterError} when a deterministic offer parameter cannot satisfy protocol rules.
    * @example
@@ -744,6 +747,7 @@ export namespace OfferUtils {
    * @param params.offers - Offers to validate as one protocol consumption group.
    * @returns Normalized offers in the same order as the input entries.
    * @throws {InvalidOfferGroupError} when the group violates protocol mechanics.
+   * @throws {InvalidOfferParameterError} when a sell offer has the zero address as its receiver.
    * @example
    * ```ts
    * import { Offer, OfferUtils } from "@morpho-org/midnight-sdk";
@@ -782,14 +786,13 @@ export namespace OfferUtils {
     readonly offers: Iterable<IOffer>;
   }): readonly Offer[] {
     const offerInputs = Array.from(params.offers);
-    if (offerInputs.length === 0) {
+    const offers = offerInputs.map((offer) => Offer.from(offer));
+    const [first] = offers;
+    if (first === undefined) {
       throw new InvalidOfferGroupError(
         "Provide at least one offer in the group.",
       );
     }
-
-    const offers = offerInputs.map((offer) => Offer.from(offer));
-    const first = offers[0]!;
 
     const expectedMaker = first.maker;
     const expectedBuy = first.buy;
@@ -862,6 +865,8 @@ export namespace OfferUtils {
           "Buy offers must use the zero address as receiverIfMakerIsSeller.",
         );
       }
+      // Reject sell offers that would route proceeds to the zero address.
+      assertNonzeroSellReceiver(offer);
     }
 
     return [...offers];
@@ -1148,15 +1153,23 @@ export namespace OfferUtils {
     }
 
     const market = Market.from(offer.market);
-    if (timestamp < start || timestamp > expiry) return 0n;
-    if (continuousFeeCap < BigInt(market.continuousFee)) return 0n;
-    if (market.lossFactor >= maxUint128) return 0n;
+    if (timestamp < start || timestamp > expiry) {
+      return 0n;
+    }
+    if (continuousFeeCap < BigInt(market.continuousFee)) {
+      return 0n;
+    }
+    if (market.lossFactor >= maxUint128) {
+      return 0n;
+    }
     // A zero spacing marks an untouched market, which `take` creates with its default spacing.
     const tickSpacing =
       market.tickSpacing === 0
         ? DEFAULT_TICK_SPACING
         : BigInt(market.tickSpacing);
-    if (BigInt(offer.tick) % tickSpacing !== 0n) return 0n;
+    if (BigInt(offer.tick) % tickSpacing !== 0n) {
+      return 0n;
+    }
 
     const settlementFee = market.getSettlementFee(
       market.timeToMaturity(timestamp),
@@ -1166,16 +1179,22 @@ export namespace OfferUtils {
       offer,
       settlementFee,
     });
-    if (maxUnits > 0n) return MathLib.zeroFloorSub(maxUnits, consumed);
+    if (maxUnits > 0n) {
+      return MathLib.zeroFloorSub(maxUnits, consumed);
+    }
 
     const remainingAssets = MathLib.zeroFloorSub(maxAssets, consumed);
     if (!offer.buy) {
-      if (sellerPrice === 0n) return MathLib.MAX_UINT_256;
+      if (sellerPrice === 0n) {
+        return MathLib.MAX_UINT_256;
+      }
 
       return MathLib.mulDivDown(remainingAssets, MathLib.WAD, sellerPrice);
     }
 
-    if (buyerPrice === 0n) return MathLib.MAX_UINT_256;
+    if (buyerPrice === 0n) {
+      return MathLib.MAX_UINT_256;
+    }
 
     return ((remainingAssets + 1n) * MathLib.WAD - 1n) / buyerPrice;
   }

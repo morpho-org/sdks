@@ -168,7 +168,7 @@ export class Offer {
   /**
    * Whether the group id was supplied at construction rather than derived.
    *
-   * Ratifier-specific tree builders only substitute their scheme's
+   * V1 ratifier tree builders only substitute their scheme's
    * content-addressed singleton group when this is `false`; an explicit
    * group is always committed as-is.
    *
@@ -663,7 +663,7 @@ export class Offer {
    * @param params.expiry - Offer expiry timestamp.
    * @param params.callback - Optional callback address; defaults to the zero address.
    * @param params.callbackData - Optional callback payload; defaults to `0x`.
-   * @param params.receiverIfMakerIsSeller - Optional receiver used when maker is seller.
+   * @param params.receiverIfMakerIsSeller - Non-zero sell proceeds receiver (defaults to the maker); must be omitted or zero on buys.
    * @param params.ratifier - Ratifier contract address.
    * @param params.reduceOnly - Optional flag restricting the offer to exposure-reducing execution.
    * @returns Offer instance.

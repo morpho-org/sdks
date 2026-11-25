@@ -1,28 +1,13 @@
-import {
-  type MarketInput,
-  MarketUtils,
-  midnightAbi,
-} from "@morpho-org/midnight-sdk";
-import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
-import { type Address, isAddressEqual, zeroAddress } from "viem";
-import {
-  encodeMidnightCalldata,
-  encodeMidnightMarketId,
-} from "../../helpers/encodeMidnightCalldata.js";
-import { addTransactionMetadata } from "../../helpers/index.js";
-import { validateMidnightAddress } from "../../helpers/validateMidnightAccount.js";
-import { validateMidnightUint128Field } from "../../helpers/validateMidnightBounds.js";
-import { validateMidnightCollateralBatch } from "../../helpers/validateMidnightCollateralBatch.js";
-import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
-import {
-  EmptyMidnightCollateralSuppliesError,
-  type Metadata,
-  type MidnightCollateralTransfer,
-  type MidnightSupplyCollateralBatchAction,
-  MidnightZeroOnBehalfError,
-  NonPositiveInputError,
-  type Transaction,
+import type { MarketInput } from "@morpho-org/midnight-sdk";
+import type { Address } from "viem";
+import type {
+  Metadata,
+  MidnightCollateralTransfer,
+  MidnightSupplyCollateralBatchAction,
+  Transaction,
 } from "../../types/index.js";
+import { encodeMidnightSupplyCollateralBatch } from "./encode.js";
+import { parseMidnightSupplyCollateralBatch } from "./parseCollateralBatch.js";
 
 /** Parameters for an atomic direct Midnight collateral supply batch. */
 export interface MidnightSupplyCollateralBatchParams {
@@ -62,60 +47,7 @@ export interface MidnightSupplyCollateralBatchParams {
  */
 export const midnightSupplyCollateralBatch = (
   params: MidnightSupplyCollateralBatchParams,
-): Readonly<Transaction<MidnightSupplyCollateralBatchAction>> => {
-  // Reject malformed addresses before comparing with zero.
-  validateMidnightAddress("onBehalf", params.onBehalf);
-  if (isAddressEqual(params.onBehalf, zeroAddress)) {
-    throw new MidnightZeroOnBehalfError("onBehalf");
-  }
-  // Reject markets from another deployment before encoding.
-  validateMidnightMarket({ market: params.market, chainId: params.chainId });
-  // Direct batches require one entry per index rather than summing duplicates.
-  validateMidnightCollateralBatch(
-    params.collateralSupplies,
-    new EmptyMidnightCollateralSuppliesError(),
+): Readonly<Transaction<MidnightSupplyCollateralBatchAction>> =>
+  encodeMidnightSupplyCollateralBatch(
+    parseMidnightSupplyCollateralBatch(params),
   );
-  const calls = params.collateralSupplies.map(({ collateralIndex, assets }) => {
-    if (assets <= 0n) {
-      throw new NonPositiveInputError("assets", assets);
-    }
-    validateMidnightUint128Field("assets", assets);
-    // Reject indexes not configured on the market.
-    MarketUtils.getCollateralByIndex(params.market, collateralIndex);
-    return encodeMidnightCalldata({
-      abi: midnightAbi,
-      functionName: "supplyCollateral",
-      args: [
-        MarketUtils.toStruct(params.market),
-        collateralIndex,
-        assets,
-        params.onBehalf,
-      ],
-    });
-  });
-  let tx = {
-    to: getChainAddress(params.chainId, "midnight"),
-    value: 0n,
-    data: encodeMidnightCalldata({
-      abi: midnightAbi,
-      functionName: "multicall",
-      args: [calls],
-    }),
-  };
-  if (params.metadata) {
-    tx = addTransactionMetadata(tx, params.metadata);
-  }
-  return deepFreeze({
-    ...tx,
-    action: {
-      type: "midnightSupplyCollateralBatch",
-      args: {
-        market: encodeMidnightMarketId(params.market),
-        collateralSupplies: params.collateralSupplies.map(
-          ({ collateralIndex, assets }) => ({ collateralIndex, assets }),
-        ),
-        onBehalf: params.onBehalf,
-      },
-    },
-  });
-};

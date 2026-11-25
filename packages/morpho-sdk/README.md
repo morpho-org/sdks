@@ -59,7 +59,9 @@ BlueBundlesV1, and the remaining rows identify their destination.
 | **Blue** | `supply`, `withdraw`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`, `repayWithdrawCollateral`, `refinance` | BlueBundlesV1 |
 | **Blue** | `withdrawBuyCallback` | Morpho Blue (direct `withdraw` for a BlueBuyCallback's owner) |
 | **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `takeRepayWithdrawCollateral`, `repayWithdrawCollateral`, `takeWithdraw` | MidnightBundlesV2 (Ethereum, Base, Arbitrum, Arc, Robinhood, Tempo) |
-| | `supplyCollateral`, `withdrawCollateral`, `redeem` | Direct call |
+| | `supplyCollateral` | Midnight Core; ERC-20 only, no wrapping |
+| | `supplyCollateralWithNative` | MidnightBundlesV2 `midnightBundlesV2CancelAndMake`; wraps a positive `nativeAmount` into registered wNative, requires a `deadline`, and uses bundle approval and Midnight authorization |
+| | `withdrawCollateral`, `redeem` | Direct Midnight call |
 | | `supplyCollateralBatch`, `withdrawCollateralBatch` | Midnight multicall |
 | | `cancelOffers` | Direct call for one group (`setConsumed`), Midnight multicall for several; every Midnight chain |
 | | `makeLend`, `makeBorrow`, `makeWithdraw`, `makeRepay`, `supplyCollateralMakeBorrow`, `supplyBlueMakeLend` | MidnightBundlesV2 (Ethereum, Base, Arbitrum, Arc, Robinhood, Tempo) |
@@ -602,11 +604,13 @@ graph LR
         MN1 --> MNT[fixed-rate taker actions]
         MN1 --> MNM[maker offer submission]
         MN1 --> MNR[repayWithdrawCollateral]
-        MN1 --> MNP[collateral supply / redeem]
+        MN1 --> MNP[ERC-20 collateral supply / redeem]
+        MN1 --> MNS[native collateral supply]
         MN1 --> MNCB[collateral batches]
         MNT --> MNB2[MidnightBundlesV2]
         MNM --> MNB2
         MNR --> MNB2
+        MNS --> MNB2
         MNP --> MNC[Midnight]
         MNCB -->|multicall| MNC
     end

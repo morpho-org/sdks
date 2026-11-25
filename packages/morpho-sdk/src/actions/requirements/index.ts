@@ -1,4 +1,4 @@
 export * from "./blue/index.js";
 export * from "./encode/index.js";
-export * from "./getRequirementsApproval.js";
+export { getRequirementsApproval } from "./getRequirementsApproval.js";
 export * from "./midnight/index.js";

@@ -162,6 +162,15 @@ remaining legs settle at a price the quote never authorized. The high-level
 `@morpho-org/morpho-sdk` `client.morpho.midnight(chainId)` flows already route through the bundle
 and resolve approvals for you; the recipe below shows the same route with this package's raw ABI.
 
+Slippage quotes return **fee-excluded**, WAD-scaled prices. Deriving a bundle's asset limit
+directly from those prices is only safe on fee-free markets. For asks, add the market's current
+WAD-scaled `settlementFee` to the raw average to get the buyer price, then multiply by target
+units and round up. For bids, subtract the fee to get the seller price, then multiply by target
+units and round down. The results are loan-token base units, not WAD-scaled prices. Read the fee
+for the market's current time to maturity and refresh the quote and fee before execution; a fee
+change can invalidate the bound. These examples use no referral fee; nonzero referral fees also
+need to be included in the bundle's spend/proceeds limits.
+
 ```ts
 import { getChainAddress, MathLib } from "@morpho-org/morpho-ts";
 import { MidnightApi } from "@morpho-org/midnight-sdk/api";
@@ -186,6 +195,7 @@ export async function takeAskQuoteAtomically(params: {
   readonly taker: Address;
   readonly market: MarketParams;
   readonly marketId: Hash;
+  readonly settlementFee: bigint;
   readonly deadline: bigint;
   readonly minimumDeadline?: bigint;
 }) {
@@ -196,6 +206,7 @@ export async function takeAskQuoteAtomically(params: {
     taker: params.taker,
     units: targetUnits,
     slippage: "0.5",
+    settlementFee: params.settlementFee,
   });
 
   const deadline = quote.data.takeableOffers.reduce(
@@ -212,7 +223,8 @@ export async function takeAskQuoteAtomically(params: {
   // Keep the caller's target and the quote's aggregate guard as two independent inputs.
   // Do not substitute `quote.data.availableUnits` for the target: it is fallback capacity,
   // not what the caller asked for.
-  const maxBuyerAssets = MathLib.wMulUp(targetUnits, quote.data.averageWorstPrice);
+  const buyerPrice = BigInt(quote.data.averageWorstPrice) + params.settlementFee;
+  const maxBuyerAssets = MathLib.wMulUp(targetUnits, buyerPrice);
 
   // Two confirmed prerequisites before this call: the taker has approved `midnightBundlesV2`
   // to spend `maxBuyerAssets` of the loan token, and has authorized the bundle on Midnight via
@@ -243,9 +255,51 @@ export async function takeAskQuoteAtomically(params: {
 }
 ```
 
-Bids mirror this with `midnightBundlesV2SupplyCollateralAndSellWithUnitsTarget` and a
-`minSellerAssets` floor derived from the same `averageWorstPrice`. Prefer the `*WithAssetsTarget*`
-variants when the caller fixes the asset amount instead of the unit amount.
+Bids use `midnightBundlesV2SupplyCollateralAndSellWithUnitsTarget`. Compute its
+`minSellerAssets` floor from a bid quote as follows (with zero referral fee):
+
+```ts
+import { MathLib } from "@morpho-org/morpho-ts";
+import { MidnightApi } from "@morpho-org/midnight-sdk/api";
+import type { Address, Hash } from "viem";
+
+export async function quoteBidLimit(params: {
+  readonly marketId: Hash;
+  readonly taker: Address;
+  readonly targetUnits: bigint;
+  readonly settlementFee: bigint;
+}) {
+  const quote = await MidnightApi.fetchBookQuote({
+    marketId: params.marketId,
+    taker: params.taker,
+    side: "bids",
+    units: params.targetUnits,
+    slippage: "0.5",
+    settlementFee: params.settlementFee,
+  });
+  const sellerPrice = MathLib.zeroFloorSub(
+    quote.data.averageWorstPrice,
+    params.settlementFee,
+  );
+  const minSellerAssets = MathLib.wMulDown(params.targetUnits, sellerPrice);
+  return { quote, minSellerAssets };
+}
+```
+
+The zero floor prevents a negative unsigned limit when the raw aggregate is below the fee;
+the SDK still rejects the quote if any bid it uses to fill the target cannot cover the settlement
+fee. Bids returned in `takeableOffers` beyond the target are not checked against the fee, so do
+not fall back to them without your own fee check; the bundle's onchain limits still apply. If a
+zero proceeds floor is unacceptable, reject it and request a quote with a stricter limit.
+
+Alternatively, pass a separate fee-adjusted `averageWorstPrice` **instead of** `slippage`,
+together with the real `settlementFee`: use a fee-inclusive buyer-price ceiling for asks or a
+seller-price floor net of the fee for bids. In that mode, the returned `averageWorstPrice` is
+already fee-adjusted: apply `MathLib.wMulUp` (asks) or `MathLib.wMulDown` (bids) to it and the
+target units without adding or subtracting the fee again. Keep the user's asset limit as an
+independent execution bound; per-offer rounding or changed liquidity can still cause a revert.
+Prefer the `*WithAssetsTarget*` variants when the caller fixes the asset amount instead of the
+unit amount.
 
 If you must submit `Midnight.take` directly (for example from a contract that performs its own
 atomic price check), treat each transaction as an independent fill: await and validate its receipt

@@ -1,13 +1,12 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
-import { deepFreeze } from "@morpho-org/morpho-ts";
-import { type Address, maxUint256 } from "viem";
+import type { Address } from "viem";
 import type {
   BlueRepayAction,
   BundlesTokenRequirementSignature,
   Metadata,
   Transaction,
 } from "../../types/index.js";
-import { blueRepayWithdrawCollateral } from "./repayWithdrawCollateral.js";
+import { buildBlueRepay, parseBlueRepay } from "./repay.internal.js";
 
 /** Parameters for {@link blueRepay}. */
 export interface BlueRepayParams {
@@ -102,18 +101,5 @@ export interface BlueRepayParams {
  */
 export const blueRepay = (
   params: BlueRepayParams,
-): Readonly<Transaction<BlueRepayAction>> => {
-  const transaction = blueRepayWithdrawCollateral({
-    ...params,
-    args: {
-      ...params.args,
-      collateralAssets: 0n,
-      maxLtv: maxUint256,
-    },
-  });
-
-  return deepFreeze({
-    ...transaction,
-    action: { ...transaction.action, type: "blueRepay" },
-  });
-};
+): Readonly<Transaction<BlueRepayAction>> =>
+  buildBlueRepay(parseBlueRepay(params));

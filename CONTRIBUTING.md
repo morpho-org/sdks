@@ -88,7 +88,9 @@ bun run coverage:report
 
 ## Code Style
 
-Biome owns formatting and linting. Run `bun run lint` before pushing; the repository also runs Biome through lint-staged when hooks are installed.
+Biome handles formatting and general linting. Oxlint checks Ethereum address
+checksums; run `bun run lint:address --fix` to correct them. Run `bun run lint`
+before pushing. With hooks installed, lint-staged runs both tools on staged files.
 
 ## How This Repository Is Released
 

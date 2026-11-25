@@ -30,7 +30,7 @@ describe("main", () => {
       };
       await expect(
         main(env, async (url) => {
-          expect(url).toBe("https://registry.npmjs.org/npm/-/npm-11.21.0.tgz");
+          expect(url).toBe("https://registry.npmjs.org/npm/-/npm-11.21.2.tgz");
           return new Response("tampered", {
             status: mode === "503" ? 503 : 200,
           });

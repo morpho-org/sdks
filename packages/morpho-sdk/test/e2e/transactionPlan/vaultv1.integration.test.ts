@@ -1,3 +1,4 @@
+import { DEFAULT_SLIPPAGE_TOLERANCE } from "@morpho-org/blue-sdk";
 import { getChainAddress, Time } from "@morpho-org/morpho-ts";
 import type { AnvilTestClient } from "@morpho-org/test";
 import {
@@ -15,14 +16,17 @@ import { fetchAccrualVault } from "../../../src/fetch.js";
 import {
   applySignatures,
   buildTransactions,
+  computeVaultMaxSharePrice,
   getPendingSignatureRequests,
-  morphoViemExtension,
   parseTransactionPlan,
   prepareVaultV1Deposit,
   prepareVaultV1Withdraw,
   serializeTransactionPlan,
   type TransactionPlan,
+  vaultV1Deposit,
+  vaultV1Withdraw,
 } from "../../../src/index.js";
+import { getVaultPermit } from "../../../src/transactionPlan/permit.js";
 import {
   GauntletWethVaultV1,
   SteakhouseUSDTVaultV1,
@@ -130,7 +134,7 @@ describe("TransactionPlan Vault V1 deposit on a pinned mainnet fork", () => {
     expect(finalState.userSharesBalanceInAssets).toBe(amount - 1n);
   });
 
-  test("approval: the default approves VaultBundlesV1 for maxUint256 and matches the handle's buildTx", async ({
+  test("approval: the default approves VaultBundlesV1 for maxUint256 and encodes the deposit", async ({
     client,
   }) => {
     const amount = parseUnits("1000", 6);
@@ -159,16 +163,24 @@ describe("TransactionPlan Vault V1 deposit on a pinned mainnet fork", () => {
       account: client.account.address,
     });
 
-    const handleTx = client
-      .extend(morphoViemExtension())
-      .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id)
-      .deposit({
+    const handleTx = vaultV1Deposit({
+      vault: {
+        address: SteakhouseUsdcVaultV1.address,
+        chainId: mainnet.id,
+        asset: vaultData.asset,
+      },
+      args: {
         userAddress: client.account.address,
         amount,
-        vaultData,
+        maxSharePrice: computeVaultMaxSharePrice({
+          vaultData,
+          assets: amount,
+          deadline: BigInt(plan.expiresAt),
+          slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
+        }),
         deadline: BigInt(plan.expiresAt),
-      })
-      .buildTx();
+      },
+    });
     expect(buildTransactions(plan)[1]).toMatchObject({
       to: handleTx.to,
       data: handleTx.data,
@@ -230,7 +242,7 @@ describe("TransactionPlan Vault V1 deposit on a pinned mainnet fork", () => {
     ]);
   });
 
-  test("native: wraps ETH into the WETH vault with no prerequisite and matches the handle's buildTx", async ({
+  test("native: wraps ETH into the WETH vault with no prerequisite and encodes the deposit", async ({
     client,
   }) => {
     const amount = parseEther("1");
@@ -256,16 +268,24 @@ describe("TransactionPlan Vault V1 deposit on a pinned mainnet fork", () => {
         });
         expect(plan.steps.map(({ id }) => id)).toEqual(["vaultV1Deposit"]);
         expect(plan.signatureRequests).toEqual([]);
-        const handleTx = client
-          .extend(morphoViemExtension())
-          .morpho.vaultV1(GauntletWethVaultV1.address, mainnet.id)
-          .deposit({
+        const handleTx = vaultV1Deposit({
+          vault: {
+            address: GauntletWethVaultV1.address,
+            chainId: mainnet.id,
+            asset: vaultData.asset,
+          },
+          args: {
             userAddress: client.account.address,
             nativeAmount: amount,
-            vaultData,
+            maxSharePrice: computeVaultMaxSharePrice({
+              vaultData,
+              assets: amount,
+              deadline: BigInt(plan.expiresAt),
+              slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
+            }),
             deadline: BigInt(plan.expiresAt),
-          })
-          .buildTx();
+          },
+        });
         expect(buildTransactions(plan)[0]).toMatchObject({
           to: handleTx.to,
           data: handleTx.data,
@@ -286,7 +306,7 @@ describe("TransactionPlan Vault V1 deposit on a pinned mainnet fork", () => {
 
 describe("TransactionPlan Vault V1 on a pinned mainnet fork", () => {
   for (const mode of ["allowed", "approval", "permit"] as const) {
-    test(`withdraws with ${mode} share authorization and matches the lazy handle`, async ({
+    test(`withdraws with ${mode} share authorization and matches the action builder`, async ({
       client,
     }) => {
       const shares = parseUnits("1000", 18);
@@ -358,40 +378,26 @@ describe("TransactionPlan Vault V1 on a pinned mainnet fork", () => {
       const restored = parseTransactionPlan(serializeTransactionPlan(plan));
       const transactions = buildTransactions(restored);
       expect(transactions).toEqual(buildTransactions(plan));
-      const fresh = client.extend(
-        morphoViemExtension({ supportSignature: true }),
-      );
       const firstRequest = restored.signatureRequests[0];
       const request =
         firstRequest?.kind === "permit" ? firstRequest : undefined;
       expect(request).toBe(firstRequest);
-      const expected = fresh.morpho
-        .vaultV1(SteakhouseUsdcVaultV1.address, client.chain.id)
-        .withdraw({
-          vaultData,
+      const expected = vaultV1Withdraw({
+        vault: {
+          address: SteakhouseUsdcVaultV1.address,
+          chainId: client.chain.id,
+        },
+        args: {
           amount,
           userAddress: client.account.address,
           deadline: BigInt(expiresAt),
-        })
-        .buildTx(
-          request
-            ? [
-                {
-                  action: {
-                    type: "permit",
-                    args: request.args,
-                    typedData: request.typedData,
-                  },
-                  args: {
-                    ...request.args,
-                    owner: client.account.address,
-                    asset: SteakhouseUsdcVaultV1.address,
-                    signature: request.signature!,
-                  },
-                },
-              ]
-            : [],
-        );
+          requirementSignature: getVaultPermit(restored.signatureRequests, {
+            id: request?.id,
+            asset: SteakhouseUsdcVaultV1.address,
+            owner: client.account.address,
+          }),
+        },
+      });
       expect(transactions.at(-1)?.to).toBe(expected.to);
       expect(transactions.at(-1)?.data).toBe(expected.data);
       let burnedShares = 0n;

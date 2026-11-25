@@ -5,6 +5,7 @@ import { mainnet } from "viem/chains";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { spawnAnvil } from "../src/anvil.js";
 import { createAnvilTestClient } from "../src/client.js";
+import { createForkBootstrapBlock } from "../src/forkProxy.js";
 
 describe.sequential("spawnAnvil", () => {
   // spawnAnvil forks directly, without the anvil_nodeInfo proxy, when one is set.
@@ -168,6 +169,67 @@ describe.sequential("spawnAnvil", () => {
             header.test === "second value",
         ),
       ).toBe(true);
+    } finally {
+      server.closeAllConnections();
+      server.close();
+      await upstream.stopAndWait();
+    }
+  });
+
+  test("behavior: starts independent forks from one upstream block response", async () => {
+    const upstream = await spawnAnvil({ chainId: mainnet.id });
+    let blockReads = 0;
+    const server = createServer(async (req, res) => {
+      let body = "";
+      for await (const chunk of req) body += chunk;
+      const { method, params } = JSON.parse(body);
+      if (method === "eth_getBlockByNumber" && params?.[0] === "0x1")
+        blockReads += 1;
+      const response = await fetch(upstream.rpcUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body,
+      });
+      res
+        .writeHead(response.status, { "content-type": "application/json" })
+        .end(await response.text());
+    });
+    try {
+      const upstreamClient = createAnvilTestClient(
+        http(upstream.rpcUrl),
+        mainnet,
+      );
+      await upstreamClient.mine({ blocks: 1 });
+      await new Promise<void>((resolve) =>
+        server.listen(0, "127.0.0.1", resolve),
+      );
+      const fork = {
+        forkChainId: mainnet.id,
+        forkBlockNumber: 1n,
+        forkUrl: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+        noStorageCaching: true,
+      };
+      const bootstrapBlock = createForkBootstrapBlock(1n);
+      const address = "0x000000000000000000000000000000000000dEaD";
+      const first = await spawnAnvil(fork, { bootstrapBlock });
+      try {
+        const firstClient = createAnvilTestClient(http(first.rpcUrl), mainnet);
+        await firstClient.setBalance({ address, value: 1n });
+        const second = await spawnAnvil(fork, { bootstrapBlock });
+        try {
+          const secondClient = createAnvilTestClient(
+            http(second.rpcUrl),
+            mainnet,
+          );
+          await expect(firstClient.getBalance({ address })).resolves.toBe(1n);
+          await expect(secondClient.getBalance({ address })).resolves.toBe(0n);
+          expect(blockReads).toBe(1);
+        } finally {
+          await second.stopAndWait();
+        }
+      } finally {
+        await first.stopAndWait();
+      }
     } finally {
       server.closeAllConnections();
       server.close();

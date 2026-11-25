@@ -4,6 +4,7 @@ import {
   MarketUtils,
   midnightAbi,
   midnightBundlesV2Abi,
+  midnightEventsAbi,
   Offer,
   rateRatifierV1Abi,
   Tree,
@@ -22,7 +23,7 @@ import {
   getE2eTakeableOffers,
   postE2eSetterTree,
 } from "@morpho-org/morpho-test/midnight";
-import { getChainAddress, Time } from "@morpho-org/morpho-ts";
+import { ChainId, getChainAddress, Time } from "@morpho-org/morpho-ts";
 import type { AnvilTestClient } from "@morpho-org/test";
 import {
   type Address,
@@ -42,6 +43,7 @@ import type { MidnightActionOutput } from "../../src/entities/midnight/types.js"
 import {
   type ActionRequirement,
   type BaseAction,
+  ExpiredDeadlineError,
   getMidnightApprovalRequirements,
   getMidnightBlueBuyCallbackAddress,
   getMidnightBlueBuyCallbackData,
@@ -60,6 +62,10 @@ const scenario: E2eScenario = {
     "setterRatifier",
     "rateRatifierV1",
   ],
+};
+const liveOfferScenario: E2eScenario = {
+  name: "midnight-native-live-offer",
+  requires: ["midnight", "midnightBundlesV2", "rateRatifierV1", "wNative"],
 };
 const blueScenario: E2eScenario = {
   name: "midnight-native-blue",
@@ -387,6 +393,334 @@ const positionData = async (ctx: Ctx, accountAddress: Address) =>
     marketId: ctx.marketId,
     accountAddress,
   });
+
+describeE2e(
+  {
+    name: "midnight-native-standalone-collateral",
+    requires: ["midnight", "midnightBundlesV2", "wNative"],
+  },
+  (test, { chainId }) => {
+    for (const [funding, nativeAmount] of [
+      ["direct", 0n],
+      ["full", collateralAssets],
+      ["partial", collateralAssets / 4n],
+      ["one wei", 1n],
+    ] as const) {
+      test(`standalone collateral supply accounts for every wei (${funding})`, async ({
+        client,
+      }) => {
+        const ctx = await setUp({
+          client,
+          chainId,
+          wallets: {},
+          nativeCollateral: true,
+        });
+        const account = client.account;
+        const wNative = getChainAddress(chainId, "wNative");
+        const bundles = getChainAddress(chainId, "midnightBundlesV2");
+        await client.setBalance({
+          address: account.address,
+          value: 3n * collateralAssets,
+        });
+        const { timestamp: now } = await client.getBlock();
+        if (nativeAmount < collateralAssets) {
+          await wrapE2eNative(client, {
+            wNative,
+            account: account.address,
+            amount: collateralAssets - nativeAmount,
+          });
+        }
+        const params = {
+          accountAddress: account.address,
+          marketData: ctx.marketData,
+          collateralAssets,
+          now,
+        };
+        const output =
+          funding === "direct"
+            ? ctx.midnight.supplyCollateral(params)
+            : ctx.midnight.supplyCollateralWithNative({
+                ...params,
+                nativeAmount,
+                deadline: now + 600n,
+              });
+        const spender = funding === "direct" ? ctx.market.midnight : bundles;
+        const requirements = await output.getRequirements();
+        if (funding === "direct") {
+          expect(requirements.map(({ action }) => action)).toEqual([
+            { type: "erc20Approval", args: { spender, amount: maxUint256 } },
+          ]);
+          expect(output.buildTx()).toMatchObject({ to: spender, value: 0n });
+        }
+        await sendRequirements(client, {
+          account: account.address,
+          requirements,
+        });
+        const balances = async () => ({
+          eth: await client.getBalance({ address: account.address }),
+          weth: await tokenBalance({
+            client,
+            token: wNative,
+            account: account.address,
+          }),
+          bundleEth: await client.getBalance({ address: bundles }),
+          bundleWeth: await tokenBalance({
+            client,
+            token: wNative,
+            account: bundles,
+          }),
+          coreWeth: await tokenBalance({
+            client,
+            token: wNative,
+            account: ctx.market.midnight,
+          }),
+        });
+        // Anvil charges Base's L1 and operator fees but omits them from the receipt.
+        const rollupFees = async () =>
+          chainId === ChainId.BaseMainnet
+            ? (await client.getBalance({
+                address: "0x420000000000000000000000000000000000001A",
+              })) +
+              (await client.getBalance({
+                address: "0x420000000000000000000000000000000000001b",
+              }))
+            : 0n;
+        const before = await balances();
+        const feesBefore = await rollupFees();
+        const beforePosition = await position(ctx, account.address);
+        const receipt = await send(client, {
+          ...output.buildTx(),
+          account,
+          gas: takeGas,
+        });
+        expect(await balances()).toEqual({
+          eth:
+            before.eth -
+            nativeAmount -
+            receipt.gasUsed * receipt.effectiveGasPrice -
+            ((await rollupFees()) - feesBefore),
+          weth: before.weth - (collateralAssets - nativeAmount),
+          bundleEth: before.bundleEth,
+          bundleWeth: before.bundleWeth,
+          coreWeth: before.coreWeth + collateralAssets,
+        });
+        expect(await position(ctx, account.address)).toEqual({
+          ...beforePosition,
+          collateral: beforePosition.collateral + collateralAssets,
+        });
+        expect(
+          parseEventLogs({
+            abi: midnightEventsAbi,
+            logs: receipt.logs.filter(({ address }) =>
+              isAddressEqual(address, ctx.market.midnight),
+            ),
+          }).map(({ eventName }) => eventName),
+        ).toEqual(["MarketCreated", "SupplyCollateral"]);
+
+        if (nativeAmount < collateralAssets) {
+          await wrapE2eNative(client, {
+            wNative,
+            account: account.address,
+            amount: collateralAssets - nativeAmount,
+          });
+        }
+        await client.writeContract({
+          account,
+          address: wNative,
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [spender, 0n],
+        });
+        const beforeRevert = await balances();
+        const feesBeforeRevert = await rollupFees();
+        expect(beforeRevert.weth + nativeAmount).toBeGreaterThanOrEqual(
+          collateralAssets,
+        );
+        const beforeRevertPosition = await position(ctx, account.address);
+        const failedHash = await client.sendTransaction({
+          ...output.buildTx(),
+          account,
+          gas: takeGas,
+        });
+        const failed = await client.waitForTransactionReceipt({
+          hash: failedHash,
+        });
+        expect(failed.status).toBe("reverted");
+        expect(failed.logs).toEqual([]);
+        expect(await balances()).toEqual({
+          ...beforeRevert,
+          eth:
+            beforeRevert.eth -
+            failed.gasUsed * failed.effectiveGasPrice -
+            ((await rollupFees()) - feesBeforeRevert),
+        });
+        expect(await position(ctx, account.address)).toEqual(
+          beforeRevertPosition,
+        );
+      });
+    }
+
+    test("standalone native collateral supply refuses requirements after expiry", async ({
+      client,
+    }) => {
+      const ctx = await setUp({
+        client,
+        chainId,
+        wallets: {},
+        nativeCollateral: true,
+      });
+      const accountAddress = client.account.address;
+      const { timestamp: now } = await client.getBlock();
+      const supplyDeadline = now + 60n;
+      const output = ctx.midnight.supplyCollateralWithNative({
+        accountAddress,
+        marketData: ctx.marketData,
+        collateralAssets,
+        nativeAmount: collateralAssets,
+        now,
+        deadline: supplyDeadline,
+      });
+
+      expect(await output.getRequirements()).toHaveLength(2);
+      await client.setNextBlockTimestamp({ timestamp: supplyDeadline + 1n });
+      await client.mine({ blocks: 1 });
+      await expect(output.getRequirements()).rejects.toBeInstanceOf(
+        ExpiredDeadlineError,
+      );
+    });
+  },
+);
+
+describeE2e(liveOfferScenario, (test, { chainId }) => {
+  test("standalone native collateral supply preserves a published, fillable borrow offer", async ({
+    client,
+  }) => {
+    const { timestamp: now } = await client.getBlock();
+    const day = 86_400n;
+    const ctx = await setUp({
+      client,
+      chainId,
+      maturity: ((now + 365n * day) / day + 1n) * day + 15n * 3_600n,
+      nativeCollateral: true,
+      wallets: { A: {}, B: {} },
+    });
+    const wNative = getChainAddress(chainId, "wNative");
+    const bundles = getChainAddress(chainId, "midnightBundlesV2");
+    const ratifier = getChainAddress(chainId, "rateRatifierV1");
+    const group = `0x${"b".repeat(64)}` as Hex;
+    const tree = Tree.create({
+      type: "rateV1",
+      entries: [
+        {
+          offer: Offer.create({
+            market: ctx.market,
+            buy: false,
+            maker: B,
+            expiry: ctx.market.maturity,
+            tick: 5_000n,
+            group,
+            ratifier,
+            receiverIfMakerIsSeller: B,
+            maxUnits: units,
+          }),
+          rate: parseEther("1"),
+        },
+      ],
+    });
+    await client.setBalance({ address: B, value: 3n * collateralAssets });
+    await wrapE2eNative(client, {
+      wNative,
+      account: B,
+      amount: collateralAssets,
+    });
+    await wrapE2eNative(client, { wNative, account: A, amount: 2n * units });
+    await execute(ctx, {
+      account: B,
+      output: await ctx.midnight.supplyCollateralMakeBorrow({
+        accountAddress: B,
+        offers: tree,
+        collateral: {
+          market: ctx.market,
+          supplies: [{ collateralIndex: 0n, assets: collateralAssets }],
+        },
+        now,
+        deadline: now + 600n,
+        validation: false,
+      }),
+    });
+
+    const marketData = await ctx.midnight.getMarketData(ctx.marketId);
+    const take = ctx.midnight.takeLend({
+      marketData,
+      accountAddress: A,
+      target: { type: "units", units, maxBuyerAssets: 2n * units },
+      takeableOffers: getE2eTakeableOffers({ tree, units }),
+      maxContinuousFee: maxUint256,
+      now,
+      deadline: now + 600n,
+    });
+    await sendRequirements(client, {
+      account: A,
+      requirements: await take.getRequirements(),
+    });
+    const takeTx = { ...take.buildTx(), account: A, gas: takeGas };
+    await client.call(takeTx);
+
+    const readAuthorization = (operator: Address) =>
+      client.readContract({
+        address: ctx.market.midnight,
+        abi: midnightAbi,
+        functionName: "isAuthorized",
+        args: [B, operator],
+      });
+    const readConsumed = () =>
+      client.readContract({
+        address: ctx.market.midnight,
+        abi: midnightAbi,
+        functionName: "consumed",
+        args: [B, group],
+      });
+    const publicationState = async () => ({
+      rootRatified: await client.readContract({
+        address: ratifier,
+        abi: rateRatifierV1Abi,
+        functionName: "isRootRatified",
+        args: [B, tree.root],
+      }),
+      consumed: await readConsumed(),
+      ratifierAuthorized: await readAuthorization(ratifier),
+      bundleAuthorized: await readAuthorization(bundles),
+    });
+    const before = await publicationState();
+    expect(before).toEqual({
+      rootRatified: true,
+      consumed: 0n,
+      ratifierAuthorized: true,
+      bundleAuthorized: true,
+    });
+
+    const supply = ctx.midnight.supplyCollateralWithNative({
+      accountAddress: B,
+      marketData,
+      collateralAssets: units,
+      nativeAmount: units,
+      now,
+      deadline: now + 600n,
+    });
+    expect(await supply.getRequirements()).toEqual([]);
+    await execute(ctx, { account: B, output: supply });
+    expect(await publicationState()).toEqual(before);
+    await expect(position(ctx, B)).resolves.toMatchObject({
+      collateral: collateralAssets + units,
+      debt: 0n,
+    });
+
+    await send(client, takeTx);
+    await expect(readConsumed()).resolves.toBe(units);
+    await expect(position(ctx, B)).resolves.toMatchObject({ debt: units });
+    await expect(position(ctx, A)).resolves.toMatchObject({ credit: units });
+  });
+});
 
 describeE2e(scenario, (test, { chainId }) => {
   for (const funding of ["full", "partial"] as const) {

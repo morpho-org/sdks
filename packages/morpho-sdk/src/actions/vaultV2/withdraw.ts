@@ -1,7 +1,7 @@
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData } from "viem";
 import { vaultBundlesV1Abi } from "../../abis.js";
-import { validateUint256Field } from "../../helpers/validate.js";
+import { parseUint256 } from "../../helpers/parse.js";
 import {
   type Erc2612RequirementSignature,
   type Metadata,
@@ -12,8 +12,8 @@ import {
 import {
   finalizeVaultBundlesV1Transaction,
   getBundlesReferralFeeAssets,
-  getBundlesSharesPermit,
-  normalizeBundlesCommonParams,
+  getParsedBundlesSharesPermit,
+  normalizeBundlesCommonParams as parseBundlesCommon,
 } from "../bundles/common.js";
 
 /** Parameters for {@link vaultV2Withdraw}. */
@@ -31,6 +31,23 @@ export interface VaultV2WithdrawParams {
   };
   readonly metadata?: Metadata;
 }
+
+declare const parsedVaultV2Withdraw: unique symbol;
+/** Validated withdraw inputs, independent of signatures. @internal */
+export type VaultV2WithdrawInput = {
+  readonly vault: Readonly<VaultV2WithdrawParams["vault"]>;
+  readonly args: Omit<
+    VaultV2WithdrawParams["args"],
+    "requirementSignature" | "amount" | "deadline"
+  > & {
+    readonly amount: bigint;
+    readonly deadline: ReturnType<typeof parseBundlesCommon>["deadline"];
+  };
+  readonly common: ReturnType<typeof parseBundlesCommon>;
+  readonly metadata?: Metadata;
+  readonly requirementSignature?: VaultV2WithdrawParams["args"]["requirementSignature"];
+  readonly [parsedVaultV2Withdraw]: true;
+};
 
 /**
  * Encodes an exact-assets Vault V2 withdrawal through VaultBundlesV1.
@@ -86,18 +103,49 @@ export interface VaultV2WithdrawParams {
  */
 export const vaultV2Withdraw = (
   params: VaultV2WithdrawParams,
-): Readonly<Transaction<VaultV2WithdrawAction>> => {
+): Readonly<Transaction<VaultV2WithdrawAction>> =>
+  buildVaultV2Withdraw(parseVaultV2Withdraw(params));
+
+/** Parses the amount and common fields in standalone order. @internal */
+export const parseVaultV2Withdraw = (
+  params: VaultV2WithdrawParams,
+): VaultV2WithdrawInput => {
   if (params.args.amount <= 0n) {
     throw new NonPositiveInputError("amount", params.args.amount);
   }
-  // Validate the ABI bound before encoding to preserve the SDK's typed errors.
-  validateUint256Field("amount", params.args.amount);
-  const common = normalizeBundlesCommonParams(params.args);
+  const amount = parseUint256("amount", params.args.amount);
+  const common = parseBundlesCommon(params.args);
+
+  return {
+    vault: { chainId: params.vault.chainId, address: params.vault.address },
+    args: { amount, userAddress: params.args.userAddress, ...common },
+    common,
+    metadata: params.metadata,
+    requirementSignature: params.args.requirementSignature,
+  } as VaultV2WithdrawInput;
+};
+
+/** Encodes parsed inputs and validates a fresh share signature. @internal */
+export const buildVaultV2Withdraw = (
+  parsed: VaultV2WithdrawInput,
+  signatures: Pick<
+    VaultV2WithdrawParams["args"],
+    "requirementSignature"
+  > = parsed,
+): Readonly<Transaction<VaultV2WithdrawAction>> => {
+  const { common } = parsed;
+  const params = {
+    ...parsed,
+    args: {
+      ...parsed.args,
+      requirementSignature: signatures.requirementSignature,
+    },
+  };
   const spender = getChainAddress(
     params.vault.chainId,
     "bundles.vaultBundlesV1",
   );
-  const sharesPermit = getBundlesSharesPermit({
+  const sharesPermit = getParsedBundlesSharesPermit({
     vault: params.vault.address,
     deadline: common.deadline,
     owner: params.args.userAddress,

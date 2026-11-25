@@ -8,13 +8,17 @@ import { type Address, getAddress, maxUint256, zeroAddress } from "viem";
 import { expectTypeOf } from "vitest";
 import type { SimulationAuthorization } from "../../authorizations.js";
 import { SimulationValidationError } from "../../errors.js";
-import type { MidnightMarketStruct } from "../../limits.js";
+import type {
+  MidnightCollateralAmount,
+  MidnightMarketStruct,
+} from "../../limits.js";
 import type { SimulateParams } from "../../params.js";
 import type { SimulationVerification } from "../../result.js";
 import type { SimulationTransaction } from "../../types.js";
 import {
   conditionalQuoteViolations,
   missingInKindProceeds,
+  type ParsedOperationLimit,
   type ParsedRequest,
   type ParsedTransaction,
   parseRequest,
@@ -2651,9 +2655,50 @@ describe("parseRequest", () => {
 
   test("type-level: ParsedRequest fields are readonly", () => {
     expectTypeOf<ParsedRequest["transactions"]>().toEqualTypeOf<
-      readonly ParsedTransaction[]
+      readonly [ParsedTransaction, ...ParsedTransaction[]]
     >();
     expectTypeOf<ParsedRequest["chainId"]>().toEqualTypeOf<number>();
+    expectTypeOf<ParsedRequest["owner"]>().toEqualTypeOf<Address>();
+    expectTypeOf<{
+      chainId: number;
+      owner: Address;
+      mode: "final";
+      transactions: readonly [ParsedTransaction];
+      authorizations: readonly [];
+      limits: "none";
+    }>().not.toExtend<ParsedRequest>();
+    type Quote = Extract<
+      ParsedOperationLimit,
+      { type: "midnightSupplyCollateralTakeBorrow" }
+    >["quote"];
+    expectTypeOf<Quote["assetsReceived"]>().toEqualTypeOf<bigint>();
+    expectTypeOf<
+      Quote["collateralSupplies"][0]
+    >().toEqualTypeOf<MidnightCollateralAmount>();
+    type BatchQuote = Extract<
+      ParsedOperationLimit,
+      { type: "midnightSupplyCollateralBatch" }
+    >["quote"];
+    expectTypeOf<
+      BatchQuote["collateralSupplies"][0]
+    >().toEqualTypeOf<MidnightCollateralAmount>();
+    expectTypeOf<[]>().not.toExtend<BatchQuote["collateralSupplies"]>();
+    expectTypeOf<{}>().not.toExtend<BatchQuote>();
+  });
+
+  test("behavior: parsed owner is the normalized common sender", () => {
+    const request = parse({
+      chainId: 1,
+      transactions: [
+        tx({ from: TOKEN.toLowerCase() as Address }),
+        tx({ from: TOKEN }),
+      ],
+      limits: "none",
+    });
+    expect(request.owner).toBe(TOKEN);
+    expect(request.transactions[0].from).toBe(request.owner);
+    expect(request.transactions[1]?.from).toBe(request.owner);
+    expect(request.transactions[0].value).toBe(0n);
   });
 
   const permitAuth: SimulationAuthorization = {
@@ -3843,6 +3888,25 @@ describe("parseRequest — Midnight sells", () => {
       assetsReceived: 5n,
     },
   };
+
+  test("behavior: parsed combined collateral quote retains required sides", () => {
+    const request = parse({
+      chainId: 8453,
+      transactions: [tx()],
+      limits: { operations: [supplyBorrow] },
+    });
+    expect(request.limits).not.toBe("none");
+    if (request.limits === "none") return;
+    const operation = request.limits.operations[0];
+    expect(operation?.type).toBe("midnightSupplyCollateralTakeBorrow");
+    if (operation?.type !== "midnightSupplyCollateralTakeBorrow") return;
+    expect(operation.quote.collateralSupplies[0]).toEqual({
+      collateralIndex: 0n,
+      assets: 5n,
+    });
+    expect(operation.quote.assetsReceived).toBe(5n);
+    expect(Object.isFrozen(operation.quote.collateralSupplies)).toBe(true);
+  });
 
   test.each([borrow, withdraw, supplyBorrow])(
     "behavior: accepts required quotes for %s",

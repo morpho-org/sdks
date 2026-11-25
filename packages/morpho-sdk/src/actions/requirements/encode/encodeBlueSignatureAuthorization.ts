@@ -33,6 +33,48 @@ interface EncodeBlueSignatureAuthorizationParams
   deadline?: bigint;
 }
 
+declare const blueSignatureAuthorizationInput: unique symbol;
+/** Complete checked authorization signature invocation. @internal */
+export type BlueSignatureAuthorizationInput =
+  Readonly<EncodeBlueSignatureAuthorizationParams> & {
+    readonly isAuthorized: boolean;
+    readonly [blueSignatureAuthorizationInput]: true;
+  };
+
+/** Checks the standalone invocation without defaulting the required operator. @internal */
+export const parseBlueSignatureAuthorization = (
+  viemClient: Client,
+  params: EncodeBlueSignatureAuthorizationParams,
+): BlueSignatureAuthorizationInput => {
+  const input = {
+    owner: params.owner,
+    authorized: params.authorized,
+    chainId: params.chainId,
+    nonce: params.nonce,
+    isAuthorized: params.isAuthorized,
+    deadline: params.deadline,
+    now: params.now,
+  };
+  if (viemClient.chain?.id !== input.chainId) {
+    throw new ChainIdMismatchError(viemClient.chain?.id, input.chainId);
+  }
+  const blueBundlesV1 = getChainAddress(input.chainId, "bundles.blueBundlesV1");
+  if (!isAddressEqual(blueBundlesV1, input.authorized)) {
+    throw new UnsupportedAuthorizationOperatorError(
+      input.authorized,
+      input.chainId,
+    );
+  }
+  if (input.deadline != null) {
+    validateDeadline(input.deadline);
+  }
+  const { isAuthorized = true } = input;
+  return {
+    ...input,
+    isAuthorized,
+  } as BlueSignatureAuthorizationInput;
+};
+
 /**
  * Builds a Morpho authorization `Requirement` that, once signed, lets BlueBundlesV1 operate on
  * Morpho on the signer's behalf.
@@ -91,37 +133,21 @@ export const encodeBlueSignatureAuthorization = async (
   viemClient: Client,
   params: EncodeBlueSignatureAuthorizationParams,
 ): Promise<Requirement<AuthorizationRequirementSignature>> => {
-  const { owner, authorized, chainId, nonce, isAuthorized = true } = params;
+  return encodeParsedBlueSignatureAuthorization(
+    parseBlueSignatureAuthorization(viemClient, params),
+  );
+};
 
-  if (viemClient.chain?.id !== chainId) {
-    throw new ChainIdMismatchError(viemClient.chain?.id, chainId);
+/** Completes dynamic deadline defaults and builds the checked authorization. @internal */
+export const encodeParsedBlueSignatureAuthorization = async (
+  params: BlueSignatureAuthorizationInput,
+): Promise<Requirement<AuthorizationRequirementSignature>> => {
+  const { owner, authorized, chainId, nonce, isAuthorized } = params;
+  const timestamp = params.now ?? Time.timestamp();
+  if (params.deadline != null && params.deadline <= timestamp) {
+    throw new ExpiredDeadlineError(params.deadline, timestamp);
   }
-
-  // Pin the authorized operator to the chain's registered BlueBundlesV1 so a direct caller
-  // cannot sign an authorization granting an arbitrary address control over the signer's Morpho
-  // positions. Mirrors the `getBlueAuthorizationRequirement` resolver guard and applies to grant
-  // and revoke payloads alike: the registry is pinned per release, so revoking a rotated-out
-  // operator is outside this helper's scope.
-  const blueBundlesV1 = getChainAddress(chainId, "bundles.blueBundlesV1");
-  if (!isAddressEqual(blueBundlesV1, authorized)) {
-    throw new UnsupportedAuthorizationOperatorError(authorized, chainId);
-  }
-
-  // Reject an invalid or already-expired caller-supplied deadline before signing, so a direct caller
-  // is never walked through a wallet EIP-712 prompt for an authorization Morpho would reject with
-  // `SIGNATURE_EXPIRED`. Mirrors the sibling `encodeErc20Permit2SignatureTransfer` and the
-  // `getBlueAuthorizationRequirement` resolver guards. An omitted deadline defaults to two hours
-  // from now and is always valid.
-  if (params.deadline != null) {
-    validateDeadline(params.deadline);
-    const timestamp = params.now ?? Time.timestamp();
-    if (params.deadline <= timestamp) {
-      throw new ExpiredDeadlineError(params.deadline, timestamp);
-    }
-  }
-
-  const deadline =
-    params.deadline ?? (params.now ?? Time.timestamp()) + Time.s.from.h(2n);
+  const deadline = params.deadline ?? timestamp + Time.s.from.h(2n);
 
   const typedData = deepFreeze(
     getAuthorizationTypedData(

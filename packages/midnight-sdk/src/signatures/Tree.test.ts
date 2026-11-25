@@ -4,6 +4,7 @@ import { describe, expect, expectTypeOf, test, vi } from "vitest";
 import { createFixtures } from "../__test__/fixtures.js";
 import {
   InvalidOfferGroupError,
+  InvalidOfferParameterError,
   InvalidRateRatifierV1TickError,
   InvalidTreeError,
   InvalidTreeHeightError,
@@ -66,6 +67,26 @@ const trees = () =>
   ] as const;
 
 describe("Tree.create", () => {
+  test.each(["ecrecover", "setter", "priceV1", "rateV1"] as const)(
+    "error: InvalidOfferParameterError for a zero sell receiver on %s",
+    (type) => {
+      const offer = {
+        ...offers[0]!,
+        buy: false,
+        group: undefined,
+        receiverIfMakerIsSeller: zeroAddress,
+      };
+      const request: TreeCreateRequest =
+        type === "priceV1"
+          ? { type, entries: [{ offer, allowedTaker: zeroAddress }] }
+          : type === "rateV1"
+            ? { type, entries: [{ offer, rate: 100n }] }
+            : { type, entries: [offer] };
+
+      expect(() => Tree.create(request)).toThrow(InvalidOfferParameterError);
+    },
+  );
+
   test("default", () => {
     const [ecrecover, setter, price, rate] = trees();
     expectTypeOf(ecrecover).toEqualTypeOf<Tree<"ecrecover">>();
@@ -202,6 +223,22 @@ describe("Tree.create", () => {
     expect(rate.entries[0]!.rate).toBe(100n);
   });
 
+  test.each(["ecrecover", "setter"] as const)(
+    "error: InvalidOfferGroupError for a shared group passed as standalone %s offers",
+    (type) => {
+      const group = Group.create(offers.slice(0, 2));
+
+      expect(() => Tree.create({ type, entries: group.offers })).toThrow(
+        InvalidOfferGroupError,
+      );
+      const grouped = Tree.create({ type, entries: [group] });
+      expect(grouped.offers.map((offer) => offer.group)).toEqual([
+        group.id,
+        group.id,
+      ]);
+    },
+  );
+
   test("behavior: union input retains narrowing", () => {
     for (const tree of trees()) {
       const request: TreeCreateRequest =
@@ -324,6 +361,42 @@ describe("Tree.from", () => {
     const resumed = Tree.from(descriptor);
     expect(resumed).toBeInstanceOf(Tree);
     expect(resumed.root).toBe(descriptor.root);
+  });
+
+  test("behavior: resumes a legacy Rate V1 snapshot with a zero sell receiver", () => {
+    const offer = {
+      ...offers[0]!,
+      buy: false,
+      group: undefined,
+      receiverIfMakerIsSeller: zeroAddress,
+    };
+    const rate = 100n;
+    const groupedOffer = {
+      ...offer,
+      group: RateRatifierV1.groupId([{ offer, rate }]),
+    };
+    const entry = {
+      offer: OfferUtils.toStruct({ offer: groupedOffer }),
+      rate,
+      allowedTaker: zeroAddress,
+    };
+    const leaf = RateRatifierV1.hashLeaf(entry);
+    const snapshot = {
+      type: "rateV1",
+      entries: [entry],
+      offers: [groupedOffer],
+      leaves: [leaf],
+      root: leaf,
+      height: 0,
+    } as const;
+
+    const resumed = Tree.from(snapshot);
+    expect(resumed.type).toBe("rateV1");
+    expect(resumed.entries).toEqual(snapshot.entries);
+    expect(resumed.offers).toMatchObject([
+      { buy: false, receiverIfMakerIsSeller: zeroAddress },
+    ]);
+    expect(resumed.proof(0n)).toEqual({ root: leaf, leafIndex: 0n, proof: [] });
   });
 });
 

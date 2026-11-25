@@ -17,13 +17,17 @@ signing policy; signing callers must adopt the warning and coverage checks below
 Both success and failure reports always have `warnings: readonly SimulationWarning[]`.
 Warnings are plain recursively frozen data, not Error instances. Narrow on `code`,
 not `instanceof`; every warning has severity `"warn"`, `message` and `chainId`.
-`UNEXPECTED_TOKEN_TRANSFER` adds `token`, `sender` and `recipients`. Other codes
+`UNEXPECTED_TOKEN_TRANSFER` adds `token`, `sender` and `recipients`.
+`UNEXPECTED_POSITION_CHANGE` adds `protocol`, `event`, `owner` and `marketId`
+when known. Other codes
 describe skipped retention, swept balances, malformed transfer logs and wrapped-native
 event mismatches. Quantity context such as `netSwept` is bigint in raw token units;
 choose your own JSON encoding when persisting or returning it.
 
-Undeclared sender outflows no longer block. All other failures still do.
-An `ok`-only signing gate is no longer enough. A conservative replacement is:
+Undeclared sender outflows and undeclared Morpho position changes do not block.
+Other simulation failures still do.
+Signing services, including the Actions API attestor, must reject non-empty
+`report.warnings` before release, even when `report.ok` is true. For example:
 
 ```ts
 const report = await simulate(client, params);
@@ -42,9 +46,9 @@ if (report.verification?.retention !== "checked") {
 return report.result.simulationTxs;
 ```
 
-Applications may instead explicitly accept or alert on selected warning codes;
-the SDK neither logs nor decides that policy. Warnings never change `ok` or the
-severity computed from blocking failures.
+Only applications that do not sign may choose to alert without blocking or to
+accept selected warning codes. The SDK neither logs nor decides that policy.
+Warnings never change `ok` or the severity computed from blocking failures.
 
 When retention ran with every user transaction's logs present, success and failure
 reports include `report.verification.retention`. It is `"checked"`

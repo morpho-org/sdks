@@ -1,13 +1,13 @@
 import { type MarketId, MathLib } from "@morpho-org/blue-sdk";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
 import { type Client, maxUint256 } from "viem";
-import { validateBlueBundlesV1NativeFunding } from "../../actions/blue/common.js";
 import { blueSupplyCollateralBorrow } from "../../actions/blue/supplyCollateralBorrow.js";
 import { validateClientChainId } from "../../actions/requirements/validateClientChainId.js";
 import {
   DEFAULT_LLTV_BUFFER,
   validatePositionHealth,
 } from "../../helpers/index.js";
+import { parseNativeFunding } from "../../helpers/parse.js";
 import {
   type AuthorizationRequirementSignature,
   MissingAccrualPositionError,
@@ -176,7 +176,7 @@ export async function prepareBlueSupplyCollateralBorrow(
           lltv: marketParams.lltv,
         });
       }
-      const native = validateBlueBundlesV1NativeFunding({
+      const native = parseNativeFunding({
         chainId,
         token: marketParams.collateralToken,
         fundedAmount: collateralAssets,

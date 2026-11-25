@@ -113,9 +113,12 @@ export namespace TakeAmountsLib {
     assertNonNegative("targetBuyerAssets", targetBuyerAssets);
 
     const { buyerPrice } = prices({ offer: params.offer, settlementFee });
-    if (buyerPrice === 0n) throw new DivisionByZeroError("buyerPrice");
-    if (buyerPrice > MathLib.WAD)
+    if (buyerPrice === 0n) {
+      throw new DivisionByZeroError("buyerPrice");
+    }
+    if (buyerPrice > MathLib.WAD) {
       throw new PriceGreaterThanOneError(buyerPrice);
+    }
 
     return MathLib.mulDiv(
       targetBuyerAssets,
@@ -169,7 +172,9 @@ export namespace TakeAmountsLib {
     assertNonNegative("targetSellerAssets", targetSellerAssets);
 
     const { sellerPrice } = prices({ offer: params.offer, settlementFee });
-    if (sellerPrice === 0n) throw new DivisionByZeroError("sellerPrice");
+    if (sellerPrice === 0n) {
+      throw new DivisionByZeroError("sellerPrice");
+    }
 
     return MathLib.mulDiv(
       targetSellerAssets,
@@ -208,7 +213,9 @@ export namespace TakeAmountsLib {
     const price = BigInt(params.price);
     assertNonNegative("assets", assets);
     assertNonNegative("price", price);
-    if (price === 0n) throw new DivisionByZeroError("price");
+    if (price === 0n) {
+      throw new DivisionByZeroError("price");
+    }
 
     return MathLib.mulDiv(assets, MathLib.WAD, price, params.rounding);
   }

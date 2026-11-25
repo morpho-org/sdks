@@ -1,14 +1,72 @@
 import type { Address } from "@morpho-org/blue-sdk";
 import { getTokenApprovalAmounts } from "../../helpers/tokenApproval.js";
 import type { ERC20ApprovalAction, Transaction } from "../../types/index.js";
-import { encodeErc20Approval } from "./encode/encodeErc20Approval.js";
+import {
+  type Erc20ApprovalInput,
+  encodeParsedErc20Approval,
+  parseErc20Approval,
+} from "./encode/encodeErc20Approval.js";
+
+/** Complete raw approval requirement invocation. @internal */
+interface RequirementsApprovalParams {
+  address: Address;
+  chainId: number;
+  args: { spendAmount: bigint; spender: Address };
+  allowances: bigint;
+}
+const requirementsApprovalInput: unique symbol = Symbol(
+  "RequirementsApprovalInput",
+);
+/** Complete checked approval requirements, including ordered reset and approval inputs. @internal */
+export interface RequirementsApprovalInput
+  extends Readonly<RequirementsApprovalParams> {
+  readonly args: Readonly<RequirementsApprovalParams["args"]>;
+  readonly approvals: readonly Erc20ApprovalInput[];
+  readonly [requirementsApprovalInput]: true;
+}
+
+/** Owns no-op and token/spender error precedence for direct callers. @internal */
+export const parseRequirementsApproval = (
+  params: RequirementsApprovalParams,
+): RequirementsApprovalInput => {
+  const args = params.args;
+  const input = {
+    address: params.address,
+    chainId: params.chainId,
+    args: {
+      spendAmount: args.spendAmount,
+      spender: args.spender,
+    },
+    allowances: params.allowances,
+  };
+  const amounts = getTokenApprovalAmounts({
+    token: input.address,
+    chainId: input.chainId,
+    allowance: input.allowances,
+    spendAmount: input.args.spendAmount,
+  });
+  const approvals = amounts.map((amount) =>
+    parseErc20Approval({
+      token: input.address,
+      spender: input.args.spender,
+      chainId: input.chainId,
+      amount,
+    }),
+  );
+  return {
+    ...input,
+    args: { ...input.args },
+    approvals,
+    [requirementsApprovalInput]: true,
+  };
+};
 
 /**
  * Computes classic ERC-20 approval transactions for a supported SDK spender, given the existing
  * allowance.
  *
- * The spender is validated by {@link encodeErc20Approval}. Supported spenders are the chain's
- * Permit2, Midnight, MidnightBundlesV2, VaultExitBundlesV1, VaultBundlesV1, and BlueBundlesV1
+ * The operation constructor validates the spender before constructing approval inputs. Supported
+ * spenders are the chain's Permit2, Midnight, MidnightBundlesV2, VaultExitBundlesV1, VaultBundlesV1, and BlueBundlesV1
  * addresses when configured.
  *
  * When `allowances < spendAmount`, requests an approval for `maxUint256`, capped per token by
@@ -40,25 +98,13 @@ import { encodeErc20Approval } from "./encode/encodeErc20Approval.js";
  * // txs satisfies Readonly<Transaction<ERC20ApprovalAction>>[]
  * ```
  */
-export const getRequirementsApproval = (params: {
-  address: Address;
-  chainId: number;
-  args: { spendAmount: bigint; spender: Address };
-  allowances: bigint;
-}): Readonly<Transaction<ERC20ApprovalAction>>[] => {
-  const {
-    address,
-    chainId,
-    args: { spendAmount, spender },
-    allowances,
-  } = params;
+export const getRequirementsApproval = (
+  params: RequirementsApprovalParams,
+): Readonly<Transaction<ERC20ApprovalAction>>[] =>
+  getParsedRequirementsApproval(parseRequirementsApproval(params));
 
-  return getTokenApprovalAmounts({
-    token: address,
-    chainId,
-    allowance: allowances,
-    spendAmount,
-  }).map((amount) =>
-    encodeErc20Approval({ token: address, spender, amount, chainId }),
-  );
-};
+/** Consumes all checked approval inputs without revalidating each transaction. @internal */
+export const getParsedRequirementsApproval = (
+  params: RequirementsApprovalInput,
+): Readonly<Transaction<ERC20ApprovalAction>>[] =>
+  params.approvals.map(encodeParsedErc20Approval);

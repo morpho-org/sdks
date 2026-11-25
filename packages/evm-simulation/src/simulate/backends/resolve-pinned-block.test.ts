@@ -28,6 +28,19 @@ afterEach(() => {
 });
 
 describe.sequential("resolvePinnedBlock", () => {
+  test("behavior: keeps the block gas limit the node reports", async () => {
+    fetchMock.mockResolvedValueOnce(
+      rpc({ ...block, gasLimit: numberToHex(3_000_000n) }),
+    );
+    const pinned = await resolvePinnedBlock({ client: client() });
+    expect(pinned).toEqual({
+      number: 20_000_000n,
+      hash: block.hash,
+      timestamp: 1_700_000_000n,
+      gasLimit: 3_000_000n,
+    });
+  });
+
   test("default: resolves an explicit block number", async () => {
     fetchMock.mockResolvedValueOnce(rpc(block));
     const pinned = await resolvePinnedBlock({

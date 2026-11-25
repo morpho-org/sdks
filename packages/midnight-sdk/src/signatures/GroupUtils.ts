@@ -54,6 +54,8 @@ export interface IGroup {
  * Use standalone offers for independent consumption groups. Use `Group.create`
  * first when multiple offers from the same maker, side, loan token, cap mode,
  * and cap value should share one consumption group.
+ * Standard trees reject standalone offers from one maker that repeat an
+ * explicit group id; pass the group object, not its flattened offers.
  *
  * @example
  * ```ts

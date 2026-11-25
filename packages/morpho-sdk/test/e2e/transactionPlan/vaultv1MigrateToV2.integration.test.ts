@@ -1,15 +1,18 @@
 import { getChainAddress, Time } from "@morpho-org/morpho-ts";
 import { erc20Abi, maxUint256, parseUnits } from "viem";
 import { describe, expect } from "vitest";
+import { computeVaultV1MigrateToV2Quote } from "../../../src/entities/vaultV1/migrateToV2Quote.js";
+import { fetchAccrualVault, fetchAccrualVaultV2 } from "../../../src/fetch.js";
 import {
   applySignatures,
   buildTransactions,
   getPendingSignatureRequests,
-  morphoViemExtension,
   parseTransactionPlan,
   prepareVaultV1MigrateToV2,
   serializeTransactionPlan,
+  vaultV1MigrateToV2,
 } from "../../../src/index.js";
+import { getVaultPermit } from "../../../src/transactionPlan/permit.js";
 import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
 import { KeyrockUsdcVaultV2 } from "../../fixtures/vaultV2.js";
 import { withChainTimestamp } from "../../helpers/time.js";
@@ -17,7 +20,7 @@ import { vaultBundlesV1Test as test } from "../../helpers/vaultBundlesV1.js";
 
 describe("TransactionPlan Vault V1 migration on a pinned mainnet fork", () => {
   for (const mode of ["allowance", "approval", "permit"] as const) {
-    test(`migrates with ${mode}, matches the handle and never uses Permit2`, async ({
+    test(`migrates with ${mode}, matches the action builder and never uses Permit2`, async ({
       client,
     }) => {
       const sourceVault = SteakhouseUsdcVaultV1.address;
@@ -37,14 +40,8 @@ describe("TransactionPlan Vault V1 migration on a pinned mainnet fork", () => {
         });
         await client.waitForTransactionReceipt({ hash });
       }
-      const morpho = client.extend(
-        morphoViemExtension({ supportSignature: mode === "permit" }),
-      ).morpho;
-      const source = morpho.vaultV1(sourceVault, client.chain.id);
-      const sourceVaultData = await source.getData();
-      const targetVaultData = await morpho
-        .vaultV2(targetVault, client.chain.id)
-        .getData();
+      const sourceVaultData = await fetchAccrualVault(sourceVault, client);
+      const targetVaultData = await fetchAccrualVaultV2(targetVault, client);
       const timestamp = await client.timestamp();
       const deadline = Time.timestamp() + 7200n;
       const referralFee = {
@@ -65,18 +62,6 @@ describe("TransactionPlan Vault V1 migration on a pinned mainnet fork", () => {
           referralFee,
           slippageTolerance,
           expiresAt: Number(deadline),
-        }),
-      );
-      const handle = withChainTimestamp(timestamp, () =>
-        source.migrateToV2({
-          sourceVault: sourceVaultData,
-          targetVault: targetVaultData,
-          ...amount,
-          userAddress: client.account.address,
-          deadline,
-          referralFeePct: 10_000_000_000_000_000n,
-          referralFeeRecipient: referralFee.recipient,
-          slippageTolerance,
         }),
       );
       expect(plan.steps.map(({ action }) => action.type)).toEqual(
@@ -115,26 +100,36 @@ describe("TransactionPlan Vault V1 migration on a pinned mainnet fork", () => {
       const restored = parseTransactionPlan(serializeTransactionPlan(plan));
       const transactions = buildTransactions(restored);
       expect(transactions).toEqual(buildTransactions(plan));
-      const permit = request?.signature
-        ? [
-            {
-              action: {
-                type: request.kind,
-                args: request.args,
-                typedData: request.typedData,
-              },
-              args: {
-                owner: plan.account,
-                asset: sourceVault,
-                amount: request.args.amount,
-                nonce: request.args.nonce,
-                deadline: request.args.deadline,
-                signature: request.signature,
-              },
-            },
-          ]
-        : [];
-      const expected = handle.buildTx(permit);
+      const expected = vaultV1MigrateToV2({
+        vault: {
+          address: sourceVault,
+          chainId: client.chain.id,
+          asset: sourceVaultData.asset,
+        },
+        args: {
+          ...amount,
+          targetVault,
+          targetAsset: targetVaultData.asset,
+          userAddress: client.account.address,
+          deadline,
+          referralFeePct: 10_000_000_000_000_000n,
+          referralFeeRecipient: referralFee.recipient,
+          maxSharePriceVaultV2: computeVaultV1MigrateToV2Quote({
+            sourceVault: sourceVaultData,
+            targetVault: targetVaultData,
+            ...amount,
+            referralFeePct: 10_000_000_000_000_000n,
+            slippageTolerance,
+            deadline,
+            now: timestamp,
+          }).maxSharePriceVaultV2,
+          requirementSignature: getVaultPermit(plan.signatureRequests, {
+            id: request?.id,
+            asset: sourceVault,
+            owner: plan.account,
+          }),
+        },
+      });
       const migration = transactions.at(-1)!;
       expect(migration).not.toHaveProperty("id");
       expect(migration).not.toHaveProperty("kind");

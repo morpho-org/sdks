@@ -88,9 +88,9 @@ export type BlueWithdrawPlanParams = IntentParams &
  * @param params.account - Non-zero account whose supply position is withdrawn and which sends every plan transaction.
  * @param params.marketId - Market ID matching the caller-fetched snapshot and its market tuple.
  * @param params.marketData.chainId - Chain on which the market snapshot was fetched; must equal `chainId`.
- * @param params.marketData.market - Caller-fetched `Market` snapshot, used to fix the market tuple and quote share-mode penalty coverage; never stored in the plan.
+ * @param params.marketData.market - Caller-fetched `Market` snapshot used to fix the market tuple; never stored in the plan.
  * @param params.positionData.chainId - Position snapshot's chain; must match `chainId`.
- * @param params.positionData.position - Caller-fetched `AccrualPosition` belonging to `account` and `marketId`; validates the withdrawal against supplied assets or shares.
+ * @param params.positionData.position - Caller-fetched `AccrualPosition` belonging to `account` and `marketId`; validates the withdrawal against supplied assets or shares and quotes share-mode penalty coverage.
  * @param params.assets - Exact positive gross loan assets withdrawn in base units; exclusive with `shares`.
  * @param params.shares - Exact positive supply shares burned; exclusive with `assets`, with no full-close sentinel or minimum-proceeds guarantee.
  * @param params.reallocations - Optional ordered Vault V2 BluePublicAllocator inputs; defaults to an empty list. Penalties reduce withdrawal proceeds.
@@ -206,7 +206,7 @@ export async function prepareBlueWithdraw(
     const max =
       inputs.withdrawAssets > 0n
         ? inputs.withdrawAssets
-        : params.marketData.market.toSupplyAssets(
+        : snapshot.position.market.toSupplyAssets(
             inputs.withdrawShares,
             "Down",
           );

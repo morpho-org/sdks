@@ -61,7 +61,12 @@ export const MISSING_LOG_DATA = Symbol("missingLogData");
  * no matching same-tx `Deposit`/`Withdrawal` at all; a surplus equal-value
  * transfer after one-to-one pairing is kept silently. With
  * `wNativeEmitsTransfer: false`, a kept transfer matching a same-call event is
- * reported as `WRAPPED_NATIVE_MIRROR_DETECTED`.
+ * reported as `WRAPPED_NATIVE_MIRROR_DETECTED`. Set
+ * `wNativeEmitsWrapEvents: false` for verified chains whose wrapper emits only
+ * zero-address `Transfer` events on wrap/unwrap (no `Deposit`/`Withdrawal`):
+ * those transfers are the mint/burn and are kept without the dedup-miss
+ * warning, while any `Deposit`/`Withdrawal` the wrapper does emit is still
+ * paired one-to-one.
  *
  * **Hex casing.** JSON-RPC `DATA` is case-insensitive, so `topics` and `data`
  * are lowercased before signature dispatch and pair matching; a backend that
@@ -78,7 +83,9 @@ export const MISSING_LOG_DATA = Symbol("missingLogData");
  * @param options - Chain ID and wrapped-native metadata. Pass `null` for
  *   a known chain without a wrapped-native token; omit it for legacy parsing on
  *   an unknown chain. `wNativeEmitsTransfer` defaults to `true` and controls
- *   pairing for a registered wrapped-native token.
+ *   pairing for a registered wrapped-native token. `wNativeEmitsWrapEvents`
+ *   defaults to `true`; `false` drops the dedup-miss warning for the
+ *   registered wrapped-native token.
  * @returns Canonically sorted transfers and frozen structured warnings in log order.
  * @internal
  */
@@ -87,12 +94,18 @@ export function parseTransfers(
   options: {
     readonly wNative?: Address | null;
     readonly wNativeEmitsTransfer?: boolean;
+    readonly wNativeEmitsWrapEvents?: boolean;
     readonly chainId: number;
   },
 ): { transfers: Transfer[]; warnings: readonly SimulationWarning[] } {
   const transfers: Transfer[] = [];
   const warnings: SimulationWarning[] = [];
-  const { chainId, wNative, wNativeEmitsTransfer = true } = options;
+  const {
+    chainId,
+    wNative,
+    wNativeEmitsTransfer = true,
+    wNativeEmitsWrapEvents = true,
+  } = options;
   const shouldPairWnative = wNativeEmitsTransfer || wNative === undefined;
   // Lowercase `topics`/`data` so signature dispatch and pair matching are case-insensitive.
   const normalizedCalls = calls.map((call) =>
@@ -111,7 +124,9 @@ export function parseTransfers(
     (wNative !== null && isAddressEqual(address, wNative));
 
   const shouldWarnOnUnmatchedWnative = (address: Address): boolean =>
-    wNative !== undefined || wnativeShapedTokens.has(address.toLowerCase());
+    wNative === undefined
+      ? wnativeShapedTokens.has(address.toLowerCase())
+      : wNativeEmitsWrapEvents;
 
   for (const [txIdx, logs] of normalizedCalls.entries()) {
     const consumedWnativeEventLogs = new Set<number>();

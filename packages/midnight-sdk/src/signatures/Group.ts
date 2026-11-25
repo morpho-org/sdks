@@ -114,6 +114,7 @@ export class Group implements IGroup {
    * @param entry - Group object or standalone offer.
    * @returns Group instance.
    * @throws {InvalidOfferGroupError} when group mechanics are invalid.
+   * @throws {InvalidOfferParameterError} when a sell offer has the zero address as its receiver.
    * @example
    * ```ts
    * import { Group, Offer } from "@morpho-org/midnight-sdk";
@@ -149,8 +150,12 @@ export class Group implements IGroup {
    * ```
    */
   public static from(entry: GroupInput): Group {
-    if (entry instanceof Group) return entry;
-    if (GroupUtils.isGroupInput(entry)) return new Group(entry.offers);
+    if (entry instanceof Group) {
+      return entry;
+    }
+    if (GroupUtils.isGroupInput(entry)) {
+      return new Group(entry.offers);
+    }
 
     return new Group([entry as IOffer]);
   }
@@ -167,6 +172,7 @@ export class Group implements IGroup {
    * @param offers - Iterable of offers to group.
    * @returns Group instance.
    * @throws {InvalidOfferGroupError} when group mechanics are invalid.
+   * @throws {InvalidOfferParameterError} when a sell offer has the zero address as its receiver.
    * @example
    * ```ts
    * import { Group, Offer } from "@morpho-org/midnight-sdk";

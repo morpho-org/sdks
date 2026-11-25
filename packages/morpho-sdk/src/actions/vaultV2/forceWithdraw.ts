@@ -3,10 +3,10 @@ import { type Address, encodeFunctionData } from "viem";
 import { vaultExitBundlesV1Abi } from "../../abis.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
-  validateDeadline,
-  validateReferralFee,
-  validateUint256Field,
-} from "../../helpers/validate.js";
+  parseDeadline,
+  parseReferralFee,
+  parseUint256,
+} from "../../helpers/parse.js";
 import {
   type Metadata,
   NonPositiveInputError,
@@ -14,7 +14,7 @@ import {
   type Transaction,
   type VaultV2ForceWithdrawAction,
 } from "../../types/index.js";
-import { getBundlesSharesPermit } from "../bundles/common.js";
+import { getParsedBundlesSharesPermit } from "../bundles/common.js";
 
 /** Parameters for {@link vaultV2ForceWithdraw}. */
 export interface VaultV2ForceWithdrawParams {
@@ -31,6 +31,32 @@ export interface VaultV2ForceWithdrawParams {
   };
   readonly metadata?: Metadata;
 }
+
+declare const vaultV2ForceWithdrawInput: unique symbol;
+/** Checked force-withdraw fields, independent of snapshot and clock checks. @internal */
+export type VaultV2ForceWithdrawInput = {
+  readonly vault: Readonly<VaultV2ForceWithdrawParams["vault"]>;
+  readonly args: Omit<
+    VaultV2ForceWithdrawParams["args"],
+    | "requirementSignature"
+    | "exitAssets"
+    | "minSharePriceE27"
+    | "deadline"
+    | "referralFeePct"
+    | "referralFeeRecipient"
+  > & {
+    readonly exitAssets: bigint;
+    readonly minSharePriceE27: bigint;
+    readonly deadline: bigint;
+  };
+  readonly referral: {
+    readonly referralFeePct: bigint;
+    readonly referralFeeRecipient: Address;
+  };
+  readonly metadata?: Metadata;
+  readonly requirementSignature?: VaultV2ForceWithdrawParams["args"]["requirementSignature"];
+  readonly [vaultV2ForceWithdrawInput]: true;
+};
 
 /**
  * Prepares a Vault V2 force withdrawal through VaultExitBundlesV1.
@@ -100,27 +126,60 @@ export interface VaultV2ForceWithdrawParams {
  * }
  * ```
  */
-export const vaultV2ForceWithdraw = ({
-  vault,
-  args,
-  metadata,
-}: VaultV2ForceWithdrawParams): Readonly<
-  Transaction<VaultV2ForceWithdrawAction>
-> => {
-  if (args.exitAssets <= 0n) {
-    throw new NonPositiveInputError("exitAssets", args.exitAssets);
+export const vaultV2ForceWithdraw = (
+  params: VaultV2ForceWithdrawParams,
+): Readonly<Transaction<VaultV2ForceWithdrawAction>> =>
+  buildVaultV2ForceWithdraw(parseVaultV2ForceWithdraw(params));
+
+/** Runs standalone force-withdraw stages in their established order. @internal */
+export const parseVaultV2ForceWithdraw = (
+  params: VaultV2ForceWithdrawParams,
+): VaultV2ForceWithdrawInput => {
+  if (params.args.exitAssets <= 0n) {
+    throw new NonPositiveInputError("exitAssets", params.args.exitAssets);
   }
-  validateUint256Field("exitAssets", args.exitAssets);
-  validateDeadline(args.deadline);
-  // `0n` stays valid — it is the intentional "no on-chain bound" opt-out — but a value the uint256
-  // slot cannot hold must fail with a dedicated error instead of viem's `IntegerOutOfRangeError`.
-  // The entity never emits these (it forbids a non-positive override); this guards direct callers.
-  validateUint256Field("minSharePriceE27", args.minSharePriceE27);
+  const exitAssets = parseUint256("exitAssets", params.args.exitAssets);
+  const deadline = parseDeadline(params.args.deadline);
+  const minSharePriceE27 = parseUint256(
+    "minSharePriceE27",
+    params.args.minSharePriceE27,
+  );
+  const referral = parseReferralFee(params.args);
 
-  const { referralFeePct, referralFeeRecipient } = validateReferralFee(args);
+  return {
+    vault: { chainId: params.vault.chainId, address: params.vault.address },
+    args: {
+      adapter: params.args.adapter,
+      userAddress: params.args.userAddress,
+      exitAssets,
+      deadline,
+      minSharePriceE27,
+    },
+    referral,
+    metadata: params.metadata,
+    requirementSignature: params.args.requirementSignature,
+  } as VaultV2ForceWithdrawInput;
+};
 
+/** Encodes parsed fields and binds a fresh share permit. @internal */
+export const buildVaultV2ForceWithdraw = (
+  parsed: VaultV2ForceWithdrawInput,
+  signatures: Pick<
+    VaultV2ForceWithdrawParams["args"],
+    "requirementSignature"
+  > = parsed,
+): Readonly<Transaction<VaultV2ForceWithdrawAction>> => {
+  const {
+    vault,
+    metadata,
+    referral: { referralFeePct, referralFeeRecipient },
+  } = parsed;
+  const args = {
+    ...parsed.args,
+    requirementSignature: signatures.requirementSignature,
+  };
   const to = getChainAddress(vault.chainId, "bundles.vaultExitBundlesV1");
-  const sharesPermit = getBundlesSharesPermit({
+  const sharesPermit = getParsedBundlesSharesPermit({
     vault: vault.address,
     deadline: args.deadline,
     owner: args.userAddress,

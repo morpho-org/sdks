@@ -26,6 +26,11 @@ export type StateRead = {
       readonly owner: Address;
     }
   | {
+      readonly kind: "morpho.marketParams";
+      readonly morpho: Address;
+      readonly marketId: MarketId;
+    }
+  | {
       readonly kind: "midnight.collateral";
       readonly midnight: Address;
       readonly marketId: Hex;

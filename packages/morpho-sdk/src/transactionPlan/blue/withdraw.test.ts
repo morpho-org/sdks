@@ -116,6 +116,32 @@ test("error: aggregate penalty exceeds shares-mode proceeds", async () => {
   });
 });
 
+test("error: shares-mode penalty exceeds proceeds quoted by the position snapshot", async () => {
+  const result = prepareBlueWithdraw(client().client, {
+    ...params,
+    marketData: {
+      chainId: 1,
+      market: new Market({ ...market, totalSupplyAssets: 1_000n }),
+    },
+    shares: 1_500_000n,
+    reallocations: [
+      {
+        vault: owner.address,
+        from: { type: "idle" },
+        to: { adapter: owner.address },
+        assets: 2n,
+        penalty: 10n ** 18n,
+      },
+    ],
+  });
+  await expect(result).rejects.toBeInstanceOf(InputExceedsMaxError);
+  await expect(result).rejects.toMatchObject({
+    field: "reallocationPenaltyAssets",
+    value: 2n,
+    max: 1n,
+  });
+});
+
 test.each([
   [{ assets: position.supplyAssets + 1n }, WithdrawExceedsSupplyError],
   [{ shares: position.supplyShares + 1n }, WithdrawSharesExceedSupplyError],

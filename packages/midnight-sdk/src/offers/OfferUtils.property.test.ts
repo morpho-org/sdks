@@ -153,7 +153,7 @@ describe("OfferUtils.onchainHash", () => {
       const offer = Offer.create({
         market: market.params,
         buy,
-        maker: zeroAddress,
+        maker: "0x0000000000000000000000000000000000009000",
         start: 0n,
         expiry: 1_000_000n,
         tick,

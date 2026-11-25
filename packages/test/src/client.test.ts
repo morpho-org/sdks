@@ -252,6 +252,46 @@ describe.sequential("createAnvilTestClient", () => {
     }
   });
 
+  test("behavior: backs off from 1 ms to the polling interval while the automined block is pending", async () => {
+    let sent = false;
+    let postSendBlockPolls = 0;
+
+    const node = await startNode(async (method) => {
+      if (method === "anvil_getAutomine") return { result: true };
+
+      if (method === "eth_blockNumber") {
+        if (!sent) return { result: numberToHex(100) };
+        postSendBlockPolls += 1;
+        return {
+          result: numberToHex(postSendBlockPolls > 8 ? 101 : 100),
+        };
+      }
+
+      if (method === "eth_sendRawTransaction") {
+        sent = true;
+        return { result: hash };
+      }
+
+      return {
+        result: method === "eth_getTransactionReceipt" ? receipt : null,
+      };
+    });
+
+    const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
+    try {
+      await node.client.sendRawTransaction({ serializedTransaction: "0x01" });
+
+      expect(
+        setTimeoutSpy.mock.calls
+          .map(([, delay]) => delay)
+          .filter((delay) => delay !== undefined && delay <= 50),
+      ).toEqual([1, 2, 4, 8, 16, 32, 50, 50]);
+    } finally {
+      setTimeoutSpy.mockRestore();
+      node.close();
+    }
+  });
+
   test("sends without block or receipt lookups when automine is off", async () => {
     const node = await startNode(async (method) => ({
       result: method === "eth_sendRawTransaction" ? hash : false,

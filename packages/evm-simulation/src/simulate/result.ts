@@ -43,7 +43,20 @@ export function assembleResult(params: {
     chainId: ctx.chainId,
     blockNumber: ctx.block.blockNumber,
     blockTimestamp: ctx.block.blockTimestamp,
-    limits: request.limits === "none" ? "none" : ctx.limits,
+    limits:
+      request.limits === "none"
+        ? "none"
+        : {
+            ...ctx.limits,
+            ...(request.limits.effects === undefined
+              ? {}
+              : {
+                  effects: request.limits.effects.map((effect) => ({
+                    ...effect,
+                    txIdx: effect.txIdx ?? request.transactions.length - 1,
+                  })),
+                }),
+          },
     operations,
     authorizations,
   };

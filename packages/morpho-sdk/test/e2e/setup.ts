@@ -58,34 +58,41 @@ export const describeE2e = (
           nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
           rpcUrls: { default: { http: [] } },
         });
-      const test = createViemTest(chain, {
-        forkUrl: run.status === "run" ? run.forkUrl : undefined,
-        forkBlockNumber,
-        // Midnight needs CLZ (Osaka), which Anvil's Arbitrum default does not enable.
-        hardfork: chainId === ChainId.ArbitrumMainnet ? "Osaka" : undefined,
-        // HyperEVM small blocks cap gas at 3M, below a Vault V2 deployment.
-        gasLimit: 60_000_000n,
-        stepsTracing: false,
-      }).extend<E2eTestContext>({
-        client: async ({ client }, use) => {
-          // Fork accounts may carry EIP-7702 code that turns ecrecover permits into EIP-1271 checks.
-          await client.setCode({
-            address: client.account.address,
-            bytecode: "0x",
-          });
-          for (const { label, address } of undatedDeployments)
-            expect(
-              await client.getCode({ address }),
-              `${label} has no code at block ${forkBlockNumber}; register its deployment block`,
-            ).toBeDefined();
-          await use(client);
-        },
-      });
+      // Built inside the chain suite, so a reused idle fork stops when its chain finishes.
+      const createTest = () =>
+        createViemTest(
+          chain,
+          {
+            forkUrl: run.status === "run" ? run.forkUrl : undefined,
+            forkBlockNumber,
+            // Midnight needs CLZ (Osaka), which Anvil's Arbitrum default does not enable.
+            hardfork: chainId === ChainId.ArbitrumMainnet ? "Osaka" : undefined,
+            // HyperEVM small blocks cap gas at 3M, below a Vault V2 deployment.
+            gasLimit: 60_000_000n,
+            stepsTracing: false,
+          },
+          { reuseAnvil: true },
+        ).extend<E2eTestContext>({
+          client: async ({ client }, use) => {
+            // Fork accounts may carry EIP-7702 code that turns ecrecover permits into EIP-1271 checks.
+            await client.setCode({
+              address: client.account.address,
+              bytecode: "0x",
+            });
+            for (const { label, address } of undatedDeployments)
+              expect(
+                await client.getCode({ address }),
+                `${label} has no code at block ${forkBlockNumber}; register its deployment block`,
+              ).toBeDefined();
+            await use(client);
+          },
+        });
       const title = `${chainName} (${chainId}) @ ${forkBlockNumber}`;
 
       if (run.status === "skip")
-        describe.skip(`${title}: ${run.reason}`, () => body(test, run.target));
-      else describe(title, () => body(test, run.target));
+        describe.skip(`${title}: ${run.reason}`, () =>
+          body(createTest(), run.target));
+      else describe(title, () => body(createTest(), run.target));
     }
   });
 

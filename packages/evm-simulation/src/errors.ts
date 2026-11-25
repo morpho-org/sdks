@@ -24,10 +24,12 @@ export const SIMULATION_ERROR_CODES = [
   "UNSUPPORTED_LIMIT_ACTION",
   "UNEXPECTED_TOKEN_APPROVAL",
   "UNEXPECTED_TOKEN_TRANSFER",
+  "UNEXPECTED_POSITION_CHANGE",
   "UNEXPECTED_MORPHO_AUTHORIZATION",
   "UNEXPECTED_MIDNIGHT_AUTHORIZATION",
   "APPROVAL_CHECK_UNAVAILABLE",
   "UNUSED_AUTHORIZATION",
+  "SIMULATION_EFFECT_FAILED",
 ] as const;
 
 /** Stable string discriminator for log aggregation and external mapping. */
@@ -70,6 +72,25 @@ export abstract class SimulationPackageError extends Error {
 export abstract class SimulationSafetyError extends SimulationPackageError {
   /** Default log level of this group; every severity blocks the bundle. */
   readonly severity: SimulationErrorSeverity = "fatal";
+}
+
+/** Missing/mismatched control-call evidence, unbound effects-only caller transactions, or positive sender outflow. */
+export class SimulationEffectError extends SimulationSafetyError {
+  override readonly name = "SimulationEffectError";
+  readonly code = "SIMULATION_EFFECT_FAILED";
+  readonly effectType: string;
+  constructor(
+    readonly transactionIndex: number,
+    {
+      effectType,
+      reason,
+    }: { readonly effectType: string; readonly reason: string },
+  ) {
+    super(
+      `Transaction "${transactionIndex}" ${effectType}: ${reason}. Check the effect and transaction before signing.`,
+    );
+    this.effectType = effectType;
+  }
 }
 
 /**
@@ -517,6 +538,43 @@ export class UnexpectedTokenTransferError extends SimulationSafetyError {
   }
 }
 
+/**
+ * An owner position decreases outside declared operation kinds and markets, or its event is malformed.
+ * Converted to a plain `SimulationWarning` with severity `"warn"`, never a blocking failure.
+ * Integrators gating signing must inspect report warnings.
+ * Extends {@link SimulationSafetyError}.
+ */
+export class UnexpectedPositionChangeError extends SimulationSafetyError {
+  override readonly name = "UnexpectedPositionChangeError";
+  readonly code = "UNEXPECTED_POSITION_CHANGE";
+  /** Registered protocol emitting the event. */
+  readonly protocol: "Blue" | "Midnight";
+  /** Position-decreasing event name. */
+  readonly event: string;
+  /** Market id, absent when the event could not be decoded. */
+  readonly marketId?: Hex;
+  /** Simulation owner whose position is protected. */
+  readonly owner: Address;
+
+  /** Identify an undeclared position decrease or an undecodable matching event. */
+  constructor(params: {
+    readonly protocol: "Blue" | "Midnight";
+    readonly event: string;
+    readonly marketId?: Hex;
+    readonly owner: Address;
+    readonly cause?: unknown;
+  }) {
+    super(
+      `Unexpected ${params.protocol} ${params.event} position change for owner "${params.owner}" on market "${params.marketId ?? "unknown"}". Do not sign this request.`,
+      params.cause === undefined ? undefined : { cause: params.cause },
+    );
+    this.protocol = params.protocol;
+    this.event = params.event;
+    this.marketId = params.marketId;
+    this.owner = params.owner;
+  }
+}
+
 /** A sender-granted token approval or permit is not allowed by the request. Extends {@link SimulationSafetyError}. */
 export class UnexpectedTokenApprovalError extends SimulationSafetyError {
   override readonly name = "UnexpectedTokenApprovalError";
@@ -794,6 +852,8 @@ export class UnexpectedSimulationError extends SimulationInfrastructureError {
  * was asked to limit: `args.onBehalf` is not `owner`, or not
  * `options.onBehalf ?? owner` on `midnightSupplyCollateral` or `midnightRedeem`
  * (`field: "onBehalf"`),
+ * `args.accountAddress` on `midnightSupplyCollateralWithNative` is not
+ * `owner` (`field: "args.accountAddress"`),
  * `redeem.recipient` on `vaultV2ForceRedeem` is not `receiver ?? owner`
  * (`field: "redeem.recipient"`), a `receiver` other than `owner` is passed
  * for an action that encodes no distinct receiver (`field: "receiver"`),
@@ -817,6 +877,7 @@ export class LimitAccountMismatchError extends SimulationInvalidRequestError {
     | "receiver"
     | "redeem.recipient"
     | "options.onBehalf"
+    | "args.accountAddress"
     | "args.receiver"
     | "args.collateralReceiver";
   /**
@@ -837,6 +898,7 @@ export class LimitAccountMismatchError extends SimulationInvalidRequestError {
       | "receiver"
       | "redeem.recipient"
       | "options.onBehalf"
+      | "args.accountAddress"
       | "args.receiver"
       | "args.collateralReceiver";
     /**
@@ -866,6 +928,11 @@ export class LimitAccountMismatchError extends SimulationInvalidRequestError {
         `credits msg.sender, so the limit measures "${mismatch.expected}". ` +
         `Omit onBehalf or set it to owner; only midnightSupplyCollateral ` +
         `and midnightRedeem act on a distinct account.`;
+    } else if (mismatch.field === "args.accountAddress") {
+      message =
+        `args.accountAddress: action specifies "${mismatch.actual}", but it ` +
+        `must equal the simulation owner "${mismatch.expected}", the account ` +
+        `that sends the transaction.`;
     } else {
       message =
         `${mismatch.field}: action encodes "${mismatch.actual}" but the ` +
@@ -987,10 +1054,12 @@ const ERROR_NAME_BY_CODE: Readonly<
   UNSUPPORTED_LIMIT_ACTION: ["UnsupportedLimitActionError"],
   UNEXPECTED_TOKEN_APPROVAL: ["UnexpectedTokenApprovalError"],
   UNEXPECTED_TOKEN_TRANSFER: ["UnexpectedTokenTransferError"],
+  UNEXPECTED_POSITION_CHANGE: ["UnexpectedPositionChangeError"],
   UNEXPECTED_MORPHO_AUTHORIZATION: ["UnexpectedMorphoAuthorizationError"],
   UNEXPECTED_MIDNIGHT_AUTHORIZATION: ["UnexpectedMidnightAuthorizationError"],
   APPROVAL_CHECK_UNAVAILABLE: ["ApprovalCheckUnavailableError"],
   UNUSED_AUTHORIZATION: ["UnusedAuthorizationError"],
+  SIMULATION_EFFECT_FAILED: ["SimulationEffectError"],
 });
 
 /**

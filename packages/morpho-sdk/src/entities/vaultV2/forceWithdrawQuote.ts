@@ -15,9 +15,9 @@ import {
   resolveVaultV2ForceWithdrawEligibility,
   validateSlippageTolerance,
 } from "../../helpers/index.js";
+import { parseReferralFee } from "../../helpers/parse.js";
 import {
   validateDeadline,
-  validateReferralFee,
   validateUint256Field,
 } from "../../helpers/validate.js";
 import {
@@ -139,9 +139,7 @@ export function computeVaultV2ForceWithdrawQuote({
   }
   validateUint256Field("exitAssets", exitAssets);
   validateSlippageTolerance(slippageTolerance);
-  // Called for its throws only: the raw pair is forwarded to the action, which normalizes it
-  // again on the encode path so a direct action caller gets the same guarantees.
-  validateReferralFee({ referralFeePct, referralFeeRecipient });
+  const referral = parseReferralFee({ referralFeePct, referralFeeRecipient });
   if (minSharePriceE27Override != null) {
     // An unbounded override reopens the exact hole this path closes: the contract reads
     // `minSharePriceE27 == 0` as "no bound".
@@ -299,5 +297,11 @@ export function computeVaultV2ForceWithdrawQuote({
     maxUint256,
   );
 
-  return { deadline, adapter, minSharePriceE27, requiredShareAllowance };
+  return {
+    deadline,
+    adapter,
+    minSharePriceE27,
+    requiredShareAllowance,
+    referral,
+  };
 }

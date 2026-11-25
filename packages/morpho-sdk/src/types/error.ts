@@ -58,6 +58,32 @@ export class NonPositiveInputError extends Error {
   }
 }
 
+/** Thrown when an input that requires a bigint is supplied with another type. */
+export class InvalidBigIntInputError extends Error {
+  /**
+   * @param field - Public input field whose value is invalid.
+   * @param value - Runtime value supplied for the field.
+   */
+  public constructor(
+    public readonly field: string,
+    public readonly value: unknown,
+  ) {
+    super(`Input "${field}" must be a bigint, got "${typeof value}".`);
+    this.name = "InvalidBigIntInputError";
+  }
+}
+
+/** Thrown when a Midnight native funding amount is supplied with a non-bigint type. */
+export class InvalidMidnightNativeAmountTypeError extends Error {
+  /**
+   * @param value - Runtime value supplied for `nativeAmount`.
+   */
+  public constructor(public readonly value: unknown) {
+    super(`Input "nativeAmount" must be a bigint, got "${typeof value}".`);
+    this.name = "InvalidMidnightNativeAmountTypeError";
+  }
+}
+
 /** Thrown when an integer input exceeds its protocol-defined maximum. */
 export class InputExceedsMaxError extends Error {
   /**
@@ -1996,7 +2022,7 @@ export class MidnightZeroOnBehalfError extends Error {
   /**
    * @param field - Account field containing the zero address.
    */
-  public constructor(public readonly field: "onBehalf") {
+  public constructor(public readonly field: "onBehalf" | "accountAddress") {
     super(
       `Midnight "${field}" cannot be the zero address. Provide a valid account.`,
     );

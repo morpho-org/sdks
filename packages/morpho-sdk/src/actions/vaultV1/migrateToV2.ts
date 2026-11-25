@@ -1,7 +1,7 @@
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData, isAddressEqual } from "viem";
 import { vaultBundlesV1Abi } from "../../abis.js";
-import { validateUint256Field } from "../../helpers/validate.js";
+import { parseUint256 } from "../../helpers/parse.js";
 import { validatePositiveInput } from "../../helpers/validatePositiveInput.js";
 import {
   AmountAndSharesExclusiveError,
@@ -16,8 +16,8 @@ import {
 import {
   finalizeVaultBundlesV1Transaction,
   getBundlesReferralFeeAssets,
-  getBundlesSharesPermit,
-  normalizeBundlesCommonParams,
+  getParsedBundlesSharesPermit,
+  normalizeBundlesCommonParams as parseBundlesCommon,
 } from "../bundles/common.js";
 
 /** Parameters for {@link vaultV1MigrateToV2}. */
@@ -127,7 +127,32 @@ export interface VaultV1MigrateToV2Params {
  */
 export const vaultV1MigrateToV2 = (
   params: VaultV1MigrateToV2Params,
-): Readonly<Transaction<VaultV1MigrateToV2Action>> => {
+): Readonly<Transaction<VaultV1MigrateToV2Action>> =>
+  buildVaultV1MigrateToV2(parseVaultV1MigrateToV2(params));
+
+declare const vaultV1MigrateToV2Input: unique symbol;
+/** Checked source exit and destination deposit fields; signatures remain untrusted. @internal */
+export type VaultV1MigrateToV2Input = {
+  readonly vault: Readonly<VaultV1MigrateToV2Params["vault"]>;
+  readonly args: Omit<
+    VaultV1MigrateToV2Params["args"],
+    "requirementSignature" | "assets" | "shares" | "maxSharePriceVaultV2"
+  >;
+  readonly bounds: {
+    readonly assets?: bigint;
+    readonly shares?: bigint;
+    readonly maxSharePriceVaultV2: bigint;
+  };
+  readonly common: ReturnType<typeof parseBundlesCommon>;
+  readonly metadata?: Metadata;
+  readonly requirementSignature?: VaultV1MigrateToV2Params["args"]["requirementSignature"];
+  readonly [vaultV1MigrateToV2Input]: true;
+};
+
+/** Parses standalone migration fields in their original validation order. @internal */
+export const parseVaultV1MigrateToV2 = (
+  params: VaultV1MigrateToV2Params,
+): VaultV1MigrateToV2Input => {
   if (!isAddressEqual(params.vault.asset, params.args.targetAsset)) {
     throw new VaultAssetMismatchError(
       params.vault.asset,
@@ -142,27 +167,72 @@ export const vaultV1MigrateToV2 = (
   if ((assets == null) === (shares == null)) {
     throw new AmountAndSharesExclusiveError();
   }
-  const selectedAmount = assets ?? shares ?? 0n;
+  const selected = assets ?? shares ?? 0n;
   const amountField = assets == null ? "shares" : "assets";
   // Validation only; rejects non-positive migration amounts.
-  validatePositiveInput(amountField, selectedAmount);
-  // Validation only; rejects non-positive share-price bounds.
+  validatePositiveInput(amountField, selected);
+  // Validation only; rejects non-positive share-price bounds before either ABI bound.
   validatePositiveInput(
     "maxSharePriceVaultV2",
     params.args.maxSharePriceVaultV2,
   );
-  // Reject ABI overflow with SDK errors before calldata encoding.
-  validateUint256Field(amountField, selectedAmount);
-  validateUint256Field(
-    "maxSharePriceVaultV2",
-    params.args.maxSharePriceVaultV2,
-  );
-  const common = normalizeBundlesCommonParams(params.args);
+  // ABI bounds follow both positive-only guards, preserving first-error order.
+  parseUint256(assets == null ? "shares" : "assets", selected);
+  const bounds = {
+    assets,
+    shares,
+    maxSharePriceVaultV2: parseUint256(
+      "maxSharePriceVaultV2",
+      params.args.maxSharePriceVaultV2,
+    ),
+  };
+  const common = parseBundlesCommon(params.args);
+
+  const input: Omit<VaultV1MigrateToV2Input, typeof vaultV1MigrateToV2Input> = {
+    vault: {
+      chainId: params.vault.chainId,
+      address: params.vault.address,
+      asset: params.vault.asset,
+    },
+    args: {
+      targetVault: params.args.targetVault,
+      targetAsset: params.args.targetAsset,
+      userAddress: params.args.userAddress,
+      ...common,
+    },
+    bounds,
+    common,
+    metadata: params.metadata,
+    requirementSignature: params.args.requirementSignature,
+  };
+  return input as VaultV1MigrateToV2Input;
+};
+
+/** Encodes parsed migration inputs and validates a fresh share permit. @internal */
+export const buildVaultV1MigrateToV2 = (
+  parsed: VaultV1MigrateToV2Input,
+  signatures: Pick<
+    VaultV1MigrateToV2Params["args"],
+    "requirementSignature"
+  > = parsed,
+): Readonly<Transaction<VaultV1MigrateToV2Action>> => {
+  const {
+    common,
+    bounds: { assets, shares },
+  } = parsed;
+  const params = {
+    ...parsed,
+    args: {
+      ...parsed.args,
+      ...parsed.bounds,
+      requirementSignature: signatures.requirementSignature,
+    },
+  };
   const spender = getChainAddress(
     params.vault.chainId,
     "bundles.vaultBundlesV1",
   );
-  const sharesPermit = getBundlesSharesPermit({
+  const sharesPermit = getParsedBundlesSharesPermit({
     vault: params.vault.address,
     deadline: common.deadline,
     owner: params.args.userAddress,

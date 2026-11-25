@@ -7,9 +7,9 @@ import { join } from "node:path";
 
 import { isMain, readRequiredEnv, reportCliError } from "../workflow.ts";
 
-const VERSION = "11.21.0";
+const VERSION = "11.21.2";
 const INTEGRITY =
-  "Zov8KhamNneiLdELtj5YALtNmJW4L4fCLTzjfpzXG2w6MSHcf0UxgdlK5uloCuksWT+7mGUU7wi79cO6RqivPg==";
+  "7HPApk+AflMUavSseL1Pm6CnYqMIHk53x+KmuhqmTDqPkjPMgxIpTPcTqsE91EKNw4gFBJV9fnXiSdGm1DXq9A==";
 
 /** Rejects a changed npm distribution before extracting or executing any of it. */
 export function verifyNpmArchive(

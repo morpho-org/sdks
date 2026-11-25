@@ -22,7 +22,10 @@ describe("MorphoVaultV2 bundles deadlines", () => {
       const vault = handle.client
         .extend(morphoViemExtension())
         .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
-      vi.spyOn(vault, "getData").mockResolvedValue(vaultData);
+      vi.spyOn(
+        vault as unknown as { getDataWithChainCheck: typeof vault.getData },
+        "getDataWithChainCheck",
+      ).mockResolvedValue(vaultData);
       mockRead(handle, {
         address: IN_KIND_VAULT,
         abi: erc20Abi,
@@ -103,7 +106,10 @@ describe("MorphoVaultV2 bundles deadlines", () => {
       .extend(morphoViemExtension())
       .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
     const vaultData = withChainTimestamp(now, () => inKindVaultV2Data());
-    vi.spyOn(vault, "getData").mockResolvedValue(vaultData);
+    vi.spyOn(
+      vault as unknown as { getDataWithChainCheck: typeof vault.getData },
+      "getDataWithChainCheck",
+    ).mockResolvedValue(vaultData);
     mockRead(handle, {
       address: IN_KIND_VAULT,
       abi: erc20Abi,

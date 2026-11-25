@@ -1,14 +1,14 @@
-import { MathLib } from "@morpho-org/blue-sdk";
+import { MarketParams, MathLib } from "@morpho-org/blue-sdk";
 import { erc4626Abi, parseEther, parseUnits } from "viem";
 import { describe, expect } from "vitest";
 import {
   applySignatures,
   buildTransactions,
   getPendingSignatureRequests,
-  morphoViemExtension,
   parseTransactionPlan,
   prepareVaultV2ForceRedeem,
   serializeTransactionPlan,
+  vaultV2ForceRedeem,
 } from "../../../src/index.js";
 import { vaultBundlesV1Test as test } from "../../helpers/vaultBundlesV1.js";
 import { setUpSingleAdapterVaultV2 } from "../../helpers/vaultV2.js";
@@ -91,19 +91,24 @@ describe("TransactionPlan forceRedeem at mainnet block 25,730,000", () => {
     plan = parseTransactionPlan(serializeTransactionPlan(plan));
     const [transaction] = buildTransactions(plan);
     if (!transaction) throw new Error("Expected the force-redeem transaction");
-    const handle = client
-      .extend(morphoViemExtension())
-      .morpho.vaultV2(vault, client.chain.id)
-      .forceRedeem({
-        deallocations: deallocations.map(({ assets, ...deallocation }) => ({
-          ...deallocation,
-          amount: assets,
-        })),
-        redeem,
-        userAddress: client.account.address,
-      });
+    const expected = vaultV2ForceRedeem({
+      vault: { address: vault },
+      args: {
+        deallocations: deallocations.map(
+          ({ assets, marketParams, ...deallocation }) => ({
+            ...deallocation,
+            ...(marketParams && {
+              marketParams: new MarketParams(marketParams),
+            }),
+            amount: assets,
+          }),
+        ),
+        redeem: { ...redeem, recipient: client.account.address },
+        onBehalf: client.account.address,
+      },
+    });
     expect(transaction.to).toBe(vault);
-    expect(transaction.data).toBe(handle.buildTx().data);
+    expect(transaction.data).toBe(expected.data);
     const hash = await client.sendTransaction(transaction);
     expect((await client.waitForTransactionReceipt({ hash })).status).toBe(
       "success",

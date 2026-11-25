@@ -10,6 +10,7 @@ import {
   type Chain,
   createWalletClient,
   http,
+  InvalidAddressError,
   isHex,
   maxUint256,
   verifyTypedData,
@@ -25,7 +26,11 @@ import {
   NonPositiveInputError,
   UnsupportedAuthorizationOperatorError,
 } from "../../../types/index.js";
-import { encodeBlueSignatureAuthorization } from "./encodeBlueSignatureAuthorization.js";
+import {
+  encodeBlueSignatureAuthorization,
+  encodeParsedBlueSignatureAuthorization,
+  parseBlueSignatureAuthorization,
+} from "./encodeBlueSignatureAuthorization.js";
 
 // Anvil account #0 — signing is local crypto, so no RPC is required.
 const account = privateKeyToAccount(
@@ -33,7 +38,9 @@ const account = privateKeyToAccount(
 );
 
 const blueBundlesV1 = addressesRegistry[mainnet.id].bundles?.blueBundlesV1;
-if (blueBundlesV1 == null) throw new Error("BlueBundlesV1 is not registered");
+if (blueBundlesV1 == null) {
+  throw new Error("BlueBundlesV1 is not registered");
+}
 
 function walletClient(chainId: number = mainnet.id) {
   const chain: Chain = { ...mainnet, id: chainId };
@@ -41,6 +48,44 @@ function walletClient(chainId: number = mainnet.id) {
 }
 
 describe("encodeBlueSignatureAuthorization", () => {
+  test.each([undefined, null])(
+    "rejects missing required authorized=%s without defaulting the operator",
+    async (authorized) => {
+      await expect(
+        encodeBlueSignatureAuthorization(walletClient(), {
+          owner: account.address,
+          // @ts-expect-error Exercise JavaScript callers that omit a required field.
+          authorized,
+          chainId: mainnet.id,
+          nonce: 0n,
+          deadline: 200n,
+          now: 100n,
+        }),
+      ).rejects.toBeInstanceOf(InvalidAddressError);
+    },
+  );
+
+  test("the constructor owns defaults and the complete signature operation", async () => {
+    const params = {
+      owner: account.address,
+      authorized: blueBundlesV1,
+      chainId: mainnet.id,
+      nonce: 7n,
+      now: 100n,
+    };
+    const parsed = parseBlueSignatureAuthorization(walletClient(), params);
+    params.nonce = 8n;
+    const requirement = await encodeParsedBlueSignatureAuthorization(parsed);
+    expect(requirement.action.typedData.message).toMatchObject({
+      authorizer: account.address,
+      authorized: blueBundlesV1,
+      nonce: 7n,
+      isAuthorized: true,
+      deadline: 7_300n,
+    });
+    expect(Object.isFrozen(requirement.action.typedData)).toBe(true);
+  });
+
   test("default authorization deadline uses the supplied reference time", async () => {
     const now = 1_000n;
     const requirement = await encodeBlueSignatureAuthorization(walletClient(), {

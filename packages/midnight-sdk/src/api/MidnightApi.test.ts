@@ -1,3 +1,4 @@
+import { fc, test as propertyTest } from "@fast-check/vitest";
 import packageJson from "@morpho-org/midnight-sdk/package.json" with {
   type: "json",
 };
@@ -330,11 +331,12 @@ const apiBidTakeableOffer = {
 
 function createQuoteFetch(
   takeableOffers: readonly (typeof apiTakeableOffer)[],
+  averageWorstPrice = "0",
 ) {
   return createJsonFetch({
     data: {
       average_best_price: "0",
-      average_worst_price: "0",
+      average_worst_price: averageWorstPrice,
       available_assets: "0",
       available_units: "0",
       takeable_offers: takeableOffers,
@@ -1128,6 +1130,50 @@ describe("MidnightApi.fetchBookPriceLevels", () => {
 });
 
 describe("MidnightApi.fetchBookTakeableOffers", () => {
+  test.each(["-1", "0x10", 1, "", (maxUint256 + 1n).toString()])(
+    "error: InvalidMidnightApiResponseError for invalid take units %j",
+    async (units) => {
+      const { fetch } = createJsonFetch({
+        data: [
+          {
+            ...apiTakeableOffer,
+            units,
+            offer: { ...apiOffer, max_units: "0", max_assets: "1" },
+          },
+        ],
+      });
+
+      await expect(
+        MidnightApi.fetchBookTakeableOffers({
+          marketId: MARKET_ID,
+          side: "asks",
+          fetch,
+        }),
+      ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+    },
+  );
+
+  test.each(["0", maxUint256.toString()])(
+    "behavior: accepts uint256 decimal take units %s",
+    async (units) => {
+      const { fetch } = createJsonFetch({
+        data: [
+          {
+            ...apiTakeableOffer,
+            units,
+            offer: { ...apiOffer, max_units: "0", max_assets: "1" },
+          },
+        ],
+      });
+      const result = await MidnightApi.fetchBookTakeableOffers({
+        marketId: MARKET_ID,
+        side: "asks",
+        fetch,
+      });
+      expect(result.data[0]?.units).toBe(BigInt(units));
+    },
+  );
+
   test("error: InvalidMidnightApiResponseError for takeable offer with both caps zero", async () => {
     const { fetch } = createJsonFetch({
       data: [
@@ -1205,6 +1251,278 @@ describe("MidnightApi.fetchBookTakeableOffers", () => {
 });
 
 describe("MidnightApi.fetchBookQuote", () => {
+  test.each(["asks", "bids"] as const)(
+    "behavior: positive-fee %s partial-fill slippage respects Router rounding boundary",
+    async (side) => {
+      const take = side === "asks" ? apiTakeableOffer : apiBidTakeableOffer;
+      const units = MathLib.WAD - 1n;
+      const price = TickLib.tickToPrice(take.offer.tick);
+      const assetNumerator = units * price;
+      expect(assetNumerator % MathLib.WAD).not.toBe(0n);
+      const assets =
+        side === "asks"
+          ? (assetNumerator + MathLib.WAD - 1n) / MathLib.WAD
+          : assetNumerator / MathLib.WAD;
+      const priceNumerator = assets * MathLib.WAD;
+      expect(priceNumerator % units).not.toBe(0n);
+      const routerAverage =
+        side === "asks"
+          ? (priceNumerator + units - 1n) / units
+          : priceNumerator / units;
+      const { fetch } = createJsonFetch({
+        data: {
+          average_best_price: routerAverage.toString(),
+          average_worst_price: routerAverage.toString(),
+          available_assets: assets.toString(),
+          available_units: MathLib.WAD.toString(),
+          takeable_offers: [{ ...take, units: MathLib.WAD.toString() }],
+        },
+      });
+      const params = {
+        marketId: MARKET_ID,
+        side,
+        units,
+        slippage: "0.01",
+        settlementFee: 5_000000000000000n,
+        fetch,
+      } as const;
+      const result = await MidnightApi.fetchBookQuote(params);
+      expect(result.data.averageWorstPrice).toBe(routerAverage.toString());
+
+      const strictGuard =
+        side === "asks" ? routerAverage - 1n : routerAverage + 1n;
+      const { fetch: strictFetch } = createJsonFetch({
+        data: {
+          average_best_price: routerAverage.toString(),
+          average_worst_price: strictGuard.toString(),
+          available_assets: assets.toString(),
+          available_units: MathLib.WAD.toString(),
+          takeable_offers: [{ ...take, units: MathLib.WAD.toString() }],
+        },
+      });
+      await expect(
+        MidnightApi.fetchBookQuote({ ...params, fetch: strictFetch }),
+      ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+    },
+  );
+
+  test.each([
+    ["asks", "units"],
+    ["bids", "units"],
+    ["asks", "assets"],
+    ["bids", "assets"],
+  ] as const)(
+    "behavior: positive-fee %s slippage guard uses raw Router prices (%s)",
+    async (side, target) => {
+      const take = side === "asks" ? apiTakeableOffer : apiBidTakeableOffer;
+      const price = TickLib.tickToPrice(take.offer.tick);
+      const guard = side === "asks" ? price + 1n : price - 1n;
+      const { fetch } = createJsonFetch({
+        data: {
+          average_best_price: price.toString(),
+          average_worst_price: guard.toString(),
+          available_assets: price.toString(),
+          available_units: MathLib.WAD.toString(),
+          takeable_offers: [{ ...take, units: MathLib.WAD.toString() }],
+        },
+      });
+      const result = await MidnightApi.fetchBookQuote({
+        marketId: MARKET_ID,
+        side,
+        ...(target === "units" ? { units: MathLib.WAD } : { assets: price }),
+        slippage: "0.01",
+        settlementFee: 5_000000000000000n,
+        fetch,
+      });
+      expect(result.data.averageWorstPrice).toBe(guard.toString());
+      expect(result.data.averageBestPrice).toBe(price.toString());
+    },
+  );
+
+  test.each(["asks", "bids"] as const)(
+    "error: %s slippage guard rejects a worse raw average",
+    async (side) => {
+      const take = side === "asks" ? apiTakeableOffer : apiBidTakeableOffer;
+      const price = TickLib.tickToPrice(take.offer.tick);
+      const guard = side === "asks" ? price - 1n : price + 1n;
+      const { fetch } = createJsonFetch({
+        data: {
+          average_best_price: price.toString(),
+          average_worst_price: guard.toString(),
+          available_assets: price.toString(),
+          available_units: MathLib.WAD.toString(),
+          takeable_offers: [{ ...take, units: MathLib.WAD.toString() }],
+        },
+      });
+      await expect(
+        MidnightApi.fetchBookQuote({
+          marketId: MARKET_ID,
+          side,
+          units: MathLib.WAD,
+          slippage: "0.01",
+          settlementFee: 5_000000000000000n,
+          fetch,
+        }),
+      ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+    },
+  );
+
+  test.each(["asks", "bids"] as const)(
+    "behavior: positive-fee %s absolute guard remains fee-aware",
+    async (side) => {
+      const take = side === "asks" ? apiTakeableOffer : apiBidTakeableOffer;
+      const price = TickLib.tickToPrice(take.offer.tick);
+      const settlementFee = 5_000000000000000n;
+      const guard =
+        side === "asks" ? price + settlementFee : price - settlementFee;
+      const { fetch } = createQuoteFetch([take]);
+      const params = {
+        marketId: MARKET_ID,
+        side,
+        units: MathLib.WAD,
+        settlementFee,
+        fetch,
+      } as const;
+      await expect(
+        MidnightApi.fetchBookQuote({ ...params, averageWorstPrice: price }),
+      ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+      const result = await MidnightApi.fetchBookQuote({
+        ...params,
+        averageWorstPrice: guard,
+      });
+      expect(result.data.averageWorstPrice).toBe(guard.toString());
+    },
+  );
+
+  test("behavior: runtime absolute guard takes precedence over slippage", async () => {
+    const price = TickLib.tickToPrice(apiTakeableOffer.offer.tick);
+    const settlementFee = 5_000000000000000n;
+    const { fetch } = createQuoteFetch(
+      [apiTakeableOffer],
+      (price + settlementFee).toString(),
+    );
+    const params = {
+      marketId: MARKET_ID,
+      side: "asks",
+      units: MathLib.WAD,
+      averageWorstPrice: price,
+      slippage: "0.01",
+      settlementFee,
+      fetch,
+    } as unknown as FetchBookQuoteParams;
+
+    await expect(MidnightApi.fetchBookQuote(params)).rejects.toBeInstanceOf(
+      InvalidMidnightApiResponseError,
+    );
+  });
+
+  test("error: slippage bids preserve SettlementFeeExceedsPriceError", async () => {
+    const { fetch } = createQuoteFetch([apiBidTakeableOffer]);
+    await expect(
+      MidnightApi.fetchBookQuote({
+        marketId: MARKET_ID,
+        side: "bids",
+        units: MathLib.WAD,
+        slippage: "0.01",
+        settlementFee: TickLib.tickToPrice(apiBidTakeableOffer.offer.tick) + 1n,
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(SettlementFeeExceedsPriceError);
+  });
+
+  test("error: InvalidMidnightApiResponseError for negative take units before an above-guard offer", async () => {
+    const units = 100n * MathLib.WAD;
+    const guard = TickLib.tickToPrice(0n) + 1n;
+    expect(TickLib.tickToPrice(apiOffer.tick)).toBeGreaterThan(guard);
+    const { fetch } = createQuoteFetch([
+      {
+        ...apiTakeableOffer,
+        units: (-10n * units).toString(),
+        offer: { ...apiOffer, tick: 0 },
+      },
+      { ...apiTakeableOffer, units: units.toString() },
+    ]);
+
+    await expect(
+      MidnightApi.fetchBookQuote({
+        marketId: MARKET_ID,
+        side: "asks",
+        units,
+        averageWorstPrice: guard,
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
+  propertyTest.prop(
+    [
+      fc.array(
+        fc.record({
+          tick: fc.integer({ min: 0, max: 990 }),
+          units: fc.bigInt({ min: -(10n ** 24n), max: 10n ** 24n }),
+        }),
+        { maxLength: 6 },
+      ),
+      fc.record({
+        target: fc.bigInt({ min: 1n, max: 10n ** 24n }),
+        guardTick: fc.integer({ min: 0, max: 990 }),
+      }),
+    ],
+    {
+      numRuns: 200,
+      examples: [[[{ tick: 0, units: -1n }], { target: 1n, guardTick: 0 }]],
+    },
+  )(
+    "behavior: resolved guarded asks quotes have non-negative units and respect the target-clamped price guard",
+    async (entries, { target, guardTick }) => {
+      const guard = TickLib.tickToPrice(guardTick);
+      const { fetch } = createQuoteFetch(
+        entries.map(({ tick, units }) => ({
+          ...apiTakeableOffer,
+          units: units.toString(),
+          offer: {
+            ...apiOffer,
+            tick,
+            max_units: "0",
+            max_assets: (10n ** 30n).toString(),
+          },
+        })),
+      );
+      let result: Awaited<ReturnType<typeof MidnightApi.fetchBookQuote>>;
+      try {
+        result = await MidnightApi.fetchBookQuote({
+          marketId: MARKET_ID,
+          side: "asks",
+          units: target,
+          averageWorstPrice: guard,
+          fetch,
+        });
+      } catch (error) {
+        expect(error).toBeInstanceOf(InvalidMidnightApiResponseError);
+        return;
+      }
+      let remaining = target;
+      let filledUnits = 0n;
+      let filledAssets = 0n;
+      for (const take of result.data.takeableOffers) {
+        expect(take.units).toBeGreaterThanOrEqual(0n);
+        const filled = MathLib.min(take.units, remaining);
+        filledUnits += filled;
+        filledAssets += MathLib.mulDivUp(
+          filled,
+          TickLib.tickToPrice(take.offer.tick),
+          MathLib.WAD,
+        );
+        remaining -= filled;
+      }
+      if (filledUnits > 0n) {
+        expect(
+          MathLib.mulDivUp(filledAssets, MathLib.WAD, filledUnits),
+        ).toBeLessThanOrEqual(guard);
+      }
+    },
+  );
+
   test("default", async () => {
     const { calls, fetch } = createJsonFetch({
       data: {
@@ -1881,6 +2199,16 @@ describe("MidnightApi.fetchBookQuote", () => {
 });
 
 describe("MidnightApi.fetchTakeableOffers", () => {
+  test("error: InvalidMidnightApiResponseError for negative take units", async () => {
+    const { fetch } = createJsonFetch({
+      data: [{ ...apiTakeableOffer, units: "-1" }],
+    });
+
+    await expect(
+      MidnightApi.fetchTakeableOffers({ maker: MAKER, fetch }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
   test("error: InvalidMidnightApiResponseError for takeable offer with both caps zero", async () => {
     const { fetch } = createJsonFetch({
       data: [

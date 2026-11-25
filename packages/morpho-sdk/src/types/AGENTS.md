@@ -37,3 +37,8 @@ One class per error case. Never throw a generic `Error` from SDK source.
 2. Extend the `TransactionAction` union.
 3. Reuse the generic input-bound errors for scalar validation; add a dedicated class in `error.ts` only for a distinct domain failure mode.
 4. Mark all properties `readonly`.
+5. Add [EVM simulation](../../../evm-simulation/AGENTS.md) support in the same PR. Add a fork test in
+   [`evm-simulation/test/e2e/`](../../../evm-simulation/test/e2e/) that builds the SDK transaction
+   and checks that `simulate` returns `ok: true`. The `sendE2eSimulated` helper already checks this.
+   Derive operation limits with `toSimulationLimits`. Use `limits: "none"` only when no operation
+   in the simulated bundle needs limits.

@@ -1,18 +1,15 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
-import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
-import { type Address, encodeFunctionData } from "viem";
-import { blueAbi } from "../../abis.js";
-import { addTransactionMetadata } from "../../helpers/index.js";
-import {
-  validateMarketParamsId,
-  validateUint256Field,
-} from "../../helpers/validate.js";
-import {
-  type BlueWithdrawBuyCallbackAction,
-  type Metadata,
-  NonPositiveInputError,
-  type Transaction,
+import type { Address } from "viem";
+import type {
+  BlueWithdrawBuyCallbackAction,
+  Metadata,
+  Transaction,
 } from "../../types/index.js";
+
+import {
+  buildBlueWithdrawBuyCallback,
+  parseBlueWithdrawBuyCallback,
+} from "./withdrawBuyCallback.internal.js";
 
 /** Parameters for {@link blueWithdrawBuyCallback}. */
 export interface BlueWithdrawBuyCallbackParams {
@@ -73,38 +70,5 @@ export interface BlueWithdrawBuyCallbackParams {
  */
 export const blueWithdrawBuyCallback = (
   params: BlueWithdrawBuyCallbackParams,
-): Readonly<Transaction<BlueWithdrawBuyCallbackAction>> => {
-  const { chainId, marketParams } = params.market;
-  const { callbackAddress, userAddress, shares } = params.args;
-  validateMarketParamsId(marketParams);
-  validateUint256Field("shares", shares);
-  if (shares === 0n) {
-    throw new NonPositiveInputError("shares", shares);
-  }
-
-  let tx = {
-    to: getChainAddress(chainId, "blue"),
-    value: 0n,
-    data: encodeFunctionData({
-      abi: blueAbi,
-      functionName: "withdraw",
-      args: [marketParams, 0n, shares, callbackAddress, userAddress],
-    }),
-  };
-  if (params.metadata) {
-    tx = addTransactionMetadata(tx, params.metadata);
-  }
-
-  return deepFreeze({
-    ...tx,
-    action: {
-      type: "blueWithdrawBuyCallback",
-      args: {
-        market: marketParams.id,
-        shares,
-        onBehalf: callbackAddress,
-        receiver: userAddress,
-      },
-    },
-  });
-};
+): Readonly<Transaction<BlueWithdrawBuyCallbackAction>> =>
+  buildBlueWithdrawBuyCallback(parseBlueWithdrawBuyCallback(params));

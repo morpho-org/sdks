@@ -1,5 +1,6 @@
-import { type MarketId, MathLib } from "@morpho-org/blue-sdk";
+import { type MarketId, MarketUtils, MathLib } from "@morpho-org/blue-sdk";
 import { blueAbi, vaultV2Abi } from "@morpho-org/morpho-sdk/abis";
+import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import {
   type Address,
   encodeAbiParameters,
@@ -9,6 +10,7 @@ import {
   parseAbiParameters,
   zeroAddress,
 } from "viem";
+import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
   ConsumerLimitViolationError,
@@ -21,6 +23,7 @@ import {
   type SlippageQuote,
 } from "../limits.js";
 import type { RawLog, Transfer } from "../types.js";
+import { resolveAssets } from "./backends/resolve-assets.js";
 import type { CheckContext } from "./context.js";
 import { sharePriceMeasurement } from "./measurement-plan.js";
 import type { ParsedOperationLimit } from "./request/parse-request.js";
@@ -76,7 +79,7 @@ describe("Midnight direct collateral batches", () => {
       const entries = [
         { collateralIndex: 0n, assets: 10n },
         { collateralIndex: 1n, assets: 20n },
-      ];
+      ] as const;
       const midnightMarket = {
         chainId: 1n,
         midnight: vault,
@@ -199,6 +202,482 @@ const verifySlippage = (
 };
 
 describe("verifySlippage", () => {
+  test.each(
+    (["blueSupplyCollateral", "blueSupplyCollateralBorrow"] as const).flatMap(
+      (type) =>
+        [
+          { name: "separate wNative pull fails", wrappedDebit: 1n, fail: true },
+          { name: "ETH-only exact funding" },
+          { name: "wrap then supply", wrap: true },
+          { name: "wNative-only funding", native: 0n, wrappedDebit: 100n },
+          {
+            name: "unmeasured wNative credit cannot mask excess ETH",
+            native: 110n,
+            wrappedCredit: 10n,
+            fail: true,
+          },
+          {
+            name: "unmeasured wNative credit with exact ETH funding",
+            wrappedCredit: 10n,
+          },
+          ...(type === "blueSupplyCollateralBorrow"
+            ? [
+                {
+                  name: "same-token wNative proceeds cannot mask excess ETH",
+                  sameToken: true,
+                  native: 150n,
+                  fail: true,
+                },
+                {
+                  name: "same-token wNative exact native funding",
+                  sameToken: true,
+                },
+                {
+                  name: "same-token wNative extra pull reduces proceeds",
+                  sameToken: true,
+                  wrappedDebit: 1n,
+                  fail: true,
+                  receivedFailure: true,
+                },
+              ]
+            : [
+                {
+                  name: "same-token single-leg retains combined funding",
+                  sameToken: true,
+                },
+                {
+                  name: "same-token single-leg extra pull fails",
+                  sameToken: true,
+                  wrappedDebit: 1n,
+                  fail: true,
+                },
+                ...[false, true].flatMap((reverse) =>
+                  [false, true].map((fail) => ({
+                    name: `cross-quote proceeds cannot mask ETH (reverse=${reverse}, excess=${fail})`,
+                    sameToken: true,
+                    crossQuote: true,
+                    reverse,
+                    native: fail ? 150n : 100n,
+                    fail,
+                  })),
+                ),
+              ]),
+          {
+            name: "multiple native collateral quotes retain funding coverage",
+            duplicate: true,
+          },
+          {
+            name: "multiple native collateral quotes reject extra pull",
+            duplicate: true,
+            wrappedDebit: 1n,
+            fail: true,
+          },
+          {
+            name: "mixed typed wNative funding",
+            mixed: true,
+            native: 0n,
+            wrappedDebit: 10n,
+          },
+          {
+            name: "mixed typed wNative extra pull fails",
+            mixed: true,
+            native: 0n,
+            wrappedDebit: 11n,
+            fail: true,
+          },
+          {
+            name: "reversed mixed funding",
+            mixed: true,
+            reverse: true,
+            native: 0n,
+            wrappedDebit: 10n,
+          },
+          {
+            name: "reversed mixed extra pull fails",
+            mixed: true,
+            reverse: true,
+            native: 0n,
+            wrappedDebit: 11n,
+            fail: true,
+          },
+          {
+            name: "mixed quote-only wNative funding",
+            mixed: true,
+            typed: false,
+            native: 0n,
+            wrappedDebit: 10n,
+          },
+          {
+            name: "mixed quote-only extra pull fails",
+            mixed: true,
+            typed: false,
+            native: 0n,
+            wrappedDebit: 11n,
+            fail: true,
+          },
+          {
+            name: "ETH-funded mixed quote-only exact funding",
+            mixed: true,
+            typed: false,
+            wrappedDebit: 10n,
+          },
+          {
+            name: "ETH-funded mixed quote-only oversized native send fails",
+            mixed: true,
+            typed: false,
+            native: 101n,
+            wrappedDebit: 10n,
+            fail: true,
+          },
+          {
+            name: "ETH-funded mixed quote-only extra wNative pull fails",
+            mixed: true,
+            typed: false,
+            wrappedDebit: 11n,
+            fail: true,
+          },
+          { name: "within tolerance", wrappedDebit: 1n, tolerance: 10n ** 16n },
+          {
+            name: "above tolerance fails",
+            wrappedDebit: 2n,
+            tolerance: 10n ** 16n,
+            fail: true,
+          },
+          { name: "missing wNative balance fails closed", missing: true },
+          {
+            name: "non-wNative collateral stays native-only",
+            registered: false,
+            wrappedDebit: 1n,
+          },
+          {
+            name: "non-sentinel quote stays balance-only",
+            nativeAlias: false,
+            native: 0n,
+            wrappedDebit: 100n,
+          },
+        ].map((scenario) => ({
+          type,
+          native: 100n,
+          wrappedDebit: 0n,
+          wrappedCredit: 0n,
+          tolerance: 0n,
+          fail: false,
+          wrap: false,
+          missing: false,
+          registered: true,
+          nativeAlias: true,
+          mixed: false,
+          reverse: false,
+          typed: true,
+          duplicate: false,
+          sameToken: false,
+          crossQuote: false,
+          receivedFailure: false,
+          ...scenario,
+        })),
+    ),
+  )(
+    "behavior: Blue collateral quote $type: $name",
+    async ({
+      type,
+      native,
+      wrappedDebit,
+      wrappedCredit,
+      tolerance,
+      fail,
+      wrap,
+      missing,
+      registered,
+      nativeAlias,
+      mixed,
+      reverse,
+      typed,
+      duplicate,
+      sameToken,
+      crossQuote,
+      receivedFailure,
+    }) => {
+      const wrapped: Address = "0x0000000000000000000000000000000000000004";
+      const loan: Address = sameToken
+        ? wrapped
+        : "0x0000000000000000000000000000000000000005";
+      const sameTokenBorrow =
+        sameToken && (type === "blueSupplyCollateralBorrow" || crossQuote);
+      const marketParams = {
+        loanToken: loan,
+        collateralToken: wrapped,
+        oracle: zeroAddress,
+        irm: zeroAddress,
+        lltv: 0n,
+      };
+      const handle = createMockClient(mainnet);
+      const fundingMarket = {
+        ...marketParams,
+        loanToken: wrapped,
+        collateralToken: loan,
+      };
+      const fundingMarketId = MarketUtils.getMarketId(fundingMarket);
+      mockRead(handle, {
+        address: vault,
+        abi: blueAbi,
+        functionName: "idToMarketParams",
+        result: [loan, wrapped, zeroAddress, zeroAddress, 0n],
+      });
+      const operation: ParsedOperationLimit = {
+        type,
+        marketId: MarketUtils.getMarketId(marketParams),
+        assetPaid: nativeAlias ? ethAddress : wrapped,
+        quote: {
+          assetsPaid: 100n,
+          collateralSupplied: 100n,
+          ...(type === "blueSupplyCollateralBorrow"
+            ? { assetsReceived: 50n, sharesMinted: 50n }
+            : {}),
+        },
+        slippageTolerance: tolerance,
+      };
+      const wNative = registered ? wrapped : loan;
+      const limits: ParsedOperationLimit[] = [operation];
+      if (crossQuote) {
+        limits.push({
+          type: "blueSupplyCollateralBorrow",
+          marketId: operation.marketId,
+          assetPaid: ethAddress,
+          quote: {
+            assetsPaid: 150n,
+            collateralSupplied: 100n,
+            assetsReceived: 50n,
+            sharesMinted: 50n,
+          },
+          slippageTolerance: 0n,
+        });
+      }
+      if (duplicate) limits.push(operation);
+      const operations = [
+        ...(await resolveAssets({
+          client: handle.client,
+          morpho: vault,
+          wNative,
+          operations: limits,
+          blockHash: `0x${"11".repeat(32)}`,
+        })),
+      ];
+      if (mixed) {
+        mockRead(handle, {
+          address: vault,
+          abi: blueAbi,
+          functionName: "idToMarketParams",
+          result: [wrapped, loan, zeroAddress, zeroAddress, 0n],
+        });
+        operations.push(
+          ...(await resolveAssets({
+            client: handle.client,
+            morpho: vault,
+            wNative,
+            blockHash: `0x${"11".repeat(32)}`,
+            operations: [
+              {
+                type: "blueSupply",
+                marketId: fundingMarketId,
+                ...(typed ? { inputs: { assets: 10n } } : {}),
+                quote: { assetsPaid: 10n, sharesMinted: 10n },
+                slippageTolerance: 0n,
+              },
+            ],
+          })),
+        );
+      }
+      if (reverse) operations.reverse();
+      const plan = planStateReads({
+        owner,
+        morpho: vault,
+        midnight: zeroAddress,
+        wNative,
+        operations,
+        nativeValueSent: native > 0n,
+      });
+      const measurement = plan.operations
+        .find(({ limit: plannedLimit }) => plannedLimit.type === type)
+        ?.measurements.find(({ field }) => field === "assetsPaid");
+      expect(measurement?.type).toBe(nativeAlias ? "native" : "balance");
+      if (nativeAlias && registered && !mixed && !sameTokenBorrow) {
+        expect(plan.reads).toContainEqual(
+          expect.objectContaining({
+            kind: "erc20.balance",
+            token: wrapped,
+            account: owner,
+          }),
+        );
+        expect(measurement).toMatchObject({
+          readId: expect.any(String),
+          wrappedDebitOnly: true,
+        });
+      } else if (nativeAlias) {
+        expect(measurement).toEqual({
+          field: "assetsPaid",
+          type: "native",
+          account: owner,
+        });
+      }
+      const before = new Map<string, StateValue>();
+      const after = new Map<string, StateValue>();
+      for (const read of plan.reads) {
+        before.set(
+          read.id,
+          read.kind === "morpho.position"
+            ? { supplyShares: 0n, borrowShares: 0n, collateral: 0n }
+            : 1000n,
+        );
+        after.set(
+          read.id,
+          read.kind === "morpho.position"
+            ? mixed && read.marketId === fundingMarketId
+              ? { supplyShares: 10n, borrowShares: 0n, collateral: 0n }
+              : {
+                  supplyShares: 0n,
+                  borrowShares:
+                    type === "blueSupplyCollateralBorrow" || crossQuote
+                      ? 50n
+                      : 0n,
+                  collateral: 100n,
+                }
+            : read.kind === "erc20.balance" && read.token === wrapped
+              ? 1000n +
+                (sameTokenBorrow ? 50n : 0n) +
+                wrappedCredit -
+                wrappedDebit
+              : 1050n,
+        );
+        if (
+          missing &&
+          read.kind === "erc20.balance" &&
+          read.token === wrapped
+        ) {
+          after.delete(read.id);
+        }
+      }
+      const result = findOperationSlippageFailures({
+        ctx,
+        operations: plan.operations,
+        before,
+        after,
+        transfers: [
+          {
+            token: ethAddress,
+            from: owner,
+            to: wrap ? wrapped : vault,
+            amount: sameTokenBorrow || wrappedCredit > 0n ? 100n : native,
+            txIdx: 0,
+          },
+          ...(wrappedCredit > 0n
+            ? [
+                {
+                  token: wrapped,
+                  from: vault,
+                  to: owner,
+                  amount: wrappedCredit,
+                  txIdx: 0,
+                },
+                {
+                  token: ethAddress,
+                  from: owner,
+                  to: receiver,
+                  amount: native - 100n,
+                  txIdx: 0,
+                },
+              ]
+            : []),
+          ...(sameTokenBorrow
+            ? [
+                {
+                  token: wrapped,
+                  from: vault,
+                  to: owner,
+                  amount: 50n,
+                  txIdx: 0,
+                },
+                {
+                  token: ethAddress,
+                  from: owner,
+                  to: receiver,
+                  amount: native - 100n,
+                  txIdx: 0,
+                },
+              ]
+            : []),
+          {
+            token: wrapped,
+            from: owner,
+            to: receiver,
+            amount: wrappedDebit,
+            txIdx: 0,
+          },
+          ...(wrap
+            ? [
+                {
+                  token: wrapped,
+                  from: zeroAddress,
+                  to: owner,
+                  amount: native,
+                  txIdx: 0,
+                },
+                {
+                  token: wrapped,
+                  from: owner,
+                  to: vault,
+                  amount: native,
+                  txIdx: 0,
+                },
+              ]
+            : []),
+        ],
+        logs: [],
+        morpho: vault,
+        requestTransactions: [{ from: owner, value: native }],
+      });
+      if (missing) {
+        expect(result.failures).toContainEqual(
+          expect.any(SlippageCheckUnavailableError),
+        );
+      } else if (fail && sameTokenBorrow) {
+        expect(result.failures).toContainEqual(
+          expect.objectContaining({
+            operationType: type,
+            field: receivedFailure ? "assetsReceived" : "assetsPaid",
+            observed: receivedFailure ? 50n - wrappedDebit : native,
+            bound: receivedFailure ? 50n : 100n,
+          }),
+        );
+      } else if (fail) {
+        const supplyPaymentFailed = mixed && native <= 100n;
+        expect(result.failures).toContainEqual(
+          expect.objectContaining({
+            operationType: supplyPaymentFailed ? "blueSupply" : type,
+            field: "assetsPaid",
+            observed: mixed
+              ? supplyPaymentFailed
+                ? wrappedDebit
+                : native
+              : native + wrappedDebit,
+            bound: supplyPaymentFailed
+              ? 10n
+              : 100n + (100n * tolerance) / 10n ** 18n,
+          }),
+        );
+        if (mixed && !typed) {
+          expect(
+            result.failures.filter(
+              (failure) =>
+                failure instanceof ConsumerLimitViolationError &&
+                failure.field === "assetsPaid",
+            ),
+          ).toHaveLength(1);
+        }
+      } else {
+        expect(result.failures).toEqual([]);
+      }
+    },
+  );
   test.each([
     "vaultV1Withdraw",
     "vaultV2Withdraw",
@@ -2907,61 +3386,6 @@ describe("verifySlippage — Midnight sells", () => {
     },
   );
 
-  test.each(["undefined", "empty"] as const)(
-    "error: combined limits fail closed when collateral supplies are %s",
-    (kind) => {
-      const combinedLimit = {
-        type: "midnightSupplyCollateralTakeBorrow",
-        marketId,
-        receiver: owner,
-        quote: {
-          collateralSupplies: [{ collateralIndex: 0n, assets: 30n }],
-          unitsSold: 10n,
-          assetsReceived: 20n,
-        },
-        slippageTolerance: 0n,
-      } satisfies ParsedOperationLimit;
-      const plan = planStateReads({
-        operations: [
-          {
-            limit: combinedLimit,
-            assetsReceived: token,
-            midnightMarket,
-            midnightCollateralTokens: [{ collateralIndex: 0n, token }],
-          },
-        ],
-        owner,
-        morpho: zeroAddress,
-        midnight,
-      });
-      const quote =
-        kind === "empty"
-          ? { ...combinedLimit.quote, collateralSupplies: [] }
-          : (() => {
-              const { collateralSupplies, ...remainingQuote } =
-                combinedLimit.quote;
-              expect(collateralSupplies).toBeDefined();
-              return remainingQuote;
-            })();
-      const plannedOperation = plan.operations[0]!;
-      const state = new Map(plan.reads.map(({ id }) => [id, 100n] as const));
-      expect(() =>
-        verifySlippage({
-          ctx,
-          logs: [],
-          morpho: zeroAddress,
-          operations: [
-            { ...plannedOperation, limit: { ...combinedLimit, quote } },
-          ],
-          before: state,
-          after: state,
-          transfers: [],
-          requestTransactions: [],
-        }),
-      ).toThrow(SlippageCheckUnavailableError);
-    },
-  );
-
   test("error: combined limits fail closed when collateral evidence is missing", () => {
     const combinedLimit: ParsedOperationLimit = {
       type: "midnightSupplyCollateralTakeBorrow",
@@ -4456,6 +4880,7 @@ describe("shared-read position bounds", () => {
         });
         expect(plan.reads.length).toBeGreaterThan(0);
         for (const read of plan.reads) {
+          if (read.kind === "morpho.marketParams") continue;
           const before = new Map<string, StateValue>(
             plan.reads.map((entry) => [
               entry.id,

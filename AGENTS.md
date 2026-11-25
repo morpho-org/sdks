@@ -6,7 +6,7 @@ Where present, `CLAUDE.md` is a symlink to `AGENTS.md` at every level — same c
 
 Every PR is measured against the rules below. A change that violates an architectural principle doesn't land — we question the change before we question the principle.
 
-> **Enforcement note.** The Biome formatter, knip, the fork harness in `@morpho-org/test`, and Changesets generation enforce some rules below. Biome's `noExcessiveCognitiveComplexity` (maximum 50), `noExcessiveLinesPerFunction` (maximum 120, skipping blank lines), `noNestedTernary`, `useCollapsedElseIf`, `noNegationElse`, `useBlockStatements`, `noNonNullAssertion`, `noExplicitAny` and `noTsIgnore` are errors in non-test source for `morpho-sdk`, `morpho-ts`, `evm-simulation`, `blue-sdk`, `blue-sdk-viem`, `wdk-protocol-lending-morpho-evm` and `morpho-test`. They warn in other packages' non-test source.
+> **Enforcement note.** The Biome formatter, knip, the fork harness in `@morpho-org/test`, and Changesets generation enforce some rules below. Biome's `noExcessiveCognitiveComplexity` (maximum 50), `noExcessiveLinesPerFunction` (maximum 120, skipping blank lines), `noNestedTernary`, `useCollapsedElseIf`, `noNegationElse`, `useBlockStatements`, `noNonNullAssertion`, `noExplicitAny` and `noTsIgnore` are errors in every package's `src/`, except in `*.test.ts` files and anything under a `test/` directory within `src/`.
 >
 > Most rules are **review-time conventions**, including JSDoc on every export, §2 patterns not covered by Biome (such as `as unknown as`, framework imports, and mocked viem clients on RPC paths), changeset requirements, and full coverage thresholds. Treat them as binding even when tooling does not enforce them.
 
@@ -193,6 +193,7 @@ The tooling decision is recorded in [ADR-2026-11-18](./docs/adrs/ADR-2026-11-18-
 - Bun 1.4.5 + Node ≥26. Root checks: `bun run lint` and `bun run test`.
 - Knip gates unused files, dependencies, and exports in `bun run lint`; public barrel exports aren't flagged (entry files).
 - Biome owns style: 2-space indent, organized imports, no unused imports or variables.
+- Oxlint checks address checksums. Run `bun run lint:address --fix` to correct them.
 - NodeNext module resolution; relative imports include `.js` (`export * from "./market/index.js"`).
 - Type-only imports where possible (`import type { Address } from "viem"`).
 - Never push a working branch with `--no-verify`. Fix what the hook flags, or report the hook if it is broken.

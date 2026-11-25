@@ -6,7 +6,7 @@ import type { MidnightCancelAndMakeParams } from "../types/midnightCancelAndMake
 /** @internal */
 export const snapshotMidnightCancelAndMakeParams = (
   params: MidnightCancelAndMakeParams,
-): MidnightCancelAndMakeParams => {
+) => {
   const {
     chainId,
     cancellations: inputCancellations,
@@ -25,7 +25,21 @@ export const snapshotMidnightCancelAndMakeParams = (
     metadata = { origin, ...(timestamp !== undefined && { timestamp }) };
   }
 
-  let publication: MidnightCancelAndMakeParams["publication"];
+  let publication:
+    | (Omit<
+        NonNullable<MidnightCancelAndMakeParams["publication"]>,
+        "collateral"
+      > & {
+        readonly collateral?: {
+          readonly market: ReturnType<typeof MarketUtils.toStruct>;
+          readonly supplies: NonNullable<
+            NonNullable<
+              MidnightCancelAndMakeParams["publication"]
+            >["collateral"]
+          >["supplies"];
+        };
+      })
+    | undefined;
   if (inputPublication != null) {
     const {
       ratifier,
@@ -60,9 +74,7 @@ export const snapshotMidnightCancelAndMakeParams = (
         callbackSalt,
       };
     }
-    let collateral: NonNullable<
-      MidnightCancelAndMakeParams["publication"]
-    >["collateral"];
+    let collateral: NonNullable<typeof publication>["collateral"];
     if (inputCollateral != null) {
       const { market: inputMarket, supplies: inputSupplies } = inputCollateral;
       const supplies = inputSupplies.map(({ collateralIndex, assets }) => ({

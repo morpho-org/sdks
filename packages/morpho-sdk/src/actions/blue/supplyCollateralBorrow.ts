@@ -1,33 +1,15 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
-import { type Address, encodeFunctionData } from "viem";
-import { blueBundlesV1Abi } from "../../abis.js";
-import {
-  validateMarketParamsId,
-  validateUint256Field,
-} from "../../helpers/validate.js";
-import {
-  type AuthorizationRequirementSignature,
-  type BlueSupplyCollateralBorrowAction,
-  type BundlesTokenRequirementSignature,
-  InputExceedsMaxError,
-  type Metadata,
-  NonPositiveInputError,
-  ReallocationsRequireBorrowError,
-  type Transaction,
-  UnexpectedRequirementSignatureError,
-  type VaultV2BlueReallocation,
+import type { Address } from "viem";
+import type {
+  AuthorizationRequirementSignature,
+  BlueSupplyCollateralBorrowAction,
+  BundlesTokenRequirementSignature,
+  Metadata,
+  Transaction,
+  VaultV2BlueReallocation,
 } from "../../types/index.js";
-import { getBundlesReferralFeeAssets } from "../bundles/common.js";
-import {
-  type BlueBundlesV1CommonParams,
-  finalizeBlueBundlesV1Transaction,
-  getBlueBundlesV1PenaltyAssets,
-  getBlueBundlesV1PublicAllocations,
-  getBlueBundlesV1SignedAuthorization,
-  getBlueBundlesV1TokenPermit,
-  normalizeBlueBundlesV1CommonParams,
-  validateBlueBundlesV1NativeFunding,
-} from "./common.js";
+import { encodeBlueSupplyCollateralBorrow } from "./encode.js";
+import { parseBlueSupplyCollateralBorrow } from "./supplyCollateralBorrow.internal.js";
 
 /** Parameters for {@link blueSupplyCollateralBorrow}. */
 export interface BlueSupplyCollateralBorrowParams {
@@ -88,7 +70,8 @@ export interface BlueSupplyCollateralBorrowParams {
  * @param params.metadata - Optional transaction metadata.
  * @returns A deep-frozen `Readonly<Transaction<BlueSupplyCollateralBorrowAction>>`
  *   whose `to` address is BlueBundlesV1 and whose `action` records the normalized inputs.
- * @throws {MarketIdMismatchError} when `marketParams.id` does not hash from its tuple fields.
+ * @throws {MarketIdMismatchError} when the target market or a reallocation source market has an
+ *   `id` that does not hash from its tuple fields.
  * @throws {NegativeInputError} when an amount, `maxLtv`, native value, or fee is negative.
  * @throws {NonPositiveInputError} when both operation legs are zero, the deadline is not positive,
  *   or a reallocation amount is not positive.
@@ -135,122 +118,5 @@ export interface BlueSupplyCollateralBorrowParams {
  */
 export const blueSupplyCollateralBorrow = (
   params: BlueSupplyCollateralBorrowParams,
-): Readonly<Transaction<BlueSupplyCollateralBorrowAction>> => {
-  const { chainId, marketParams } = params.market;
-  validateMarketParamsId(marketParams);
-  const {
-    userAddress,
-    collateralAssets,
-    borrowAssets,
-    maxLtv,
-    requirementSignature,
-    authorizationSignature,
-  } = params.args;
-  for (const [field, value] of [
-    ["collateralAssets", collateralAssets],
-    ["borrowAssets", borrowAssets],
-    ["maxLtv", maxLtv],
-  ] as const) {
-    validateUint256Field(field, value);
-  }
-  if (collateralAssets === 0n && borrowAssets === 0n) {
-    throw new NonPositiveInputError("collateralAssets or borrowAssets", 0n);
-  }
-
-  const reallocations = [...(params.args.reallocations ?? [])];
-  if (borrowAssets === 0n && reallocations.length > 0) {
-    throw new ReallocationsRequireBorrowError();
-  }
-  if (collateralAssets === 0n && requirementSignature != null) {
-    throw new UnexpectedRequirementSignatureError(
-      requirementSignature.action.type,
-    );
-  }
-  if (borrowAssets === 0n && authorizationSignature != null) {
-    throw new UnexpectedRequirementSignatureError("authorization");
-  }
-
-  const common: BlueBundlesV1CommonParams = {
-    chainId,
-    userAddress,
-    deadline: params.args.deadline,
-    referralFeePct: params.args.referralFeePct,
-    referralFeeRecipient: params.args.referralFeeRecipient,
-    metadata: params.metadata,
-  };
-  const { referralFeePct, referralFeeRecipient } =
-    normalizeBlueBundlesV1CommonParams(common);
-  const value = validateBlueBundlesV1NativeFunding({
-    chainId,
-    token: marketParams.collateralToken,
-    fundedAmount: collateralAssets,
-    nativeAmount: params.args.nativeAmount,
-    requirementSignature,
-  });
-  const collateralPermit = getBlueBundlesV1TokenPermit({
-    chainId,
-    userAddress,
-    token: marketParams.collateralToken,
-    amount: collateralAssets,
-    requirementSignature,
-  });
-  const signedAuthorization = getBlueBundlesV1SignedAuthorization({
-    chainId,
-    userAddress,
-    authorizationSignature,
-  });
-  const publicAllocations = getBlueBundlesV1PublicAllocations(
-    reallocations,
-    marketParams,
-  );
-  const reallocationPenaltyAssets =
-    getBlueBundlesV1PenaltyAssets(publicAllocations);
-  if (reallocationPenaltyAssets > borrowAssets) {
-    throw new InputExceedsMaxError({
-      field: "reallocationPenaltyAssets",
-      value: reallocationPenaltyAssets,
-      max: borrowAssets,
-    });
-  }
-
-  return finalizeBlueBundlesV1Transaction({
-    common,
-    value,
-    data: encodeFunctionData({
-      abi: blueBundlesV1Abi,
-      functionName: "blueBundlesV1SupplyCollateralAndBorrow",
-      args: [
-        marketParams,
-        collateralAssets,
-        borrowAssets,
-        maxLtv,
-        collateralPermit,
-        signedAuthorization,
-        publicAllocations,
-        referralFeePct,
-        referralFeeRecipient,
-        params.args.deadline,
-      ],
-    }),
-    action: {
-      type: "blueSupplyCollateralBorrow",
-      args: {
-        market: marketParams.id,
-        collateralAssets,
-        borrowAssets,
-        maxLtv,
-        onBehalf: userAddress,
-        nativeAmount: value > 0n ? value : undefined,
-        reallocations: publicAllocations.length,
-        reallocationPenaltyAssets,
-        referralFeePct,
-        referralFeeRecipient,
-        referralFeeAssets: getBundlesReferralFeeAssets(
-          borrowAssets - reallocationPenaltyAssets,
-          referralFeePct,
-        ),
-        deadline: params.args.deadline,
-      },
-    },
-  });
-};
+): Readonly<Transaction<BlueSupplyCollateralBorrowAction>> =>
+  encodeBlueSupplyCollateralBorrow(parseBlueSupplyCollateralBorrow(params));

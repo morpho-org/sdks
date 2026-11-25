@@ -192,6 +192,7 @@ test("reports a wrong-chain endpoint instead of missing contract code", async ()
   ).rejects.toBeInstanceOf(ChainIdMismatchError);
   expect(handle.request.mock.calls.map(([args]) => args.method)).toEqual([
     "eth_getCode",
+    "eth_getCode",
     "eth_chainId",
   ]);
 });

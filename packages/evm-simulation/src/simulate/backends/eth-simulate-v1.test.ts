@@ -27,7 +27,13 @@ import type { ExecutionPlan } from "../plan/plan-execution.js";
 import { planExecution } from "../plan/plan-execution.js";
 import { parseRequest } from "../request/index.js";
 import { decodeStateRead } from "../state/read-state.js";
-import { rpc as callRpc, executePlan } from "./eth-simulate-v1.js";
+import {
+  rpc as callRpc,
+  EVIDENCE_READ_GAS_BUDGET,
+  EVIDENCE_READ_GAS_FLOOR,
+  EVIDENCE_READ_GAS_LIMIT,
+  executePlan,
+} from "./eth-simulate-v1.js";
 
 const OWNER: Address = getAddress("0x1111111111111111111111111111111111111111");
 const VAULT: Address = getAddress("0x3333333333333333333333333333333333333333");
@@ -117,6 +123,42 @@ const FUNDING_MESSAGE =
   "Sender native balance cannot fund transaction value. Fund the sender or reduce value.";
 
 describe.sequential("executePlan", () => {
+  test.each([true, false])(
+    "behavior: hash selector is independent of parentHashCheck %s",
+    async (parentHashCheck) => {
+      respondHappy(okCalls(3));
+      await executePlan({ ...params, parentHashCheck });
+      const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+      expect(request.params[1]).toEqual({
+        blockHash: params.stateBlock.hash,
+        requireCanonical: true,
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  test.each([
+    [-32000, "header not found"],
+    [-32000, "hash is not currently canonical"],
+    [-32602, "invalid params"],
+  ])(
+    "error: hash rejection %s fails closed without fallback",
+    async (code, message) => {
+      fetchMock.mockResolvedValueOnce(
+        Response.json({ jsonrpc: "2.0", id: 1, error: { code, message } }),
+      );
+      const error = await executePlan(params).catch((cause: unknown) => cause);
+      expect(error).toBeInstanceOf(RpcTransportError);
+      expect((error as RpcTransportError).cause).toBeDefined();
+      const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+      expect(request.params[1]).toEqual({
+        blockHash: params.stateBlock.hash,
+        requireCanonical: true,
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    },
+  );
+
   test("passes RPC-shaped state overrides alongside block overrides", async () => {
     const stateOverrides = {
       [OWNER]: {
@@ -194,7 +236,7 @@ describe.sequential("executePlan", () => {
             },
           ],
         },
-        numberToHex(STATE_BLOCK),
+        { blockHash: params.stateBlock.hash, requireCanonical: true },
       ],
     });
     // No state overrides at all — no balance inflation.
@@ -235,6 +277,185 @@ describe.sequential("executePlan", () => {
         (call) => "gas" in call,
       ),
     ).toBe(false);
+  });
+
+  test("default: only SDK evidence reads carry the fixed evidence-read gas", async () => {
+    respondHappy(okCalls(3));
+    await executePlan(params);
+    const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      params: [{ blockStateCalls: [{ calls: Record<string, unknown>[] }] }];
+    };
+    const evidenceGas = numberToHex(EVIDENCE_READ_GAS_LIMIT);
+    expect(
+      request.params[0].blockStateCalls[0]?.calls.map((call) => call.gas),
+    ).toEqual([evidenceGas, undefined, evidenceGas]);
+  });
+
+  const sentGas = () => {
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      params: [{ blockStateCalls: [{ calls: { gas?: string }[] }] }];
+    };
+    return (body.params[0].blockStateCalls[0]?.calls ?? []).map((call) =>
+      call.gas === undefined ? undefined : BigInt(call.gas),
+    );
+  };
+
+  test("behavior: evidence reads at the budget floor keep the floor gas", async () => {
+    const reads = Array.from({ length: 75 }, (_, index) =>
+      makeBalanceRead(USDC, getAddress(numberToHex(index + 1, { size: 20 }))),
+    );
+    const plan = planExecution({
+      request: parseRequest(
+        {
+          limits: "none",
+          transactions: [{ from: OWNER, to: VAULT, data: "0x12" }],
+        },
+        1,
+      ),
+      owner: OWNER,
+      preparations: [],
+      reads,
+    });
+    respondHappy(okCalls(plan.calls.length));
+    await executePlan({ ...params, plan });
+    const readGas = sentGas().filter((value) => value !== undefined);
+    expect(readGas).toHaveLength(150);
+    expect(new Set(readGas)).toEqual(new Set([EVIDENCE_READ_GAS_FLOOR]));
+  });
+
+  test("behavior: evidence reads too many to share the budget carry no SDK gas", async () => {
+    const reads = Array.from({ length: 500 }, (_, index) =>
+      makeBalanceRead(USDC, getAddress(numberToHex(index + 1, { size: 20 }))),
+    );
+    const plan = planExecution({
+      request: parseRequest(
+        {
+          limits: "none",
+          transactions: [{ from: OWNER, to: VAULT, data: "0x12" }],
+        },
+        1,
+      ),
+      owner: OWNER,
+      preparations: [],
+      reads,
+    });
+    respondHappy(okCalls(plan.calls.length));
+    await executePlan({ ...params, plan });
+    const gas = sentGas();
+    expect(gas).toHaveLength(1001);
+    expect(gas.every((value) => value === undefined)).toBe(true);
+  });
+
+  test("behavior: many evidence reads share the evidence-read gas budget", async () => {
+    const reads = Array.from({ length: 40 }, (_, index) =>
+      makeBalanceRead(USDC, getAddress(numberToHex(index + 1, { size: 20 }))),
+    );
+    const plan = planExecution({
+      request: parseRequest(
+        {
+          limits: "none",
+          transactions: [{ from: OWNER, to: VAULT, data: "0x12" }],
+        },
+        1,
+      ),
+      owner: OWNER,
+      preparations: [],
+      reads,
+    });
+    respondHappy(okCalls(plan.calls.length));
+    await executePlan({ ...params, plan });
+    const gas = sentGas();
+    expect(gas).toHaveLength(81);
+    const readGas = gas.filter((value) => value !== undefined);
+    expect(readGas).toHaveLength(80);
+    expect(new Set(readGas)).toEqual(new Set([EVIDENCE_READ_GAS_BUDGET / 80n]));
+    expect(readGas.reduce((sum, value) => sum + value, 0n)).toBeLessThanOrEqual(
+      EVIDENCE_READ_GAS_BUDGET,
+    );
+  });
+
+  const planWithReads = (count: number) =>
+    planExecution({
+      request: parseRequest(
+        {
+          limits: "none",
+          transactions: [{ from: OWNER, to: VAULT, data: "0x12" }],
+        },
+        1,
+      ),
+      owner: OWNER,
+      preparations: [],
+      reads: Array.from({ length: count }, (_, index) =>
+        makeBalanceRead(USDC, getAddress(numberToHex(index + 1, { size: 20 }))),
+      ),
+    });
+
+  test("behavior: evidence reads use at most half of a small state block's gas limit", async () => {
+    const plan = planWithReads(5);
+    respondHappy(okCalls(plan.calls.length));
+    await executePlan({
+      ...params,
+      plan,
+      stateBlock: { ...params.stateBlock, gasLimit: 3_000_000n },
+    });
+    const readGas = sentGas().filter((value) => value !== undefined);
+    expect(readGas).toHaveLength(10);
+    expect(new Set(readGas)).toEqual(new Set([150_000n]));
+    expect(readGas.reduce((sum, value) => sum + value, 0n)).toBe(1_500_000n);
+  });
+
+  test("behavior: evidence reads a small state block cannot fund carry no SDK gas", async () => {
+    const plan = planWithReads(8);
+    respondHappy(okCalls(plan.calls.length));
+    await executePlan({
+      ...params,
+      plan,
+      stateBlock: { ...params.stateBlock, gasLimit: 3_000_000n },
+    });
+    const gas = sentGas();
+    expect(gas).toHaveLength(17);
+    expect(gas.every((value) => value === undefined)).toBe(true);
+  });
+
+  test("behavior: a large state block keeps the fixed evidence-read budget", async () => {
+    const plan = planWithReads(40);
+    respondHappy(okCalls(plan.calls.length));
+    await executePlan({
+      ...params,
+      plan,
+      stateBlock: { ...params.stateBlock, gasLimit: 200_000_000n },
+    });
+    const readGas = sentGas().filter((value) => value !== undefined);
+    expect(new Set(readGas)).toEqual(new Set([EVIDENCE_READ_GAS_BUDGET / 80n]));
+    expect(readGas.reduce((sum, value) => sum + value, 0n)).toBe(
+      EVIDENCE_READ_GAS_BUDGET,
+    );
+  });
+
+  test("behavior: derivation reads carry no SDK gas while balance reads do", async () => {
+    const plan = planExecution({
+      request: parseRequest(
+        {
+          limits: "none",
+          transactions: [{ from: OWNER, to: VAULT, data: "0x12" }],
+        },
+        1,
+      ),
+      owner: OWNER,
+      preparations: [],
+      reads: [makeBalanceRead(USDC, OWNER)],
+      derivationReads: [
+        { kind: "derivation", id: "derivation", to: VAULT, data: "0x1234" },
+      ],
+    });
+    respondHappy(okCalls(plan.calls.length));
+    await executePlan({ ...params, plan });
+    expect(sentGas()).toEqual([
+      undefined,
+      EVIDENCE_READ_GAS_LIMIT,
+      undefined,
+      EVIDENCE_READ_GAS_LIMIT,
+    ]);
   });
 
   test("behavior: a per-call gas limit is sent on every call", async () => {

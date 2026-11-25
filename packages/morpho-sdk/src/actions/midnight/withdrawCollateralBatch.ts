@@ -1,29 +1,13 @@
-import {
-  type MarketInput,
-  MarketUtils,
-  midnightAbi,
-} from "@morpho-org/midnight-sdk";
-import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
-import { type Address, isAddressEqual, zeroAddress } from "viem";
-import {
-  encodeMidnightCalldata,
-  encodeMidnightMarketId,
-} from "../../helpers/encodeMidnightCalldata.js";
-import { addTransactionMetadata } from "../../helpers/index.js";
-import { validateMidnightAddress } from "../../helpers/validateMidnightAccount.js";
-import { validateMidnightUint128Field } from "../../helpers/validateMidnightBounds.js";
-import { validateMidnightCollateralBatch } from "../../helpers/validateMidnightCollateralBatch.js";
-import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
-import { validateMidnightReceiver } from "../../helpers/validateMidnightReceiver.js";
-import {
-  EmptyMidnightCollateralWithdrawalsError,
-  type Metadata,
-  type MidnightCollateralTransfer,
-  type MidnightWithdrawCollateralBatchAction,
-  MidnightZeroOnBehalfError,
-  NonPositiveInputError,
-  type Transaction,
+import type { MarketInput } from "@morpho-org/midnight-sdk";
+import type { Address } from "viem";
+import type {
+  Metadata,
+  MidnightCollateralTransfer,
+  MidnightWithdrawCollateralBatchAction,
+  Transaction,
 } from "../../types/index.js";
+import { encodeMidnightWithdrawCollateralBatch } from "./encode.js";
+import { parseMidnightWithdrawCollateralBatch } from "./parseCollateralBatch.js";
 
 /** Parameters for an atomic direct Midnight collateral withdrawal batch. */
 export interface MidnightWithdrawCollateralBatchParams {
@@ -68,70 +52,7 @@ export interface MidnightWithdrawCollateralBatchParams {
  */
 export const midnightWithdrawCollateralBatch = (
   params: MidnightWithdrawCollateralBatchParams,
-): Readonly<Transaction<MidnightWithdrawCollateralBatchAction>> => {
-  // Reject malformed addresses before comparing with zero.
-  validateMidnightAddress("onBehalf", params.onBehalf);
-  if (isAddressEqual(params.onBehalf, zeroAddress)) {
-    throw new MidnightZeroOnBehalfError("onBehalf");
-  }
-  // Reject markets from another deployment before encoding.
-  validateMidnightMarket({ market: params.market, chainId: params.chainId });
-  validateMidnightReceiver({
-    chainId: params.chainId,
-    market: params.market,
-    field: "receiver",
-    receiver: params.receiver,
-  });
-  // Direct batches require one entry per index rather than summing duplicates.
-  validateMidnightCollateralBatch(
-    params.collateralWithdrawals,
-    new EmptyMidnightCollateralWithdrawalsError(),
+): Readonly<Transaction<MidnightWithdrawCollateralBatchAction>> =>
+  encodeMidnightWithdrawCollateralBatch(
+    parseMidnightWithdrawCollateralBatch(params),
   );
-  const calls = params.collateralWithdrawals.map(
-    ({ collateralIndex, assets }) => {
-      if (assets <= 0n) {
-        throw new NonPositiveInputError("assets", assets);
-      }
-      validateMidnightUint128Field("assets", assets);
-      // Reject indexes not configured on the market.
-      MarketUtils.getCollateralByIndex(params.market, collateralIndex);
-      return encodeMidnightCalldata({
-        abi: midnightAbi,
-        functionName: "withdrawCollateral",
-        args: [
-          MarketUtils.toStruct(params.market),
-          collateralIndex,
-          assets,
-          params.onBehalf,
-          params.receiver,
-        ],
-      });
-    },
-  );
-  let tx = {
-    to: getChainAddress(params.chainId, "midnight"),
-    value: 0n,
-    data: encodeMidnightCalldata({
-      abi: midnightAbi,
-      functionName: "multicall",
-      args: [calls],
-    }),
-  };
-  if (params.metadata) {
-    tx = addTransactionMetadata(tx, params.metadata);
-  }
-  return deepFreeze({
-    ...tx,
-    action: {
-      type: "midnightWithdrawCollateralBatch",
-      args: {
-        market: encodeMidnightMarketId(params.market),
-        collateralWithdrawals: params.collateralWithdrawals.map(
-          ({ collateralIndex, assets }) => ({ collateralIndex, assets }),
-        ),
-        onBehalf: params.onBehalf,
-        receiver: params.receiver,
-      },
-    },
-  });
-};

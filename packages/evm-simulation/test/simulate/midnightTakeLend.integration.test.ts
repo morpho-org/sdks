@@ -40,6 +40,7 @@ import { base } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
   ConsumerLimitViolationError,
+  simulate,
   toSimulationLimits,
 } from "../../src/index.js";
 import {
@@ -771,20 +772,28 @@ describe.sequential("Midnight takeLend limits — Base fork", () => {
       marketId,
     });
 
-    let failure: unknown;
-    try {
-      await simulateOrThrow(configFor(client), {
+    const report = await simulate(
+      configFor(client),
+      {
         transactions: [asTransaction(user, buyTx), asTransaction(user, sellTx)],
         limits,
-      });
-    } catch (error) {
-      failure = error;
-    }
-    expect(failure).toBeInstanceOf(ConsumerLimitViolationError);
-    expect((failure as Error).message).toContain(
+      },
+      { timeoutMs: 30_000 },
+    );
+    expect(report.ok).toBe(false);
+    expect(report.warnings.map(({ code }) => code)).toContain(
+      "UNEXPECTED_POSITION_CHANGE",
+    );
+    const limitError =
+      !report.ok &&
+      report.failures.find(
+        (error) => error instanceof ConsumerLimitViolationError,
+      );
+    expect(limitError).toBeInstanceOf(ConsumerLimitViolationError);
+    expect((limitError as Error).message).toContain(
       "Limit operation 0 (midnightTakeLend)",
     );
-    expect((failure as Error).message).toContain("unitsBought");
+    expect((limitError as Error).message).toContain("unitsBought");
   });
 
   test("two takes use one aggregate market quote", async ({ client }) => {

@@ -3,6 +3,15 @@ import type { SimulationOptions } from "../../types.js";
 import { validateOptions } from "./validate-options.js";
 
 describe("validateOptions", () => {
+  it.each(["hash", "number"] as const)(
+    "rejects removed blockSelector option %s",
+    (blockSelector) => {
+      expect(() =>
+        validateOptions({ blockSelector } as unknown as SimulationOptions),
+      ).toThrow(SimulationValidationError);
+    },
+  );
+
   it("accepts empty options", () => {
     expect(() => validateOptions({})).not.toThrow();
   });

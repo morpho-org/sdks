@@ -9,7 +9,7 @@ import type {
   MidnightAuthorizationAction,
   Transaction,
 } from "../../../types/index.js";
-import { validateClientChainId } from "../validateClientChainId.js";
+import { type ChainCheck, createChainCheck } from "../chainCheck.js";
 
 /** Parameters for {@link getMidnightAuthorizationRequirement}. */
 export interface GetMidnightAuthorizationRequirementParams {
@@ -18,6 +18,32 @@ export interface GetMidnightAuthorizationRequirementParams {
   readonly owner: Address;
   readonly authorized: Address;
 }
+
+declare const midnightAuthorizationRequirementInput: unique symbol;
+/** Complete checked Midnight authorization invocation. @internal */
+export type MidnightAuthorizationRequirementInput =
+  Readonly<GetMidnightAuthorizationRequirementParams> & {
+    readonly [midnightAuthorizationRequirementInput]: true;
+  };
+
+/** Owns the complete direct-caller authorization contract. @internal */
+export const parseMidnightAuthorizationRequirement = (
+  params: GetMidnightAuthorizationRequirementParams,
+): MidnightAuthorizationRequirementInput => {
+  const input = {
+    viemClient: params.viemClient,
+    chainId: params.chainId,
+    owner: params.owner,
+    authorized: params.authorized,
+  };
+  validateMidnightAccount("owner", input.owner);
+  validateChainId(input.viemClient.chain?.id, input.chainId);
+  validateMidnightAuthorizationTarget({
+    chainId: input.chainId,
+    authorized: input.authorized,
+  });
+  return { ...input } as MidnightAuthorizationRequirementInput;
+};
 
 /**
  * Resolves the Midnight authorization transaction for a Midnight bundle operator.
@@ -64,15 +90,17 @@ export interface GetMidnightAuthorizationRequirementParams {
 export const getMidnightAuthorizationRequirement = async (
   params: GetMidnightAuthorizationRequirementParams,
 ): Promise<Readonly<Transaction<MidnightAuthorizationAction>> | null> => {
-  // Reject the zero account before reading state for it.
-  validateMidnightAccount("owner", params.owner);
-  validateChainId(params.viemClient.chain?.id, params.chainId);
-  // Reject unknown operators before reading authorization state.
-  validateMidnightAuthorizationTarget({
-    chainId: params.chainId,
-    authorized: params.authorized,
-  });
-  await validateClientChainId(params.viemClient, params.chainId);
+  return getParsedMidnightAuthorizationRequirement(
+    parseMidnightAuthorizationRequirement(params),
+  );
+};
+
+/** Reads and builds from the complete checked authorization invocation. @internal */
+export const getParsedMidnightAuthorizationRequirement = async (
+  params: MidnightAuthorizationRequirementInput,
+  chainCheck: ChainCheck = createChainCheck(params.viemClient, params.chainId),
+): Promise<Readonly<Transaction<MidnightAuthorizationAction>> | null> => {
+  await chainCheck();
   const midnight = getChainAddress(params.chainId, "midnight");
   const isAuthorized = await readContract(params.viemClient, {
     address: midnight,

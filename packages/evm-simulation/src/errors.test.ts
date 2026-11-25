@@ -13,6 +13,7 @@ import {
   RpcTransportError,
   SIMULATION_ERROR_CODES,
   SimulationAssertError,
+  SimulationEffectError,
   type SimulationErrorCode,
   type SimulationErrorSeverity,
   SimulationExecutionError,
@@ -27,6 +28,7 @@ import {
   SlippageCheckUnavailableError,
   UnexpectedMidnightAuthorizationError,
   UnexpectedMorphoAuthorizationError,
+  UnexpectedPositionChangeError,
   UnexpectedSimulationError,
   UnexpectedTokenApprovalError,
   UnexpectedTokenTransferError,
@@ -53,8 +55,10 @@ const ERROR_GROUPS = [
 ] as const;
 const ERROR_GROUP_BY_CODE = {
   BLACKLIST_ERROR: SimulationSafetyError,
+  SIMULATION_EFFECT_FAILED: SimulationSafetyError,
   UNEXPECTED_TOKEN_APPROVAL: SimulationSafetyError,
   UNEXPECTED_TOKEN_TRANSFER: SimulationSafetyError,
+  UNEXPECTED_POSITION_CHANGE: SimulationSafetyError,
   UNEXPECTED_MORPHO_AUTHORIZATION: SimulationSafetyError,
   UNEXPECTED_MIDNIGHT_AUTHORIZATION: SimulationSafetyError,
   CONSUMER_LIMIT_VIOLATION: SimulationExecutionError,
@@ -78,8 +82,10 @@ const ERROR_GROUP_BY_CODE = {
 
 const SEVERITY_BY_CLASS = {
   BlacklistViolationError: "fatal",
+  SimulationEffectError: "fatal",
   UnexpectedTokenApprovalError: "fatal",
   UnexpectedTokenTransferError: "fatal",
+  UnexpectedPositionChangeError: "fatal",
   UnexpectedMorphoAuthorizationError: "fatal",
   UnexpectedMidnightAuthorizationError: "fatal",
   ConsumerLimitViolationError: "warn",
@@ -145,6 +151,10 @@ const errors = [
     logs: [],
   }),
   new BlacklistViolationError("retained"),
+  new SimulationEffectError(0, {
+    effectType: "erc20Approval",
+    reason: "expected event missing",
+  }),
   new SimulationValidationError("invalid"),
   new UnsupportedChainError(1),
   new RpcTransportError("unavailable"),
@@ -182,6 +192,11 @@ const errors = [
   }),
   new UnsupportedLimitActionError("unknownAction"),
   new UnexpectedTokenTransferError({ token: A, sender: A, recipients: [A] }),
+  new UnexpectedPositionChangeError({
+    protocol: "Blue",
+    event: "Borrow",
+    owner: A,
+  }),
 ];
 
 describe("SlippageCheckUnavailableError", () => {
@@ -303,10 +318,12 @@ describe("SimulationPackageError", () => {
         "UNSUPPORTED_LIMIT_ACTION",
         "UNEXPECTED_TOKEN_APPROVAL",
         "UNEXPECTED_TOKEN_TRANSFER",
+        "UNEXPECTED_POSITION_CHANGE",
         "UNEXPECTED_MORPHO_AUTHORIZATION",
         "UNEXPECTED_MIDNIGHT_AUTHORIZATION",
         "APPROVAL_CHECK_UNAVAILABLE",
         "UNUSED_AUTHORIZATION",
+        "SIMULATION_EFFECT_FAILED",
       ]
     `);
     expectTypeOf<
@@ -372,8 +389,10 @@ describe("SimulationPackageError", () => {
         ],
         "SimulationSafetyError": [
           "BLACKLIST_ERROR",
+          "SIMULATION_EFFECT_FAILED",
           "UNEXPECTED_MIDNIGHT_AUTHORIZATION",
           "UNEXPECTED_MORPHO_AUTHORIZATION",
+          "UNEXPECTED_POSITION_CHANGE",
           "UNEXPECTED_TOKEN_APPROVAL",
           "UNEXPECTED_TOKEN_TRANSFER",
         ],
@@ -384,6 +403,18 @@ describe("SimulationPackageError", () => {
   test("behavior: codes cover every concrete failure", () => {
     expect(new Set(errors.map((error) => error.code))).toEqual(
       new Set(SIMULATION_ERROR_CODES),
+    );
+  });
+
+  test("explains that a native collateral supply must use the simulation owner as its sender", () => {
+    const actual = "0x0000000000000000000000000000000000000002";
+    const error = new LimitAccountMismatchError({
+      field: "args.accountAddress",
+      expected: A,
+      actual,
+    });
+    expect(error.message).toBe(
+      `args.accountAddress: action specifies "${actual}", but it must equal the simulation owner "${A}", the account that sends the transaction.`,
     );
   });
 
@@ -560,7 +591,7 @@ describe("severity", () => {
       Object.values(SEVERITY_BY_CLASS);
     const count = (level: SimulationErrorSeverity) =>
       severities.filter((severity) => severity === level).length;
-    expect([count("fatal"), count("error"), count("warn")]).toEqual([5, 14, 4]);
+    expect([count("fatal"), count("error"), count("warn")]).toEqual([7, 14, 4]);
   });
 
   test("behavior: groups set the default and only UnusedAuthorizationError overrides it", () => {

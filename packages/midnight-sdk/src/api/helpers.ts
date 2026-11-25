@@ -53,21 +53,26 @@ export async function requestMidnightApi<Response = unknown>(
   url.hash = "";
   if (params.query != null) {
     for (const [key, value] of Object.entries(params.query)) {
-      if (value === undefined) continue;
-      if (Array.isArray(value) && value.length === 0) continue;
-      url.searchParams.set(
-        key,
-        Array.isArray(value)
-          ? value.map(String).join(",")
-          : value instanceof Date
-            ? value.toISOString()
-            : String(value),
-      );
+      if (value === undefined) {
+        continue;
+      }
+      if (Array.isArray(value) && value.length === 0) {
+        continue;
+      }
+      if (Array.isArray(value)) {
+        url.searchParams.set(key, value.map(String).join(","));
+      } else {
+        url.searchParams.set(
+          key,
+          value instanceof Date ? value.toISOString() : String(value),
+        );
+      }
     }
   }
   const headers = new Headers(params.request?.headers);
-  if (params.body !== undefined)
+  if (params.body !== undefined) {
     headers.set("Content-Type", "application/json");
+  }
   headers.set("sdk-version", version);
 
   const init: RequestInit = {
@@ -379,7 +384,9 @@ function mapTakeableOffer(
 
   return {
     marketId: takeableOffer.market_id,
-    units: BigInt(takeableOffer.units),
+    units: BigInt(
+      requireBigIntString(takeableOffer.units, "takeable offer units"),
+    ),
     offer: {
       market: {
         chainId: BigInt(offer.market.chain_id),
@@ -483,7 +490,9 @@ export function mapBoundTakeableOffers(
           receiverIfMakerIsSeller,
         });
       } catch (cause) {
-        if (!(cause instanceof InvalidOfferParameterError)) throw cause;
+        if (!(cause instanceof InvalidOfferParameterError)) {
+          throw cause;
+        }
         throw new InvalidMidnightApiResponseError(
           `Midnight API takeable offer for market_id "${take.marketId}" is not executable: ${cause.message}`,
           { cause },
@@ -550,11 +559,17 @@ export function mapBoundTakeableOffers(
     },
   );
 
-  if (context.side == null) return mapped;
+  if (context.side == null) {
+    return mapped;
+  }
 
   return [...mapped].sort((a, b) => {
-    if (a.offer.tick === b.offer.tick) return 0;
-    if (context.side === "asks") return a.offer.tick < b.offer.tick ? -1 : 1;
+    if (a.offer.tick === b.offer.tick) {
+      return 0;
+    }
+    if (context.side === "asks") {
+      return a.offer.tick < b.offer.tick ? -1 : 1;
+    }
     return a.offer.tick > b.offer.tick ? -1 : 1;
   });
 }
@@ -581,7 +596,9 @@ export function parseValidationResponse(
     }
 
     const details = record.details;
-    if (details == null) return { rule };
+    if (details == null) {
+      return { rule };
+    }
 
     if (
       rule === MempoolPayloadValidationRule.MinOfferAssetsUsd &&
@@ -655,8 +672,12 @@ export function parseResponseCursor(
   cursor: string | null | undefined,
   context: string,
 ): string | null {
-  if (cursor == null) return null;
-  if (typeof cursor === "string") return cursor;
+  if (cursor == null) {
+    return null;
+  }
+  if (typeof cursor === "string") {
+    return cursor;
+  }
   throw new InvalidMidnightApiResponseError(
     `Midnight API ${context} cursor is malformed.`,
   );
@@ -678,7 +699,9 @@ export function requireBigIntString(value: string, context: string): string {
 }
 
 function requireArray<T>(value: readonly T[], context: string): readonly T[] {
-  if (Array.isArray(value)) return value;
+  if (Array.isArray(value)) {
+    return value;
+  }
   throw new InvalidMidnightApiResponseError(
     `Midnight API ${context} is malformed.`,
   );
@@ -689,7 +712,9 @@ function requireRecord(
   value: unknown,
   context: string,
 ): Readonly<Record<string, unknown>> {
-  if (isRecord(value)) return value;
+  if (isRecord(value)) {
+    return value;
+  }
   throw new InvalidMidnightApiResponseError(
     `Midnight API ${context} is malformed.`,
   );

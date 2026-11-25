@@ -1,5 +1,19 @@
 # @morpho-org/test
 
+## 2.15.0
+
+### Minor Changes
+
+- Add the opt-in `reuseAnvil` option to `createViemTest`, which reverts and reuses one idle Anvil process across compatible tests instead of starting one per test, and export `AnvilLeaseClosedError` for client calls made after a reusing test ends.
+
+### Patch Changes
+
+- Classify `InvalidMidnightNativeAmountTypeError` and `InvalidBigIntInputError` as configuration errors in `classifyError`.
+- Make automined sends return sooner: `sendTransaction`, `sendRawTransaction` and `writeContract` now poll for the mined block from 1 ms, doubling up to 50 ms, instead of sleeping 50 ms after the first miss.
+- Reuse the pinned eRPC block response when a Vitest fixture starts a fresh Anvil. This does not change which tests reuse a process.
+- Keep the rest of a parallel Anvil instance's Foundry RPC cache snapshot when one of its slots, accounts or block hashes conflicts with the shared cache. The shared value is kept for the conflicting entry, so a slot Anvil wrote locally no longer discards every slot the instance fetched.
+- Refactor internal Anvil process, RPC proxy, and fixture helpers without changing the public API or behavior.
+
 ## 2.14.0
 
 ### Minor Changes

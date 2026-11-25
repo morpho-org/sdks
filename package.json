@@ -54,7 +54,7 @@
     "lint:ci": "biome check --config-path=biome.ci.json && bun run jsdoc:coverage:check && bun run lint:address && bun run lint:security-invariants && bun run typecheck:scripts && bun run knip",
     "knip": "knip",
     "lint:security-invariants": "node --no-warnings=ExperimentalWarning scripts/lint/security-invariants.ts",
-    "lint:address": "node --no-warnings=ExperimentalWarning scripts/lint/checksum-address.ts",
+    "lint:address": "oxlint -c .oxlintrc.sdk.jsonc",
     "typecheck:scripts": "tsc -p scripts/tsconfig.json",
     "jsdoc:coverage": "node --no-warnings=ExperimentalWarning scripts/jsdoc-coverage.ts",
     "jsdoc:coverage:check": "node --no-warnings=ExperimentalWarning scripts/jsdoc-coverage.ts --self-check",
@@ -82,8 +82,9 @@
     "fast-check": "catalog:",
     "happy-dom": "^21.0.4",
     "husky": "^9.1.7",
-    "knip": "6.37.0",
+    "knip": "6.47.0",
     "lint-staged": "^17.2.0",
+    "oxlint": "1.93.0",
     "solc": "0.8.36",
     "typedoc": "^0.28.20",
     "typescript": "catalog:",
@@ -94,7 +95,10 @@
   },
   "lint-staged": {
     "*.{json,gql}": "biome check --write --no-errors-on-unmatched",
-    "*.[tj]s*": "biome check --write --no-errors-on-unmatched && bun run lint:address"
+    "*.[tj]s*": [
+      "bun run lint:address --fix --no-error-on-unmatched-pattern",
+      "biome check --write --no-errors-on-unmatched"
+    ]
   },
   "commitlint": {
     "extends": [

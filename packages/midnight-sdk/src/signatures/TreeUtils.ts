@@ -17,6 +17,7 @@ import type {
 } from "../api/types.js";
 import { MAX_TREE_HEIGHT } from "../constants.js";
 import {
+  InvalidOfferGroupError,
   InvalidTreeError,
   InvalidTreeHeightError,
   MidnightMempoolValidationError,
@@ -27,6 +28,7 @@ import {
   type OfferStruct,
   OfferUtils,
 } from "../offers/index.js";
+import { assertNonzeroSellReceiver } from "../offers/offerReceiverInternal.js";
 import {
   EcrecoverRatifierUtils,
   type EcrecoverSignatureInput,
@@ -43,7 +45,11 @@ import { RateRatifierV1 } from "./RateRatifierV1.js";
 import { Ratifier } from "./Ratifier.js";
 import { SetterRatifierUtils } from "./SetterRatifier.js";
 import { Tree } from "./Tree.js";
-import { isPowerOfTwo, nextPowerOfTwo } from "./treeMathInternal.js";
+import {
+  isPowerOfTwo,
+  nextPowerOfTwo,
+  requireTreeItem,
+} from "./treeMathInternal.js";
 import type {
   AnyTree,
   AnyTreeSnapshot,
@@ -53,7 +59,9 @@ import type {
 } from "./treeTypes.js";
 
 function padOfferStructs(offers: readonly OfferStruct[]): OfferStruct[] {
-  if (isPowerOfTwo(offers.length)) return [...offers];
+  if (isPowerOfTwo(offers.length)) {
+    return [...offers];
+  }
   const paddedLength = nextPowerOfTwo(offers.length);
 
   return [
@@ -65,15 +73,42 @@ function padOfferStructs(offers: readonly OfferStruct[]): OfferStruct[] {
   ];
 }
 
+function assertIndependentStandaloneOffers(entries: TreeCreateParams): void {
+  const seen = new Set<string>();
+  for (const entry of entries) {
+    if (
+      GroupUtils.isGroupInput(entry) ||
+      (entry instanceof Offer && !entry.hasExplicitGroup)
+    ) {
+      continue;
+    }
+    const group = entry.group?.toLowerCase();
+    if (group === undefined) {
+      continue;
+    }
+    const key = `${entry.maker.toLowerCase()}:${group}`;
+    if (seen.has(key)) {
+      throw new InvalidOfferGroupError(
+        `Standalone offers from the same maker specify group "${group}". Pass a Group.create result to share a consumption cap.`,
+      );
+    }
+    seen.add(key);
+  }
+}
+
 function assertLeafOffers(
   offers: readonly OfferStruct[],
   leafHashes: readonly Hash[],
 ): void {
   const seen = new Set<Hash>();
   for (const [index, offer] of offers.entries()) {
-    if (isEmptyOfferStruct(offer, { allowDefaultGroup: true })) continue;
+    if (isEmptyOfferStruct(offer, { allowDefaultGroup: true })) {
+      continue;
+    }
 
-    const leafHash = leafHashes[index]!;
+    // Reject zero sell receivers on actual offers, not protocol padding.
+    assertNonzeroSellReceiver(offer);
+    const leafHash = requireTreeItem(leafHashes, index);
     if (seen.has(leafHash)) {
       throw new InvalidTreeError(`Duplicate offer hash "${leafHash}" in tree.`);
     }
@@ -87,12 +122,17 @@ function assertLeafOffers(
 }
 
 function buildLayers(leaves: readonly Hash[]): readonly (readonly Hash[])[] {
-  const layers: Hash[][] = [[...leaves]];
-  let level = layers[0]!;
+  let level = [...leaves];
+  const layers = [level];
   while (level.length > 1) {
     const next: Hash[] = [];
     for (let i = 0; i < level.length; i += 2) {
-      next.push(TreeUtils.hashNode(level[i]!, level[i + 1]!));
+      next.push(
+        TreeUtils.hashNode(
+          requireTreeItem(level, i),
+          requireTreeItem(level, i + 1),
+        ),
+      );
     }
     layers.push(next);
     level = next;
@@ -108,7 +148,9 @@ function assertProvableLeaves(leaves: readonly Hash[]): number {
     );
   }
   const height = Math.log2(leaves.length);
-  if (height > MAX_TREE_HEIGHT) throw new InvalidTreeHeightError(height);
+  if (height > MAX_TREE_HEIGHT) {
+    throw new InvalidTreeHeightError(height);
+  }
 
   return height;
 }
@@ -120,7 +162,7 @@ function computeRootFromLeaves(leaves: readonly Hash[]): {
   const height = assertProvableLeaves(leaves);
   const layers = buildLayers(leaves);
 
-  return { root: layers[height]![0]!, height };
+  return { root: requireTreeItem(requireTreeItem(layers, height), 0), height };
 }
 
 /**
@@ -555,7 +597,8 @@ export namespace TreeUtils {
    *
    * @param entries - Groups or standalone offers in leaf order.
    * @returns Offers in leaf order with their committed group ids.
-   * @throws {InvalidOfferGroupError} when an explicit group entry violates group mechanics.
+   * @throws {InvalidOfferGroupError} when a group violates group mechanics or standalone offers from one maker repeat an explicit group id.
+   * @throws {InvalidOfferParameterError} when an explicit group contains a sell offer with the zero address as its receiver.
    * @example
    * ```ts
    * import { TreeUtils, type TreeCreateParams } from "@morpho-org/midnight-sdk";
@@ -568,6 +611,8 @@ export namespace TreeUtils {
   export function normalizeEntries(
     entries: TreeCreateParams,
   ): readonly Offer[] {
+    // Reject shared caps before normalizing standalone offers independently.
+    assertIndependentStandaloneOffers(entries);
     return entries.flatMap((entry) =>
       GroupUtils.isGroupInput(entry)
         ? Group.from(entry).offers
@@ -593,7 +638,7 @@ export namespace TreeUtils {
    * each offer. A V1 `ratification` only asserts the matching route.
    *
    * @param params.chainId - Chain id whose API policy should validate the tree.
-   * @param params.tree - Offer tree or route-typed tree snapshot to validate. Serialized standard snapshots resume without rewriting committed groups.
+   * @param params.tree - Raw standard entries, an offer tree, or a route-typed snapshot to validate. Serialized standard snapshots resume without rewriting committed groups.
    * @param params.apiUrl - Optional Midnight API URL override used for the validation HTTP request.
    * @param params.timestamp - Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot.
    * @param params.fetch - Optional fetch implementation override used for the API call.
@@ -602,6 +647,8 @@ export namespace TreeUtils {
    * @returns Successful API validation result with `valid: true`.
    * @throws {InvalidTreeError} when the tree is empty, all padding, or duplicated, or when `ratification` does not match the tree route.
    * @throws {InvalidTreeHeightError} when the resulting height is unsupported.
+   * @throws {InvalidOfferGroupError} when raw standalone offers from one maker repeat an explicit group id.
+   * @throws {InvalidOfferParameterError} when raw tree input contains a sell offer with a zero receiver.
    * @throws {PayloadDecodeError} when validation payload encoding fails.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
@@ -706,16 +753,16 @@ export namespace TreeUtils {
           }));
         }
       } else if (params.ratification.type === "ecrecover") {
-        if (params.ratification.signature != null) {
+        if (params.ratification.signature == null) {
           items = await EcrecoverRatifierUtils.ratify({
             tree,
-            signature: params.ratification.signature,
+            client: params.ratification.client,
             account: params.ratification.account,
           });
         } else {
           items = await EcrecoverRatifierUtils.ratify({
             tree,
-            client: params.ratification.client,
+            signature: params.ratification.signature,
             account: params.ratification.account,
           });
         }
@@ -782,7 +829,8 @@ export namespace TreeUtils {
    * @returns Tree descriptor.
    * @throws {InvalidTreeError} when the offer count is empty, all padding, or duplicated.
    * @throws {InvalidTreeHeightError} when the padded tree exceeds supported ratifier typehashes.
-   * @throws {InvalidOfferGroupError} for priceV1/rateV1 entries whose explicit groups break `OfferUtils.validateOfferGroup` rules.
+   * @throws {InvalidOfferGroupError} when standalone standard offers from one maker repeat an explicit group id, or a group violates group mechanics.
+   * @throws {InvalidOfferParameterError} when a sell offer has the zero address as its receiver.
    * @throws {InvalidRateRatifierV1RateError} when a Rate leaf has a negative rate.
    * @throws {InvalidRateRatifierV1TickError} when a Rate leaf offer tick is below `RateRatifierV1.MIN_TICK`.
    * @example
@@ -828,7 +876,9 @@ export namespace TreeUtils {
    * @param entries - Untagged offers or groups in leaf order.
    * @returns Legacy padded standard-offer descriptor.
    * @throws {InvalidTreeError} When entries are empty, all padding, or duplicated.
+   * @throws {InvalidOfferParameterError} when a sell offer has the zero address as its receiver.
    * @throws {InvalidTreeHeightError} When the tree height is unsupported.
+   * @throws {InvalidOfferGroupError} When a group is empty or standalone offers from one maker repeat an explicit group id.
    * @example
    * ```ts
    * import { TreeUtils, type TreeCreateParams } from "@morpho-org/midnight-sdk";
@@ -882,6 +932,8 @@ export namespace TreeUtils {
           throw new InvalidTreeError("Unsupported tree ratifier route.");
       }
     }
+    // Reject shared caps before encoding standalone offers independently.
+    assertIndependentStandaloneOffers(entries);
     const structs = entries.flatMap((entry) =>
       GroupUtils.isGroupInput(entry)
         ? GroupUtils.toStructs(entry)
@@ -921,6 +973,8 @@ export namespace TreeUtils {
    * @returns Merkle root.
    * @throws {InvalidTreeError} when the offer count is empty, all padding, or duplicated.
    * @throws {InvalidTreeHeightError} when the padded tree exceeds supported ratifier typehashes.
+   * @throws {InvalidOfferGroupError} when standalone offers from one maker repeat an explicit group id.
+   * @throws {InvalidOfferParameterError} when a sell offer has the zero address as its receiver.
    * @example
    * ```ts
    * import { Offer, TreeUtils } from "@morpho-org/midnight-sdk";
@@ -1053,7 +1107,9 @@ export namespace TreeUtils {
     const layers = buildLayers(params.tree.leaves);
     const proof = layers
       .slice(0, -1)
-      .map((level, layerIndex) => level[(index >> layerIndex) ^ 1]!);
+      .map((level, layerIndex) =>
+        requireTreeItem(level, (index >> layerIndex) ^ 1),
+      );
 
     return deepFreeze({ root: params.tree.root, leafIndex, proof });
   }
@@ -1130,8 +1186,8 @@ export namespace TreeUtils {
       Array.from({ length: count }, (_, index) => ({
         root: params.tree.root,
         leafIndex: BigInt(index),
-        proof: siblingLayers.map(
-          (level, layerIndex) => level[(index >> layerIndex) ^ 1]!,
+        proof: siblingLayers.map((level, layerIndex) =>
+          requireTreeItem(level, (index >> layerIndex) ^ 1),
         ),
       })),
     );

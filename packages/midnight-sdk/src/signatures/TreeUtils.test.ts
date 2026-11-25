@@ -160,6 +160,43 @@ describe("Tree.create", () => {
 });
 
 describe("TreeUtils.normalizeEntries", () => {
+  test("error: InvalidOfferGroupError for repeated explicit ids regardless of hex casing", () => {
+    const group = bytesToHex(new Uint8Array(32).fill(0xab));
+    const maker = "0x000000000000000000000000000000000000ABcD";
+    const entries = [
+      baseOffer({
+        maker: maker.toLowerCase() as Hex,
+        group,
+        maxAssets: 0n,
+      }),
+      baseOffer({
+        maker,
+        group: `0x${group.slice(2).toUpperCase()}`,
+        maxAssets: 0n,
+        maxUnits: 7n,
+      }),
+    ];
+
+    expect(() => TreeUtils.normalizeEntries(entries)).toThrow(
+      InvalidOfferGroupError,
+    );
+  });
+
+  test("behavior: different makers can use the same explicit group id independently", () => {
+    const entries = [
+      baseOffer({ group: staleGroup, maxAssets: 0n }),
+      baseOffer({
+        group: staleGroup,
+        maker: zeroAddress,
+        maxAssets: 0n,
+      }),
+    ];
+
+    expect(
+      TreeUtils.normalizeEntries(entries).map((offer) => offer.group),
+    ).toEqual(entries.map((offer) => GroupUtils.hash([offer])));
+  });
+
   test("default: flattens groups and assigns singleton group ids", () => {
     const offer = baseOffer({ maxAssets: 0n });
     const group = Group.create([baseOffer({ maxAssets: 0n, maxUnits: 7n })]);
@@ -874,6 +911,17 @@ describe("TreeUtils.mempoolValidate", () => {
 });
 
 describe("TreeUtils.buildDescriptor", () => {
+  test("error: InvalidOfferGroupError for repeated explicit group ids in plain standalone offers", () => {
+    const entries = [
+      baseOfferInput({ group: staleGroup, maxAssets: 0n }),
+      baseOfferInput({ group: staleGroup, maxAssets: 0n, maxUnits: 7n }),
+    ];
+
+    expect(() => TreeUtils.buildDescriptor(entries)).toThrow(
+      InvalidOfferGroupError,
+    );
+  });
+
   test("default", () => {
     const payload = TreeUtils.buildDescriptor([baseOffer({ maxAssets: 0n })]);
 

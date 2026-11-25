@@ -12,7 +12,10 @@ import {
 import { getChainAddress, MathLib } from "@morpho-org/morpho-ts";
 import { type Address, type Client, maxUint256, zeroAddress } from "viem";
 import { getBlock, getBlockNumber, getCode, readContract } from "viem/actions";
-import { validateClientChainId } from "../../actions/requirements/validateClientChainId.js";
+import {
+  type ChainCheck,
+  createChainCheck,
+} from "../../actions/requirements/chainCheck.js";
 import {
   MidnightMarketLiquidationCursorNotEnabledError,
   MidnightMarketLltvNotEnabledError,
@@ -41,7 +44,7 @@ function requirePublicationState<T>(value: T | undefined): T {
 }
 
 /** @internal */
-export const offerMarketParams = (offer: Offer) =>
+const offerMarketParams = (offer: Offer) =>
   "params" in offer.market ? offer.market.params : offer.market;
 
 /** Onchain state used to validate one Midnight maker offer before publication.
@@ -353,7 +356,21 @@ export async function fetchMidnightMakerOfferStates(params: {
   readonly states: readonly MidnightMakerOfferState[];
   readonly now: bigint;
 }> {
-  await validateClientChainId(params.client, params.chainId);
+  return fetchMidnightMakerOfferStatesWithChainCheck(
+    params,
+    createChainCheck(params.client, params.chainId),
+  );
+}
+
+/** Reads maker state using the invocation's chain check. @internal */
+export async function fetchMidnightMakerOfferStatesWithChainCheck(
+  params: Parameters<typeof fetchMidnightMakerOfferStates>[0],
+  chainCheck: ChainCheck,
+): Promise<{
+  readonly states: readonly MidnightMakerOfferState[];
+  readonly now: bigint;
+}> {
+  await chainCheck();
   const blockNumber =
     params.blockNumber ?? (await getBlockNumber(params.client));
   const block = await getBlock(params.client, { blockNumber });

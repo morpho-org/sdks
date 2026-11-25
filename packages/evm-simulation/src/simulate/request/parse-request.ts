@@ -52,6 +52,7 @@ import {
   positionBoundsMarketField,
   sharePriceMeasurement,
 } from "../measurement-plan.js";
+import { parseEffects } from "./effects.js";
 import { INPUT_FIELDS, validateOperationInputs } from "./operation-inputs.js";
 
 /** A normalized user transaction: checksummed addresses, `value` defaulted to `0n`.
@@ -67,27 +68,71 @@ export interface ParsedTransaction {
   readonly assertLogs?: readonly LogAssertion[];
 }
 
+type CheckedLimit = CheckedOperationLimit | CheckedInputOperationLimit;
+
+/** An operation whose collateral supply quote has been validated. @internal */
+type ParsedCollateralTakeBorrowLimit = Extract<
+  CheckedLimit,
+  { readonly type: "midnightSupplyCollateralTakeBorrow" }
+> & {
+  readonly quote: SlippageQuote & {
+    readonly assetsReceived: bigint;
+    readonly collateralSupplies: readonly [
+      MidnightCollateralAmount,
+      ...MidnightCollateralAmount[],
+    ];
+  };
+};
+
+/** A batch whose non-empty collateral supply quote has been validated. @internal */
+type ParsedCollateralSupplyBatchLimit = Extract<
+  CheckedLimit,
+  { readonly type: "midnightSupplyCollateralBatch" }
+> & {
+  readonly quote: SlippageQuote & {
+    readonly collateralSupplies: readonly [
+      MidnightCollateralAmount,
+      ...MidnightCollateralAmount[],
+    ];
+  };
+};
+
 /**
- * An {@link OperationLimit} after parsing: `slippageTolerance` is always set
- * (the parser applies `DEFAULT_SLIPPAGE_TOLERANCE`).
+ * Validated operation limits with parser-established quote sides and
+ * `slippageTolerance` defaulted to `DEFAULT_SLIPPAGE_TOLERANCE`.
  * @internal
  */
 export type ParsedOperationLimit = (
-  | CheckedOperationLimit
-  | CheckedInputOperationLimit
+  | Exclude<
+      CheckedLimit,
+      {
+        readonly type:
+          | "midnightSupplyCollateralTakeBorrow"
+          | "midnightSupplyCollateralBatch";
+      }
+    >
+  | ParsedCollateralTakeBorrowLimit
+  | ParsedCollateralSupplyBatchLimit
 ) & {
   readonly derivedFields?: readonly ScalarQuoteField[];
   readonly exactFields?: readonly ScalarQuoteField[];
   readonly inactiveFields?: readonly ScalarQuoteField[];
 };
 
+declare const parsedRequestBrand: unique symbol;
+
 /** The output of {@link parseRequest}: the caller's input validated, checksummed and defaulted.
+ *
+ * The brand rejects hand-built object literals, but a spread copy keeps it, so a modified copy
+ * still type-checks. Pass any modified request data through {@link parseRequest} again.
  * @internal
  */
 export interface ParsedRequest {
+  readonly [parsedRequestBrand]: true;
+  readonly owner: Address;
   readonly chainId: number;
   readonly mode: SimulationMode;
-  readonly transactions: readonly ParsedTransaction[];
+  readonly transactions: readonly [ParsedTransaction, ...ParsedTransaction[]];
   /** Pending preview permissions or final-mode signed requests to check. */
   readonly authorizations: readonly SimulationAuthorization[];
   readonly blockNumber?: bigint | Exclude<BlockTag, "pending">;
@@ -218,7 +263,7 @@ const MIDNIGHT_DEBT_POSITION_BOUNDS_FIELDS = [
   "maxCollateral",
 ] as const;
 const BLOCK_KEYS = ["number", "hash", "timestamp"] as const;
-const LIMITS_KEYS = ["operations", "approvals"] as const;
+const LIMITS_KEYS = ["operations", "approvals", "effects"] as const;
 const AUTHORIZATION_KEYS: Readonly<Record<string, readonly string[]>> = {
   erc20Approval: ["type", "token", "owner", "spender", "amount"],
   erc2612Permit: ["type", "typedData"],
@@ -2279,7 +2324,10 @@ export function parseRequest(
 
   const { blockNumber, block } = parseBlockSelection(check, input);
   const authorizations = parseAuthorizations(check, input.authorizations);
-  const normalizedLimits = parseLimits(check, input.limits);
+  const normalizedLimits = parseLimits(check, {
+    limits: input.limits,
+    transactionCount: transactions.length,
+  });
   // Append cross-field errors after the per-field errors.
   checkBundleIdentity(fieldErrors, {
     transactions,
@@ -2288,23 +2336,26 @@ export function parseRequest(
     chainId,
   });
 
-  if (fieldErrors.length > 0) {
+  const [firstTransaction, ...remainingTransactions] = transactions;
+  if (fieldErrors.length > 0 || firstTransaction === undefined) {
     throw new SimulationValidationError(
       "Invalid simulation input",
       fieldErrors,
     );
   }
 
-  return deepFreeze<ParsedRequest>({
+  const request: Omit<ParsedRequest, typeof parsedRequestBrand> = {
+    owner: firstTransaction.from,
     chainId: chainId as number,
     mode,
-    transactions,
+    transactions: [firstTransaction, ...remainingTransactions],
     authorizations,
     ...(blockNumber === undefined ? {} : { blockNumber }),
     ...(block === undefined ? {} : { block }),
     ...(stateOverrides === undefined ? {} : { stateOverrides }),
     limits: normalizedLimits,
-  });
+  };
+  return deepFreeze(request as ParsedRequest);
 }
 
 function parseTransactions(
@@ -2456,7 +2507,10 @@ function parseAuthorizations(
 
 function parseLimits(
   check: FieldChecks,
-  limits: unknown,
+  {
+    limits,
+    transactionCount,
+  }: { readonly limits: unknown; readonly transactionCount: number },
 ): ParsedRequest["limits"] {
   const fieldErrors = check.errors;
   const operations: ParsedOperationLimit[] = [];
@@ -2466,10 +2520,16 @@ function parseLimits(
     normalizedLimits = "none";
   } else if (isRecord(limits)) {
     check.keys(limits, { allow: LIMITS_KEYS, path: "limits" });
+    const effects = parseEffects(
+      readField(limits, "effects"),
+      transactionCount,
+    );
     const rawOperations = readField(limits, "operations");
-    if (!Array.isArray(rawOperations) || rawOperations.length === 0) {
+    if (!Array.isArray(rawOperations)) {
+      fieldErrors.push('limits.operations: must be an array (or pass "none")');
+    } else if (rawOperations.length === 0 && !effects?.length) {
       fieldErrors.push(
-        'limits.operations: must be a non-empty array (or pass "none")',
+        'limits.operations: must be a non-empty array, or [] with non-empty limits.effects (or pass "none")',
       );
     } else {
       for (const [i, operation] of rawOperations.entries()) {
@@ -2502,6 +2562,7 @@ function parseLimits(
     }
     normalizedLimits = {
       operations,
+      ...(effects === undefined ? {} : { effects }),
       ...(approvals === undefined ? {} : { approvals }),
     };
   } else {

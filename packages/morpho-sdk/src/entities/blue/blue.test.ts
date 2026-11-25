@@ -1,8 +1,10 @@
 import {
   AccrualPosition,
   getChainAddresses,
+  type InputMarketParams,
   Market,
   MarketParams,
+  MarketUtils,
   MathLib,
   ORACLE_PRICE_SCALE,
   UnsupportedMarketIrmError,
@@ -13,6 +15,7 @@ import { expectFailClosed } from "@morpho-org/test/chaos";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import {
   type Address,
+  decodeFunctionData,
   erc20Abi,
   getTypesForEIP712Domain,
   hashDomain,
@@ -27,6 +30,19 @@ import {
   signerWalletClient,
 } from "../../../test/helpers/signer.js";
 import { withChainTimestamp } from "../../../test/helpers/time.js";
+import { blueBundlesV1Abi } from "../../abis.js";
+import {
+  blueBorrow,
+  blueRefinance,
+  blueRepay,
+  blueRepayWithdrawCollateral,
+  blueSupply,
+  blueSupplyCollateral,
+  blueSupplyCollateralBorrow,
+  blueWithdraw,
+  blueWithdrawBuyCallback,
+  blueWithdrawCollateral,
+} from "../../actions/blue/index.js";
 import { morphoViemExtension } from "../../client/index.js";
 import {
   DEFAULT_LLTV_BUFFER,
@@ -48,10 +64,12 @@ import {
   MissingAccrualPositionError,
   MissingContractCodeError,
   NegativeInputError,
+  NonPositiveInputError,
   ReferralFeePctExceededError,
   ReferralFeeRecipientMissingError,
   RepayExceedsDebtError,
   RepaySharesExceedDebtError,
+  type RequirementSignature,
   type VaultV2BlueReallocation,
   WithdrawExceedsCollateralError,
   WithdrawExceedsSupplyError,
@@ -114,6 +132,89 @@ const makePosition = (
   );
 
 const supplyMarketData = makePosition(marketParams).market;
+
+describe("native requirements served chain validation", () => {
+  test.each([
+    "supply",
+    "supplyCollateral",
+    "supplyCollateralBorrow",
+    "repay",
+    "repayWithdrawCollateral",
+    "supplyCollateralBorrow with authorization",
+    "repayWithdrawCollateral with authorization",
+  ] as const)(
+    "[INV-05] %s validates the served chain exactly once",
+    async (flow) => {
+      for (const servedChain of ["0x2105", "0x1"]) {
+        const handle = createMockClient(mainnet);
+        handle.request.mockImplementation(async ({ method }) => {
+          if (method === "eth_chainId") return servedChain;
+          if (method === "eth_getCode") return "0x6000";
+          if (method === "eth_call") return `0x${"0".repeat(64)}`;
+          throw new Error(`unexpected ${method}`);
+        });
+        const nativeMarketParams = new MarketParams({
+          ...marketParams,
+          loanToken: getChainAddress(mainnet.id, "wNative"),
+          collateralToken: getChainAddress(mainnet.id, "wNative"),
+        });
+        const entity = handle.client
+          .extend(morphoViemExtension({ supportSignature: false }))
+          .morpho.blue(nativeMarketParams, mainnet.id);
+        const common = { userAddress, nativeAmount: 1n, deadline: maxUint256 };
+        const positionData = makePosition(nativeMarketParams);
+        const action = (() => {
+          switch (flow) {
+            case "supply":
+              return entity.supply({
+                ...common,
+                assets: 1n,
+                marketData: positionData.market,
+              });
+            case "supplyCollateral":
+              return entity.supplyCollateral({
+                ...common,
+                collateralAssets: 1n,
+              });
+            case "supplyCollateralBorrow":
+            case "supplyCollateralBorrow with authorization":
+              return entity.supplyCollateralBorrow({
+                ...common,
+                positionData,
+                collateralAssets: 1n,
+                borrowAssets: flow.endsWith("authorization") ? 1n : 0n,
+              });
+            case "repay":
+              return entity.repay({ ...common, positionData, repayAssets: 1n });
+            case "repayWithdrawCollateral":
+            case "repayWithdrawCollateral with authorization":
+              return entity.repayWithdrawCollateral({
+                ...common,
+                positionData,
+                repayAssets: 1n,
+                collateralAssets: flow.endsWith("authorization") ? 1n : 0n,
+              });
+          }
+        })();
+        if (servedChain === "0x1") {
+          const requirements = await action.getRequirements();
+          expect(requirements).toHaveLength(
+            flow.endsWith("authorization") ? 1 : 0,
+          );
+        } else {
+          await expect(action.getRequirements()).rejects.toBeInstanceOf(
+            ChainIdMismatchError,
+          );
+        }
+        expect(
+          handle.request.mock.calls.filter(
+            ([call]) => call.method === "eth_chainId",
+          ),
+        ).toHaveLength(1);
+      }
+    },
+  );
+});
 
 describe.sequential("clock skew reproduction", () => {
   test.each([
@@ -200,6 +301,63 @@ describe.sequential("clock skew reproduction", () => {
       );
     },
   );
+  test("preserves reference time and metadata across whole-operation constructors", () => {
+    const now = 1_800_000_000n;
+    const entity = createMockClient(mainnet)
+      .client.extend(
+        morphoViemExtension({
+          metadata: { origin: "deadbeef", timestamp: true },
+        }),
+      )
+      .morpho.blue(marketParams, mainnet.id);
+    const common = { userAddress, deadline: now + 1_200n, now };
+    const positionData = makePosition(marketParams);
+    const calls = [
+      ...getCommonWriteCalls(entity, common),
+      [
+        "supplyCollateral",
+        () => entity.supplyCollateral({ ...common, collateralAssets: 1n }),
+      ],
+      [
+        "borrow",
+        () => entity.borrow({ ...common, positionData, borrowAssets: 1n }),
+      ],
+      [
+        "repay",
+        () => entity.repay({ ...common, positionData, repayAssets: 1n }),
+      ],
+      [
+        "withdrawCollateral",
+        () =>
+          entity.withdrawCollateral({
+            ...common,
+            positionData,
+            collateralAssets: 1n,
+          }),
+      ],
+      [
+        "withdrawBuyCallback",
+        () =>
+          entity.withdrawBuyCallback({
+            ...common,
+            callbackAddress: otherUserAddress,
+            positionData: makePosition(marketParams, {
+              user: otherUserAddress,
+              supplyShares: 10n,
+              borrowShares: 0n,
+            }),
+          }),
+      ],
+    ] as const;
+    for (const [name, create] of calls) {
+      const tx = withChainTimestamp(now + 10_800n, () => create().buildTx());
+      expect(`0x${tx.data.slice(-16, -8)}`, name).toBe(
+        numberToHex(now, { size: 4 }),
+      );
+      expect(tx.data.slice(-8), name).toBe("deadbeef");
+      expect(Object.isFrozen(tx), name).toBe(true);
+    }
+  });
   test("explicit reference time survives requirement re-checks while omission preserves expiry", async () => {
     const now = 1_800_000_000n;
     const handle = createMockClient(mainnet);
@@ -299,6 +457,7 @@ const getCommonWriteCalls = (
   entity: ReturnType<typeof makeEntity>,
   common: {
     deadline: bigint;
+    now?: bigint;
     referralFeePct?: bigint;
     referralFeeRecipient?: Address;
   } = { deadline: maxUint256 },
@@ -1721,6 +1880,90 @@ describe("MorphoBlue position validation", () => {
 });
 
 describe("MorphoBlue missing contract code", () => {
+  test("nested approval and authorization requirements share only an invocation-local preflight", async () => {
+    const handle = createMockClient(mainnet);
+    const defaultImpl = handle.request.getMockImplementation();
+    handle.request.mockImplementation(async ({ method, params }) => {
+      if (method === "eth_call") return `0x${"0".repeat(64)}`;
+      return defaultImpl?.({ method, params });
+    });
+    const entity = handle.client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.blue(marketParams, mainnet.id);
+    const createOperation = () =>
+      entity.supplyCollateralBorrow({
+        userAddress,
+        collateralAssets: 1n,
+        borrowAssets: 1n,
+        positionData: makePosition(marketParams, {
+          borrowShares: 0n,
+          lastUpdate: Time.timestamp(),
+        }),
+        deadline: maxUint256,
+      });
+    const operation = createOperation();
+    const first = await operation.getRequirements();
+    expect(first.map(({ action }) => action.type)).toEqual([
+      "erc20Approval",
+      "blueAuthorization",
+    ]);
+    const methods = () =>
+      handle.request.mock.calls.map(([{ method }]) => method);
+    expect(methods()).toEqual([
+      "eth_getCode",
+      "eth_getCode",
+      "eth_chainId",
+      "eth_call",
+      "eth_call",
+    ]);
+    handle.request.mockClear();
+    const second = await operation.getRequirements();
+    expect(second.map(({ action }) => action)).toEqual(
+      first.map(({ action }) => action),
+    );
+    expect(methods().filter((method) => method === "eth_chainId")).toHaveLength(
+      1,
+    );
+    handle.request.mockClear();
+    const concurrent = await Promise.all([
+      createOperation().getRequirements(),
+      createOperation().getRequirements(),
+    ]);
+    expect(
+      concurrent.map((requirements) =>
+        requirements.map(({ action }) => action),
+      ),
+    ).toEqual([
+      first.map(({ action }) => action),
+      first.map(({ action }) => action),
+    ]);
+    // Independent invocations have separate checks; viem may dedupe in-flight probes.
+    const concurrentProbes = methods().filter(
+      (method) => method === "eth_chainId",
+    ).length;
+    expect(concurrentProbes).toBeGreaterThanOrEqual(1);
+    expect(concurrentProbes).toBeLessThanOrEqual(2);
+    handle.request.mockClear();
+    const afterSettlement = await operation.getRequirements();
+    expect(afterSettlement.map(({ action }) => action)).toEqual(
+      first.map(({ action }) => action),
+    );
+    expect(methods().filter((method) => method === "eth_chainId")).toHaveLength(
+      1,
+    );
+    handle.request.mockClear();
+    handle.request.mockImplementation(async ({ method, params }) => {
+      if (method === "eth_chainId") return "0x2105";
+      return defaultImpl?.({ method, params });
+    });
+    await expect(operation.getRequirements()).rejects.toBeInstanceOf(
+      ChainIdMismatchError,
+    );
+    const probeIndex = methods().indexOf("eth_chainId");
+    expect(probeIndex).toBeGreaterThanOrEqual(0);
+    expect(methods().slice(probeIndex)).toEqual(["eth_chainId"]);
+  });
+
   test("error: supply fails closed on a code-less target before any downstream read", async () => {
     const handle = createMockClient(mainnet);
     handle.request.mockImplementation(async ({ method }) => {
@@ -1958,5 +2201,673 @@ describe("MorphoBlue supply snapshot checks", () => {
       }),
     ).toThrow(error);
     expect(request).not.toHaveBeenCalled();
+  });
+});
+
+describe("Blue parse-once handles", () => {
+  test("all write handles retain owned source, destination and reallocation market snapshots", () => {
+    const now = 1_800_000_000n;
+    withChainTimestamp(now, () => {
+      const source = new MarketParams({ ...marketParams });
+      const destination = new MarketParams({ ...destinationMarketParams });
+      const reallocationSource = new MarketParams({
+        ...marketParams,
+        oracle: "0x0000000000000000000000000000000000000093",
+      });
+      const entity = createMockClient(mainnet)
+        .client.extend(morphoViemExtension())
+        .morpho.blue(source, mainnet.id);
+      const common = { userAddress, deadline: now + 3_600n };
+      const positionData = makePosition(source, {
+        lastUpdate: now,
+        supplyShares: 100n,
+      });
+      const destinationPosition = makePosition(destination, {
+        lastUpdate: now,
+        borrowShares: 0n,
+        collateral: 0n,
+      });
+      const reallocations = [
+        {
+          vault: "0x0000000000000000000000000000000000000041",
+          from: {
+            type: "market",
+            adapter: "0x0000000000000000000000000000000000000042",
+            marketParams: reallocationSource,
+          },
+          to: { adapter: "0x0000000000000000000000000000000000000043" },
+          assets: 1n,
+          penalty: 0n,
+        },
+      ] as const satisfies readonly VaultV2BlueReallocation[];
+      const handles = [
+        entity.supply({ ...common, assets: 1n }),
+        entity.withdraw({ ...common, positionData, assets: 1n, reallocations }),
+        entity.supplyCollateral({ ...common, collateralAssets: 1n }),
+        entity.borrow({
+          ...common,
+          positionData,
+          borrowAssets: 1n,
+          reallocations,
+        }),
+        entity.supplyCollateralBorrow({
+          ...common,
+          positionData,
+          collateralAssets: 1n,
+          borrowAssets: 1n,
+          reallocations,
+        }),
+        entity.repay({ ...common, positionData, repayAssets: 1n }),
+        entity.withdrawCollateral({
+          ...common,
+          positionData,
+          collateralAssets: 1n,
+        }),
+        entity.repayWithdrawCollateral({
+          ...common,
+          positionData,
+          repayAssets: 1n,
+          collateralAssets: 1n,
+        }),
+        entity.refinance({
+          ...common,
+          positionData,
+          destination: {
+            marketParams: destination,
+            positionData: destinationPosition,
+          },
+          reallocations,
+        }),
+      ];
+      const callback = entity.withdrawBuyCallback({
+        userAddress,
+        callbackAddress: otherUserAddress,
+        positionData: makePosition(source, {
+          user: otherUserAddress,
+          supplyShares: 1n,
+          lastUpdate: now,
+        }),
+      });
+      const expected = handles.map((handle) => handle.buildTx());
+      const expectedCallback = callback.buildTx();
+      for (const market of [source, destination, reallocationSource]) {
+        expect(Object.isFrozen(market)).toBe(false);
+        Object.assign(market, {
+          oracle: "0x0000000000000000000000000000000000000099",
+        });
+      }
+      for (const [index, handle] of handles.entries()) {
+        const tx = handle.buildTx();
+        expect(tx).toEqual(expected[index]);
+        const decoded = decodeFunctionData({
+          abi: blueBundlesV1Abi,
+          data: tx.data,
+        });
+        const encodedSource = decoded.args?.[0] as InputMarketParams;
+        expect(encodedSource.oracle).not.toBe(source.oracle);
+        const sourceId = MarketUtils.getMarketId(encodedSource);
+        if (tx.action.type === "blueRefinance") {
+          expect(tx.action.args.sourceMarket).toBe(sourceId);
+          expect(decoded.functionName).toBe(
+            "blueBundlesV1MigrateBorrowPosition",
+          );
+          if (decoded.functionName === "blueBundlesV1MigrateBorrowPosition") {
+            expect(tx.action.args.destinationMarket).toBe(
+              MarketUtils.getMarketId(decoded.args[1]),
+            );
+            expect(decoded.args[1].oracle).not.toBe(destination.oracle);
+          }
+        } else expect(tx.action.args.market).toBe(sourceId);
+        const allocations =
+          decoded.functionName === "blueBundlesV1Withdraw" ||
+          decoded.functionName === "blueBundlesV1MigrateBorrowPosition"
+            ? decoded.args[4]
+            : decoded.functionName === "blueBundlesV1SupplyCollateralAndBorrow"
+              ? decoded.args[6]
+              : [];
+        for (const allocation of allocations) {
+          expect(MarketUtils.getMarketId(allocation.marketParams)).toBe(
+            tx.action.type === "blueRefinance"
+              ? tx.action.args.destinationMarket
+              : sourceId,
+          );
+          expect(MarketUtils.getMarketId(allocation.sourceMarketParams)).toBe(
+            reallocationSource.id,
+          );
+          expect(allocation.sourceMarketParams.oracle).not.toBe(
+            reallocationSource.oracle,
+          );
+        }
+      }
+      const callbackTx = callback.buildTx();
+      expect(callbackTx).toEqual(expectedCallback);
+      const decodedCallback = decodeFunctionData({
+        abi: blueAbi,
+        data: callbackTx.data,
+      });
+      expect(decodedCallback.functionName).toBe("withdraw");
+      if (decodedCallback.functionName === "withdraw")
+        expect(callbackTx.action.args.market).toBe(
+          MarketUtils.getMarketId(decodedCallback.args[0]),
+        );
+      for (const market of [source, destination, reallocationSource])
+        expect(Object.isFrozen(market)).toBe(false);
+    });
+  });
+
+  test("token requirements retain the snapshotted asset after caller market mutation", async () => {
+    const source = new MarketParams({ ...marketParams });
+    const mock = createMockClient(mainnet);
+    mockRead(mock, {
+      address: source.loanToken,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const entity = mock.client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.blue(source, mainnet.id);
+    const handle = entity.supply({
+      userAddress,
+      assets: 1n,
+      deadline: maxUint256,
+    });
+    const originalToken = source.loanToken;
+    Object.assign(source, {
+      loanToken: "0x0000000000000000000000000000000000000099",
+    });
+    const requirements = await handle.getRequirements();
+    expect(requirements).toMatchObject([
+      { to: originalToken, action: { type: "erc20Approval" } },
+    ]);
+  });
+
+  test.each(["user", "market"] as const)(
+    "callback %s mismatch precedes its zero-share error",
+    (mismatch) => {
+      const entity = makeEntity();
+      const positionData = makePosition(
+        mismatch === "market" ? destinationMarketParams : marketParams,
+        {
+          user: mismatch === "user" ? userAddress : otherUserAddress,
+          supplyShares: 0n,
+        },
+      );
+      expect(() =>
+        entity.withdrawBuyCallback({
+          userAddress,
+          callbackAddress: otherUserAddress,
+          positionData,
+        }),
+      ).toThrow(
+        mismatch === "user"
+          ? AccrualPositionUserMismatchError
+          : MarketIdMismatchError,
+      );
+    },
+  );
+
+  test("callback snapshot validation precedes registry address lookups", () => {
+    const chain = { ...mainnet, id: 999999 };
+    const entity = createMockClient(chain)
+      .client.extend(morphoViemExtension())
+      .morpho.blue(marketParams, chain.id);
+    expect(() =>
+      entity.withdrawBuyCallback({
+        userAddress,
+        callbackAddress: otherUserAddress,
+        positionData: makePosition(marketParams, {
+          user: userAddress,
+          supplyShares: 0n,
+        }),
+      }),
+    ).toThrow(AccrualPositionUserMismatchError);
+  });
+
+  test("stale destination id precedes a missing refinance source snapshot", () => {
+    const destination = new MarketParams({ ...destinationMarketParams });
+    Object.assign(destination, {
+      oracle: "0x0000000000000000000000000000000000000099",
+    });
+    expect(() =>
+      makeEntity().refinance({
+        userAddress,
+        deadline: maxUint256,
+        positionData: undefined as unknown as AccrualPosition,
+        destination: {
+          marketParams: destination,
+          positionData: makePosition(destinationMarketParams),
+        },
+      }),
+    ).toThrow(MarketIdMismatchError);
+  });
+
+  test("all Blue operations match their standalone builders", () => {
+    const now = 1_800_000_000n;
+    withChainTimestamp(now, () => {
+      const deadline = now + 3_600n;
+      const entity = makeEntity();
+      const positionData = makePosition(marketParams, {
+        lastUpdate: now,
+        supplyShares: 100n,
+      });
+      const destinationPositionData = makePosition(destinationMarketParams, {
+        lastUpdate: now,
+        borrowShares: 0n,
+        collateral: 0n,
+      });
+      const market = { chainId: mainnet.id, marketParams };
+      const args = { userAddress, deadline };
+      const maxLtv = marketParams.lltv - DEFAULT_LLTV_BUFFER;
+      const pairs = [
+        [
+          entity.supply({ ...args, assets: 1n }).buildTx(),
+          blueSupply({ market, args: { ...args, assets: 1n } }),
+        ],
+        [
+          entity.withdraw({ ...args, positionData, assets: 1n }).buildTx(),
+          blueWithdraw({
+            market,
+            args: { ...args, withdrawAssets: 1n, withdrawShares: 0n },
+          }),
+        ],
+        [
+          entity.supplyCollateral({ ...args, collateralAssets: 1n }).buildTx(),
+          blueSupplyCollateral({
+            market,
+            args: { ...args, collateralAssets: 1n },
+          }),
+        ],
+        [
+          entity.borrow({ ...args, positionData, borrowAssets: 1n }).buildTx(),
+          blueBorrow({ market, args: { ...args, borrowAssets: 1n, maxLtv } }),
+        ],
+        [
+          entity
+            .supplyCollateralBorrow({
+              ...args,
+              positionData,
+              collateralAssets: 1n,
+              borrowAssets: 1n,
+            })
+            .buildTx(),
+          blueSupplyCollateralBorrow({
+            market,
+            args: { ...args, collateralAssets: 1n, borrowAssets: 1n, maxLtv },
+          }),
+        ],
+        [
+          entity.repay({ ...args, positionData, repayAssets: 1n }).buildTx(),
+          blueRepay({
+            market,
+            args: {
+              ...args,
+              repayAssets: 1n,
+              repayShares: 0n,
+              maxRepayAssets: 1n,
+            },
+          }),
+        ],
+        [
+          entity
+            .withdrawCollateral({ ...args, positionData, collateralAssets: 1n })
+            .buildTx(),
+          blueWithdrawCollateral({
+            market,
+            args: { ...args, collateralAssets: 1n, maxLtv },
+          }),
+        ],
+        [
+          entity
+            .repayWithdrawCollateral({
+              ...args,
+              positionData,
+              repayAssets: 1n,
+              collateralAssets: 1n,
+            })
+            .buildTx(),
+          blueRepayWithdrawCollateral({
+            market,
+            args: {
+              ...args,
+              repayAssets: 1n,
+              repayShares: 0n,
+              maxRepayAssets: 1n,
+              collateralAssets: 1n,
+              maxLtv,
+            },
+          }),
+        ],
+        [
+          entity
+            .refinance({
+              ...args,
+              positionData,
+              destination: {
+                marketParams: destinationMarketParams,
+                positionData: destinationPositionData,
+              },
+            })
+            .buildTx(),
+          blueRefinance({
+            market: {
+              chainId: mainnet.id,
+              sourceMarketParams: marketParams,
+              destinationMarketParams,
+            },
+            args: { ...args, maxLtv },
+          }),
+        ],
+        [
+          entity
+            .withdrawBuyCallback({
+              userAddress,
+              callbackAddress: otherUserAddress,
+              positionData: makePosition(marketParams, {
+                user: otherUserAddress,
+                supplyShares: 1n,
+                lastUpdate: now,
+              }),
+            })
+            .buildTx(),
+          blueWithdrawBuyCallback({
+            market,
+            args: {
+              userAddress,
+              callbackAddress: otherUserAddress,
+              shares: 1n,
+            },
+          }),
+        ],
+      ] as const;
+      for (const [actual, expected] of pairs) {
+        expect(actual).toEqual(expected);
+        expect(Object.isFrozen(actual)).toBe(true);
+        expect(Object.isFrozen(actual.action.args)).toBe(true);
+      }
+    });
+  });
+
+  test("common referral parsing precedes amount and snapshot errors as on main", () => {
+    const entity = makeEntity();
+    const common = { userAddress, deadline: maxUint256, referralFeePct: 1n };
+    expect(() => entity.supply({ ...common, assets: 0n })).toThrow(
+      ReferralFeeRecipientMissingError,
+    );
+    expect(() =>
+      entity.supplyCollateral({ ...common, collateralAssets: -1n }),
+    ).toThrow(ReferralFeeRecipientMissingError);
+    expect(() =>
+      entity.supplyCollateralBorrow({
+        ...common,
+        collateralAssets: -1n,
+        borrowAssets: 0n,
+      }),
+    ).toThrow(ReferralFeeRecipientMissingError);
+    expect(() =>
+      entity.borrow({
+        ...common,
+        borrowAssets: -1n,
+        positionData: undefined as unknown as AccrualPosition,
+      }),
+    ).toThrow(ReferralFeeRecipientMissingError);
+    expect(() =>
+      entity.withdraw({
+        ...common,
+        assets: -1n,
+        positionData: undefined as unknown as AccrualPosition,
+      }),
+    ).toThrow(ReferralFeeRecipientMissingError);
+    expect(() =>
+      entity.repay({
+        ...common,
+        repayAssets: -1n,
+        positionData: undefined as unknown as AccrualPosition,
+      }),
+    ).toThrow(ReferralFeeRecipientMissingError);
+    expect(() =>
+      entity.withdrawCollateral({
+        ...common,
+        collateralAssets: -1n,
+        positionData: undefined as unknown as AccrualPosition,
+      }),
+    ).toThrow(ReferralFeeRecipientMissingError);
+    expect(() =>
+      entity.repayWithdrawCollateral({
+        ...common,
+        repayAssets: -1n,
+        collateralAssets: 0n,
+        positionData: undefined as unknown as AccrualPosition,
+      }),
+    ).toThrow(ReferralFeeRecipientMissingError);
+  });
+
+  test("refinance and callback snapshot errors precede deferred raw checks as on main", () => {
+    expect(() =>
+      makeEntity().refinance({
+        userAddress,
+        deadline: maxUint256,
+        positionData: undefined as unknown as AccrualPosition,
+        destination: {
+          marketParams,
+          positionData: undefined as unknown as AccrualPosition,
+        },
+      }),
+    ).toThrow(MissingAccrualPositionError);
+    expect(() =>
+      makeEntity().withdrawBuyCallback({
+        userAddress,
+        callbackAddress: otherUserAddress,
+        positionData: makePosition(marketParams, { supplyShares: -1n }),
+      }),
+    ).toThrow(AccrualPositionUserMismatchError);
+  });
+
+  test("withdraw preserves entity amount field names", () => {
+    const positionData = makePosition(marketParams);
+    for (const [amounts, ErrorClass, field] of [
+      [{ assets: -1n }, NegativeInputError, "assets"],
+      [{ shares: -1n }, NegativeInputError, "shares"],
+      [{ assets: 0n }, NonPositiveInputError, "assets or shares"],
+      [{ shares: 0n }, NonPositiveInputError, "assets or shares"],
+    ] as const) {
+      expect(() =>
+        makeEntity().withdraw({
+          userAddress,
+          positionData,
+          deadline: maxUint256,
+          ...amounts,
+        }),
+      ).toThrow(expect.objectContaining({ constructor: ErrorClass, field }));
+    }
+  });
+
+  test("ABI-bound supply errors now occur at handle construction", () => {
+    const entity = makeEntity();
+    const common = { userAddress, deadline: maxUint256 };
+    expect(() => entity.supply({ ...common, assets: maxUint256 + 1n })).toThrow(
+      InputExceedsMaxError,
+    );
+    expect(() =>
+      entity.supplyCollateral({ ...common, collateralAssets: maxUint256 + 1n }),
+    ).toThrow(InputExceedsMaxError);
+    expect(() =>
+      entity.supplyCollateralBorrow({
+        ...common,
+        collateralAssets: maxUint256 + 1n,
+        borrowAssets: 0n,
+      }),
+    ).toThrow(InputExceedsMaxError);
+  });
+
+  test("clock and negative amount checks retain entity precedence before eager ABI bounds", () => {
+    expect(() =>
+      makeEntity().supply({
+        userAddress,
+        assets: maxUint256 + 1n,
+        deadline: 0n,
+      }),
+    ).toThrow(ExpiredDeadlineError);
+    expect(() =>
+      makeEntity().supplyCollateralBorrow({
+        userAddress,
+        collateralAssets: maxUint256 + 1n,
+        borrowAssets: -1n,
+        deadline: maxUint256,
+      }),
+    ).toThrow(NegativeInputError);
+  });
+
+  test("ABI-bound borrow, repay, and withdrawal errors now occur at handle construction", () => {
+    const now = 1_800_000_000n;
+    withChainTimestamp(now, () => {
+      const entity = makeEntity();
+      const common = { userAddress, deadline: now + 3_600n };
+      const amount = maxUint256 + 1n;
+      const positionData = makePosition(marketParams, {
+        collateral: amount * 100n,
+        borrowShares: amount * 2n,
+        supplyShares: amount * 2n,
+        lastUpdate: now,
+      });
+      expect(() =>
+        entity.borrow({ ...common, positionData, borrowAssets: amount }),
+      ).toThrow(InputExceedsMaxError);
+      expect(() =>
+        entity.repay({ ...common, positionData, repayAssets: amount }),
+      ).toThrow(InputExceedsMaxError);
+      expect(() =>
+        entity.withdraw({ ...common, positionData, shares: amount }),
+      ).toThrow(InputExceedsMaxError);
+      const noDebtPosition = makePosition(marketParams, {
+        collateral: amount * 2n,
+        borrowShares: 0n,
+        lastUpdate: now,
+      });
+      expect(() =>
+        entity.withdrawCollateral({
+          ...common,
+          positionData: noDebtPosition,
+          collateralAssets: amount,
+        }),
+      ).toThrow(InputExceedsMaxError);
+      expect(() =>
+        entity.repayWithdrawCollateral({
+          ...common,
+          positionData: noDebtPosition,
+          repayAssets: 0n,
+          collateralAssets: amount,
+        }),
+      ).toThrow(InputExceedsMaxError);
+    });
+  });
+
+  test("eager ABI errors precede unused signatures first supplied in a later buildTx call", () => {
+    const now = 1_800_000_000n;
+    withChainTimestamp(now, () => {
+      const entity = makeEntity();
+      const common = { userAddress, deadline: now + 3_600n };
+      const amount = maxUint256 + 1n;
+      const positionData = makePosition(marketParams, {
+        collateral: amount * 100n,
+        borrowShares: amount * 2n,
+        supplyShares: amount * 2n,
+        lastUpdate: now,
+      });
+      const noDebtPosition = makePosition(marketParams, {
+        collateral: amount * 2n,
+        borrowShares: 0n,
+        lastUpdate: now,
+      });
+      for (const [create, field, signatureKind] of [
+        [
+          () => entity.supply({ ...common, assets: amount }),
+          "assets",
+          "authorization",
+        ],
+        [
+          () => entity.withdraw({ ...common, positionData, assets: amount }),
+          "withdrawAssets",
+          "permit",
+        ],
+        [
+          () =>
+            entity.supplyCollateral({ ...common, collateralAssets: amount }),
+          "collateralAssets",
+          "authorization",
+        ],
+        [
+          () =>
+            entity.borrow({ ...common, positionData, borrowAssets: amount }),
+          "borrowAssets",
+          "permit",
+        ],
+        [
+          () => entity.repay({ ...common, positionData, repayAssets: amount }),
+          "repayAssets",
+          "authorization",
+        ],
+        [
+          () =>
+            entity.withdrawCollateral({
+              ...common,
+              positionData: noDebtPosition,
+              collateralAssets: amount,
+            }),
+          "collateralAssets",
+          "permit",
+        ],
+      ] as const) {
+        const signatures = vi.fn(() => [
+          {
+            action: { type: signatureKind },
+          } as unknown as RequirementSignature,
+        ]);
+        expect(() => create().buildTx(signatures())).toThrow(
+          expect.objectContaining({ constructor: InputExceedsMaxError, field }),
+        );
+        expect(signatures).not.toHaveBeenCalled();
+      }
+    });
+  });
+
+  test("ABI-bound callback withdrawal errors now occur at handle construction", () => {
+    const callbackAddress = "0x0000000000000000000000000000000000000042";
+    const position = makePosition(marketParams);
+    for (const shares of [-1n, maxUint256 + 1n]) {
+      const positionData = new AccrualPosition(
+        {
+          user: callbackAddress,
+          supplyShares: shares,
+          borrowShares: 0n,
+          collateral: 0n,
+        },
+        new Market({ ...position.market, totalSupplyShares: maxUint256 * 2n }),
+      );
+      expect(() =>
+        makeEntity().withdrawBuyCallback({
+          userAddress,
+          callbackAddress,
+          positionData,
+        }),
+      ).toThrow(shares < 0n ? NegativeInputError : InputExceedsMaxError);
+    }
+  });
+
+  test("full repay with no debt fails in the shared funding stage at construction", () => {
+    const now = 1_800_000_000n;
+    withChainTimestamp(now, () => {
+      expect(() =>
+        makeEntity().repay({
+          userAddress,
+          positionData: makePosition(marketParams, {
+            borrowShares: 0n,
+            lastUpdate: now,
+          }),
+          repayShares: maxUint256,
+          deadline: now + 3_600n,
+        }),
+      ).toThrow(NonPositiveInputError);
+    });
   });
 });

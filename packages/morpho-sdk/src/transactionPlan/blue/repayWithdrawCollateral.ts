@@ -9,8 +9,7 @@ import { deepFreeze, Time } from "@morpho-org/morpho-ts";
 import { type Client, maxUint256 } from "viem";
 import {
   getBlueBundlesV1ReferralFeeAssets,
-  normalizeBlueBundlesV1CommonParams,
-  validateBlueBundlesV1NativeFunding,
+  parseBlueBundlesV1Common,
 } from "../../actions/blue/common.js";
 import { blueRepayWithdrawCollateral } from "../../actions/blue/repayWithdrawCollateral.js";
 import { validateClientChainId } from "../../actions/requirements/validateClientChainId.js";
@@ -19,6 +18,7 @@ import {
   validateChainId,
   validatePositionHealthAfterWithdraw,
 } from "../../helpers/index.js";
+import { parseNativeFunding } from "../../helpers/parse.js";
 import {
   quoteBlueRepay,
   quoteBlueRepayFunding,
@@ -139,7 +139,7 @@ export async function prepareBlueRepayWithdrawCollateral(
       const marketParams = params.marketData.market.params;
       // Reject chain and referral mismatches before deriving a repayment quote.
       validateChainId(client.chain?.id, params.chainId);
-      const common = normalizeBlueBundlesV1CommonParams({
+      const common = parseBlueBundlesV1Common({
         chainId: params.chainId,
         userAddress: params.account,
         deadline: intent.deadline,
@@ -156,8 +156,7 @@ export async function prepareBlueRepayWithdrawCollateral(
         deadline: intent.deadline,
         now,
       };
-      const healthQuote =
-        collateralAssets > 0n ? quoteBlueRepay(quoteParams) : undefined;
+      const healthQuote = quoteWithdrawal(quoteParams, collateralAssets);
       const expectedRepayAssets =
         healthQuote?.expectedRepayAssets ?? quoteBlueRepayFunding(quoteParams);
       const maxRepayAssets =
@@ -166,7 +165,7 @@ export async function prepareBlueRepayWithdrawCollateral(
           expectedRepayAssets,
           common.referralFeePct,
         );
-      const nativeValue = validateBlueBundlesV1NativeFunding({
+      const nativeValue = parseNativeFunding({
         chainId: params.chainId,
         token: marketParams.loanToken,
         fundedAmount: maxRepayAssets,
@@ -199,7 +198,6 @@ export async function prepareBlueRepayWithdrawCollateral(
               ? MathLib.zeroFloorSub(marketParams.lltv, DEFAULT_LLTV_BUFFER)
               : maxUint256,
           nativeAmount: nativeValue > 0n ? nativeValue : undefined,
-          deadline: intent.deadline,
           ...common,
         },
       });
@@ -311,6 +309,31 @@ function getMatchingPosition(params: BlueRepayWithdrawCollateralPlanParams) {
     }
   }
   return new AccrualPosition(position, positionMarket);
+}
+
+function quoteWithdrawal(
+  quoteParams: Parameters<typeof quoteBlueRepay>[0],
+  collateralAssets: bigint,
+) {
+  const { positionData, repayAssets, repayShares } = quoteParams;
+  if (repayShares === maxUint256 && positionData.borrowShares === 0n) {
+    throw new NonPositiveInputError("maxRepayAssets", 0n);
+  }
+  if (collateralAssets === 0n) {
+    return undefined;
+  }
+  if (
+    positionData.borrowShares === 0n &&
+    repayAssets === 0n &&
+    repayShares === 0n
+  ) {
+    return {
+      accruedPosition: positionData,
+      simulatedRepayShares: 0n,
+      expectedRepayAssets: 0n,
+    };
+  }
+  return quoteBlueRepay(quoteParams);
 }
 
 function getRepayWithdrawAmounts(

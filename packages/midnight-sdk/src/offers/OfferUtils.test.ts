@@ -189,6 +189,21 @@ describe("Offer.create", () => {
     expect(offer.receiverIfMakerIsSeller).toBe(addresses.maker);
   });
 
+  test("error: InvalidOfferParameterError for a zero sell receiver", () => {
+    const params = buildOfferParams({
+      buy: false,
+      receiverIfMakerIsSeller: zeroAddress,
+    });
+
+    expect(() => Offer.create(params)).toThrow(InvalidOfferParameterError);
+    expect(() => OfferUtils.validateOfferParams(params)).toThrow(
+      expect.objectContaining({
+        parameter: "receiverIfMakerIsSeller",
+        value: zeroAddress,
+      }),
+    );
+  });
+
   test("behavior: accepts ticks aligned to a refined market spacing", () => {
     const offer = Offer.create(
       buildOfferParams({
@@ -839,6 +854,18 @@ describe("OfferUtils.getConsumableUnits", () => {
 });
 
 describe("OfferUtils.validateOfferGroup", () => {
+  test("error: InvalidOfferParameterError for a zero sell receiver", () => {
+    const offer = baseOfferInput({
+      buy: false,
+      maxAssets: 0n,
+      receiverIfMakerIsSeller: zeroAddress,
+    });
+
+    expect(() => OfferUtils.validateOfferGroup({ offers: [offer] })).toThrow(
+      InvalidOfferParameterError,
+    );
+  });
+
   test("default", () => {
     const offers = [
       Offer.create(buildOfferParams({ tick: 5_000n })),

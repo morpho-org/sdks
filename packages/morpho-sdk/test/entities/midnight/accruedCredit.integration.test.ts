@@ -28,7 +28,6 @@ import {
   toHex,
   zeroAddress,
 } from "viem";
-import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { base } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
@@ -52,8 +51,8 @@ const PRICE_USDC = 10n ** 36n;
 const MAX_CONTINUOUS_FEE = 10n ** 16n / 31_536_000n; // 0.01e18 / 365 days
 
 const offerMaker = "0x9000000000000000000000000000000000000000" as Address;
-const offerMaker2 = privateKeyToAccount(generatePrivateKey()).address;
-const lender2 = privateKeyToAccount(generatePrivateKey()).address;
+const offerMaker2 = "0x9000000000000000000000000000000000000001" as Address;
+const lender2 = "0x9000000000000000000000000000000000000002" as Address;
 
 interface MarketFixture {
   readonly params: MarketParams;

@@ -1,10 +1,14 @@
 import { ChainId, getChainAddress } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
-import { maxUint96, maxUint256 } from "viem";
-import { mainnet } from "viem/chains";
+import { InvalidAddressError, maxUint96, maxUint256, zeroAddress } from "viem";
+import { base, mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { UnsupportedErc20ApprovalSpenderError } from "../../types/index.js";
-import { getRequirementsApproval } from "./getRequirementsApproval.js";
+import {
+  getParsedRequirementsApproval,
+  getRequirementsApproval,
+  parseRequirementsApproval,
+} from "./getRequirementsApproval.js";
 
 const usdc = getChainAddress(ChainId.EthMainnet, "usdc");
 const usdt = getChainAddress(ChainId.EthMainnet, "usdt");
@@ -16,6 +20,62 @@ const blueBundlesV1 = getChainAddress(
 const uni = "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984" as Address;
 
 describe("getRequirementsApproval", () => {
+  test.each([
+    { allowances: 0n, error: UnsupportedErc20ApprovalSpenderError },
+    { allowances: 1n, error: InvalidAddressError },
+  ])(
+    "keeps main's reset-token error precedence with allowance $allowances",
+    ({ allowances, error }) => {
+      expect(() =>
+        getRequirementsApproval({
+          address: "0x123",
+          chainId: mainnet.id,
+          args: { spendAmount: 2n, spender: zeroAddress },
+          allowances,
+        }),
+      ).toThrow(error);
+    },
+  );
+
+  test("without a reset-token list the spender error still wins over the malformed token", () => {
+    expect(() =>
+      getRequirementsApproval({
+        address: "0x123",
+        chainId: base.id,
+        args: { spendAmount: 2n, spender: zeroAddress },
+        allowances: 0n,
+      }),
+    ).toThrow(UnsupportedErc20ApprovalSpenderError);
+  });
+
+  test("no-op allowance skips even malformed token, spender and chain inputs", () => {
+    expect(
+      getRequirementsApproval({
+        address: "0x123",
+        chainId: 999_999,
+        args: { spendAmount: 2n, spender: zeroAddress },
+        allowances: 2n,
+      }),
+    ).toEqual([]);
+  });
+
+  test("the complete constructor owns reset order, approval caps and invocation values", () => {
+    const args = { spendAmount: 2n, spender: blueBundlesV1 };
+    const params = { address: usdt, chainId: mainnet.id, args, allowances: 1n };
+    const parsed = parseRequirementsApproval(params);
+    params.address = uni;
+    args.spender = zeroAddress;
+    args.spendAmount = 0n;
+    const approvals = getParsedRequirementsApproval(parsed);
+    expect(
+      approvals.map(({ to, action }) => ({ to, args: action.args })),
+    ).toEqual([
+      { to: usdt, args: { spender: blueBundlesV1, amount: 0n } },
+      { to: usdt, args: { spender: blueBundlesV1, amount: maxUint256 } },
+    ]);
+    expect(approvals.every(Object.isFrozen)).toBe(true);
+  });
+
   test("default", () => {
     const requirements = getRequirementsApproval({
       address: usdc,

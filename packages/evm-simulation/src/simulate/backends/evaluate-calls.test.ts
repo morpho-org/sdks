@@ -1,3 +1,4 @@
+import type { MarketId } from "@morpho-org/blue-sdk";
 import {
   type Address,
   encodeErrorResult,
@@ -1325,6 +1326,37 @@ describe("evaluateCalls", () => {
       expect.objectContaining({ field: id, reason: "missingRead" }),
     ]);
     expect(failures[0]).toBeInstanceOf(SlippageCheckUnavailableError);
+  });
+
+  test("behavior: a failed refinance market-parameter read is omitted without a failure", () => {
+    const marketId =
+      "0x0000000000000000000000000000000000000000000000000000000000000001" as MarketId;
+    const id = `market-params:${marketId}`;
+    const plan = planExecution({
+      request: parsed,
+      owner: OWNER,
+      preparations: [],
+      reads: [
+        {
+          kind: "morpho.marketParams",
+          id,
+          to: TARGET,
+          morpho: TARGET,
+          marketId,
+          data: "0x2c3c9157",
+        },
+      ],
+      afterOnlyReadIds: new Set([id]),
+    });
+    const readIndex = plan.calls.findIndex((call) => call.type === "stateRead");
+    const execution = parseThrowingRevert(
+      plan,
+      buildBlocks(plan, {
+        [readIndex]: { status: "failure", errorMessage: "read reverted" },
+      }),
+    );
+    expect(execution.failures).toEqual([]);
+    expect(execution.stateReads).toEqual([]);
   });
 
   test("error: reports a missing transaction result when call counts match", () => {

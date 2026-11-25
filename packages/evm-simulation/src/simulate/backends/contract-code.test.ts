@@ -1,4 +1,4 @@
-import { type Address, getAddress, numberToHex } from "viem";
+import { type Address, getAddress } from "viem";
 import { vi } from "vitest";
 import {
   InvalidSimulationResponseError,
@@ -18,6 +18,10 @@ const client = () => simulationClientFor("https://rpc.example", 1);
 const FROM = "0x1111111111111111111111111111111111111111" as Address;
 const TARGET = "0x2222222222222222222222222222222222222222" as Address;
 const OTHER = "0x3333333333333333333333333333333333333333" as Address;
+const BLOCK_SELECTOR = {
+  blockHash: `0x${"ab".repeat(32)}`,
+  requireCanonical: true,
+} as const;
 
 // biome-ignore lint/complexity/useMaxParams: positional fixture builder
 const tx = (
@@ -28,7 +32,7 @@ const tx = (
 
 const baseParams = {
   chainId: 1,
-  blockNumber: 20_000_000n,
+  blockHash: BLOCK_SELECTOR.blockHash,
 };
 
 const getCodeCalls = () =>
@@ -151,11 +155,7 @@ describe.sequential("assertTransactionTargetsHaveCode", () => {
         await expect(result).rejects.toBeInstanceOf(SimulationValidationError);
       expect(
         getCodeCalls().map(([, init]) => JSON.parse(String(init?.body)).params),
-      ).toEqual(
-        delegateCode !== undefined
-          ? []
-          : [[OTHER, numberToHex(baseParams.blockNumber)]],
-      );
+      ).toEqual(delegateCode !== undefined ? [] : [[OTHER, BLOCK_SELECTOR]]);
     },
   );
 
@@ -204,8 +204,8 @@ describe.sequential("assertTransactionTargetsHaveCode", () => {
       expect(
         getCodeCalls().map(([, init]) => JSON.parse(String(init?.body)).params),
       ).toEqual([
-        [TARGET, numberToHex(baseParams.blockNumber)],
-        [OTHER, numberToHex(baseParams.blockNumber)],
+        [TARGET, BLOCK_SELECTOR],
+        [OTHER, BLOCK_SELECTOR],
       ]);
     },
   );
@@ -237,8 +237,8 @@ describe.sequential("assertTransactionTargetsHaveCode", () => {
       expect(
         getCodeCalls().map(([, init]) => JSON.parse(String(init?.body)).params),
       ).toEqual([
-        [TARGET, numberToHex(baseParams.blockNumber)],
-        [OTHER, numberToHex(baseParams.blockNumber)],
+        [TARGET, BLOCK_SELECTOR],
+        [OTHER, BLOCK_SELECTOR],
       ]);
     },
   );
@@ -278,7 +278,7 @@ describe.sequential("assertTransactionTargetsHaveCode", () => {
     });
     expect(JSON.parse(String(getCodeCalls()[0]?.[1]?.body)).params).toEqual([
       TARGET,
-      numberToHex(20_000_000n),
+      BLOCK_SELECTOR,
     ]);
   });
 

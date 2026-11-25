@@ -1,16 +1,7 @@
-import {
-  type MarketInput,
-  MarketUtils,
-  midnightBundlesV2Abi,
-} from "@morpho-org/midnight-sdk";
-import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
-import { type Address, maxUint256, zeroAddress } from "viem";
-import { encodeMidnightCalldata } from "../../helpers/encodeMidnightCalldata.js";
-import { addTransactionMetadata } from "../../helpers/index.js";
-import {
-  validateDeadline,
-  validateReferralFee,
-} from "../../helpers/validate.js";
+import type { MarketInput, MarketUtils } from "@morpho-org/midnight-sdk";
+import { deepFreeze } from "@morpho-org/morpho-ts";
+import { type Address, type Hex, maxUint256 } from "viem";
+import { parseDeadline, parseReferralFee } from "../../helpers/parse.js";
 import { validateMidnightAddress } from "../../helpers/validateMidnightAccount.js";
 import {
   validateMidnightReferralFeeCap,
@@ -29,11 +20,12 @@ import {
   type Transaction,
   UnboundedMidnightTakeInputError,
 } from "../../types/index.js";
+import { encodeMidnightTakeWithdraw } from "./encode.js";
+import { snapshotMidnightTakeParams } from "./parse.js";
 import type {
   MidnightReferralFeeParams,
   MidnightTakeableOffer,
 } from "./types.js";
-
 /** Parameters for encoding a Midnight credit withdrawal that redeems first, then sells to offers. */
 export interface MidnightTakeWithdrawParams extends MidnightReferralFeeParams {
   readonly chainId: number;
@@ -47,79 +39,6 @@ export interface MidnightTakeWithdrawParams extends MidnightReferralFeeParams {
   readonly deadline: bigint;
   readonly metadata?: Metadata;
 }
-
-const validateParams = (params: MidnightTakeWithdrawParams) => {
-  // Reject markets from another chain deployment before checking offers against them.
-  validateMidnightMarket({ market: params.market, chainId: params.chainId });
-  const marketId = validateTakeableOffers({
-    market: params.market,
-    takeableOffers: params.takeableOffers,
-    expectedBuy: true,
-  });
-  validateMidnightAddress("receiver", params.receiver);
-  validateMidnightTakeableOfferBounds(params.takeableOffers);
-  // Rejects receivers that would strand the withdrawn assets in a contract.
-  validateMidnightReceiver({
-    chainId: params.chainId,
-    market: params.market,
-    field: "receiver",
-    receiver: params.receiver,
-  });
-
-  const { target } = params;
-  switch (target.type) {
-    case "assets": {
-      // Validation only; rejects non-positive amounts.
-      validatePositiveInput("target.assets", target.assets);
-      if (target.maxUnits === maxUint256) {
-        throw new UnboundedMidnightTakeInputError("target.maxUnits");
-      }
-      // Validation only; rejects non-positive amounts.
-      validatePositiveInput("target.maxUnits", target.maxUnits);
-      validateMidnightUint128Field("target.assets", target.assets);
-      validateMidnightUint128Field("target.maxUnits", target.maxUnits);
-      break;
-    }
-    default: {
-      if (target.units === maxUint256) {
-        throw new UnboundedMidnightTakeInputError("target.units");
-      }
-      // Validation only; rejects non-positive amounts.
-      validatePositiveInput("target.units", target.units);
-      // Validation only; rejects non-positive amounts.
-      validatePositiveInput("target.minSellerAssets", target.minSellerAssets);
-      validateMidnightUint128Field("target.units", target.units);
-      validateMidnightUint128Field(
-        "target.minSellerAssets",
-        target.minSellerAssets,
-      );
-      break;
-    }
-  }
-  if (params.deadline === maxUint256) {
-    throw new UnboundedMidnightTakeInputError("deadline");
-  }
-  validateDeadline(params.deadline);
-  if (params.referralFeeRecipient !== undefined) {
-    validateMidnightAddress(
-      "referralFeeRecipient",
-      params.referralFeeRecipient,
-    );
-  }
-  const { referralFeePct, referralFeeRecipient } = validateReferralFee(params);
-  validateMidnightReferralFeeCap(referralFeePct);
-  validateMidnightSellTargetBounds({ target, referralFeePct });
-  if (referralFeePct > 0n) {
-    // Rejects fee recipients that would strand the fee in a contract.
-    validateMidnightReceiver({
-      chainId: params.chainId,
-      market: params.market,
-      field: "referralFeeRecipient",
-      receiver: referralFeeRecipient,
-    });
-  }
-  return { marketId, referralFeePct, referralFeeRecipient };
-};
 
 /**
  * Encodes a reduce-only `MidnightBundlesV2` sell that withdraws `msg.sender`'s credit.
@@ -185,57 +104,110 @@ const validateParams = (params: MidnightTakeWithdrawParams) => {
  */
 export const midnightTakeWithdraw = (
   params: MidnightTakeWithdrawParams,
-): Readonly<Transaction<MidnightTakeWithdrawAction>> => {
-  const { marketId, referralFeePct, referralFeeRecipient } =
-    validateParams(params);
-  const { target } = params;
-  const market = MarketUtils.toStruct(params.market);
-  const args = [
-    true, // reduceOnly
-    params.receiver, // receiver
-    [], // collateralSupplies
-    params.takeableOffers, // offerFills
-    referralFeePct, // referralFeePct
-    referralFeeRecipient, // referralFeeRecipient
-    params.deadline, // deadline
-    zeroAddress, // wrappedNative
-  ] as const;
+): Readonly<Transaction<MidnightTakeWithdrawAction>> =>
+  encodeMidnightTakeWithdraw(parseMidnightTakeWithdraw(params));
 
-  let tx = {
-    to: getChainAddress(params.chainId, "midnightBundlesV2"),
-    value: 0n,
-    data:
-      target.type === "assets"
-        ? encodeMidnightCalldata({
-            abi: midnightBundlesV2Abi,
-            functionName:
-              "midnightBundlesV2SupplyCollateralAndSellWithAssetsTarget",
-            args: [market, target.assets, target.maxUnits, ...args],
-          })
-        : encodeMidnightCalldata({
-            abi: midnightBundlesV2Abi,
-            functionName:
-              "midnightBundlesV2SupplyCollateralAndSellWithUnitsTarget",
-            args: [market, target.units, target.minSellerAssets, ...args],
-          }),
-  };
-  if (params.metadata) {
-    tx = addTransactionMetadata(tx, params.metadata);
+const parsedTakeWithdraw = Symbol();
+
+/** Owned TakeWithdraw constraints: side/market/caps, target sentinel rules, bounded deadline, referral, and fee-adjusted sell bounds. @internal */
+export interface ParsedMidnightTakeWithdraw
+  extends Omit<
+    MidnightTakeWithdrawParams,
+    "market" | "target" | "takeableOffers"
+  > {
+  readonly market: ReturnType<typeof MarketUtils.toStruct>;
+  readonly marketId: Hex;
+  readonly target: MidnightTakeWithdrawParams["target"];
+  readonly takeableOffers: readonly MidnightTakeableOffer[];
+  readonly deadline: bigint;
+  readonly referralFeePct: bigint;
+  readonly referralFeeRecipient: Address;
+
+  readonly [parsedTakeWithdraw]: true;
+}
+
+/** Parses the static TakeWithdraw constraints in the standalone builder's existing order. @internal */
+export const parseMidnightTakeWithdraw = (
+  params: MidnightTakeWithdrawParams,
+): ParsedMidnightTakeWithdraw => {
+  // Reject markets from another chain deployment before checking offers against them.
+  validateMidnightMarket({ market: params.market, chainId: params.chainId });
+  const marketId = validateTakeableOffers({
+    market: params.market,
+    takeableOffers: params.takeableOffers,
+    expectedBuy: true,
+  });
+  validateMidnightAddress("receiver", params.receiver);
+  validateMidnightTakeableOfferBounds(params.takeableOffers);
+  // Rejects receivers that would strand the withdrawn assets in a contract.
+  validateMidnightReceiver({
+    chainId: params.chainId,
+    market: params.market,
+    field: "receiver",
+    receiver: params.receiver,
+  });
+
+  const { target } = params;
+  switch (target.type) {
+    case "assets": {
+      // Validation only; preserve main's positive-target and finite-cap order.
+      validatePositiveInput("target.assets", target.assets);
+      if (target.maxUnits === maxUint256) {
+        throw new UnboundedMidnightTakeInputError("target.maxUnits");
+      }
+      validatePositiveInput("target.maxUnits", target.maxUnits);
+      validateMidnightUint128Field("target.assets", target.assets);
+      validateMidnightUint128Field("target.maxUnits", target.maxUnits);
+      break;
+    }
+    default: {
+      if (target.units === maxUint256) {
+        throw new UnboundedMidnightTakeInputError("target.units");
+      }
+      // Validation only; preserve main's positive units and seller-asset floor order.
+      validatePositiveInput("target.units", target.units);
+      validatePositiveInput("target.minSellerAssets", target.minSellerAssets);
+      validateMidnightUint128Field("target.units", target.units);
+      validateMidnightUint128Field(
+        "target.minSellerAssets",
+        target.minSellerAssets,
+      );
+      break;
+    }
+  }
+  if (params.deadline === maxUint256) {
+    throw new UnboundedMidnightTakeInputError("deadline");
+  }
+  const deadline = parseDeadline(params.deadline);
+  if (params.referralFeeRecipient !== undefined) {
+    validateMidnightAddress(
+      "referralFeeRecipient",
+      params.referralFeeRecipient,
+    );
+  }
+  const { referralFeePct, referralFeeRecipient } = parseReferralFee(params);
+  validateMidnightReferralFeeCap(referralFeePct);
+  validateMidnightSellTargetBounds({ target, referralFeePct });
+  if (referralFeePct > 0n) {
+    // Rejects fee recipients that would strand the fee in a contract.
+    validateMidnightReceiver({
+      chainId: params.chainId,
+      market: params.market,
+      field: "referralFeeRecipient",
+      receiver: referralFeeRecipient,
+    });
   }
 
+  const snapshot = snapshotMidnightTakeParams({ ...params, direction: "sell" });
   return deepFreeze({
-    ...tx,
-    action: {
-      type: "midnightTakeWithdraw",
-      args: {
-        market: marketId,
-        target: { ...params.target },
-        receiver: params.receiver,
-        takeableOffers: params.takeableOffers.length,
-        deadline: params.deadline,
-        referralFeePct,
-        referralFeeRecipient,
-      },
-    },
+    ...snapshot,
+    chainId: params.chainId,
+    receiver: params.receiver,
+    marketId,
+    deadline,
+    referralFeePct,
+    referralFeeRecipient,
+
+    [parsedTakeWithdraw]: true as const,
   });
 };

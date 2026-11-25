@@ -15,7 +15,9 @@ import {
   encodeFunctionData,
   erc20Abi,
   erc4626Abi,
+  getAddress,
   parseUnits,
+  stringify,
   zeroHash,
 } from "viem";
 import { mainnet } from "viem/chains";
@@ -36,6 +38,8 @@ const test = createViemTest(mainnet, {
   forkBlockNumber: MAINNET_FORK_BLOCK,
 });
 const USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+const TRANSFER_TOPIC =
+  "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 const SPENDER = "0x3333333333333333333333333333333333333333";
 const amount = parseUnits("1", 6);
 const market = markets[mainnet.id].usdc_wstEth;
@@ -120,6 +124,81 @@ describe.sequential("simulate collected failures", () => {
     ]);
     expect(report.verification).toEqual({ retention: "checked" });
     expect(report.warnings).toEqual([]);
+  });
+
+  test("catches retention from real balance reads when the Transfer log is dropped", async ({
+    client,
+  }) => {
+    const vault = await createVault(client);
+    const bundles = getChainAddress(mainnet.id, "bundles.vaultBundlesV1");
+    await client.setCode({ address: client.account.address, bytecode: "0x" });
+    await client.deal({ erc20: USDC, amount });
+    // Strip USDC Transfer logs from the node's eth_simulateV1 response, so only
+    // the real in-block balanceOf reads can show the retained USDC.
+    let droppedInbound = 0;
+    const dropUsdcTransfers: typeof fetch = async (input, init) => {
+      const response = await fetch(input, init);
+      const body = await response.json();
+      for (const block of Array.isArray(body.result) ? body.result : []) {
+        for (const call of block.calls ?? []) {
+          call.logs = (call.logs ?? []).filter(
+            (log: { address: string; topics: string[] }) => {
+              const drop =
+                log.address.toLowerCase() === USDC.toLowerCase() &&
+                log.topics[0] === TRANSFER_TOPIC;
+              if (
+                drop &&
+                log.topics[2]
+                  ?.toLowerCase()
+                  .endsWith(bundles.slice(2).toLowerCase())
+              ) {
+                droppedInbound += 1;
+              }
+              return !drop;
+            },
+          );
+        }
+      }
+      return new Response(stringify(body), {
+        status: response.status,
+        headers: response.headers,
+      });
+    };
+    const report = await simulate(
+      simulationClientFor(
+        client.transport.url!,
+        mainnet,
+        30_000,
+        dropUsdcTransfers,
+      ),
+      {
+        limits: limitsFor(vault),
+        transactions: [
+          {
+            from: client.account.address,
+            to: USDC,
+            data: encodeFunctionData({
+              abi: erc20Abi,
+              functionName: "transfer",
+              args: [bundles, amount],
+            }),
+          },
+        ],
+      },
+      { timeoutMs: 30_000 },
+    );
+    // The filter must have removed the inbound log, or the log-based check could pass this test alone.
+    expect(droppedInbound).toBeGreaterThan(0);
+    expect(report.ok).toBe(false);
+    const retention = report.ok
+      ? []
+      : report.failures.filter(
+          (failure) => failure instanceof BlacklistViolationError,
+        );
+    expect(retention).toHaveLength(1);
+    expect(retention[0]?.assetChanges).toEqual([
+      { address: bundles, token: getAddress(USDC), netRetained: amount },
+    ]);
   });
 
   test("reports a failing assertion, then the unexpected approval", async ({

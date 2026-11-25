@@ -35,6 +35,12 @@ export interface EncodeVaultSharesPermitParams
   readonly deadline: bigint;
 }
 
+declare const vaultSharesPermitInput: unique symbol;
+/** Complete checked share-permit invocation with an owned signing-domain token. @internal */
+export type VaultSharesPermitInput = Readonly<EncodeVaultSharesPermitParams> & {
+  readonly [vaultSharesPermitInput]: true;
+};
+
 /**
  * Builds an unlimited ERC-2612 shares-permit requirement used by a vault exit.
  *
@@ -88,15 +94,24 @@ export interface EncodeVaultSharesPermitParams
 export const encodeVaultSharesPermit = (
   params: EncodeVaultSharesPermitParams,
 ): Requirement<PermitRequirementSignature> => {
-  const {
-    vault: inputVault,
-    version,
-    spender,
-    owner,
-    chainId,
-    nonce,
-    deadline,
-  } = params;
+  return encodeParsedVaultSharesPermit(parseVaultSharesPermit(params));
+};
+
+/** Owns domain normalization and static validation for the whole share-permit call. @internal */
+export const parseVaultSharesPermit = (
+  params: EncodeVaultSharesPermitParams,
+): VaultSharesPermitInput => {
+  const input = {
+    vault: params.vault,
+    version: params.version,
+    spender: params.spender,
+    owner: params.owner,
+    chainId: params.chainId,
+    nonce: params.nonce,
+    deadline: params.deadline,
+    now: params.now,
+  };
+  const { vault: inputVault, version, spender, chainId, deadline } = input;
   const inputDomain = inputVault.eip5267Domain;
   let eip5267Domain: Eip5267Domain | undefined;
   if (version === "vaultV2") {
@@ -134,11 +149,19 @@ export const encodeVaultSharesPermit = (
     allowed: ["vaultExitBundlesV1", "vaultBundlesV1"],
   });
 
-  const now = params.now ?? Time.timestamp();
   // Validate the explicit deadline: this exported encoder can be called independently of the
   // guarded resolvers, and an out-of-range or already-expired deadline otherwise surfaces only as
   // a downstream wallet typed-data error or an on-chain revert.
   validateDeadline(deadline);
+  return { ...input, vault } as VaultSharesPermitInput;
+};
+
+/** Builds the complete checked share permit, retaining the dynamic expiry guard. @internal */
+export const encodeParsedVaultSharesPermit = (
+  params: VaultSharesPermitInput,
+): Requirement<PermitRequirementSignature> => {
+  const { vault, spender, owner, chainId, nonce, deadline } = params;
+  const now = params.now ?? Time.timestamp();
   if (deadline <= now) {
     throw new ExpiredDeadlineError(deadline, now);
   }

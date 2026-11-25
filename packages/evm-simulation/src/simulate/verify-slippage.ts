@@ -530,7 +530,10 @@ function nativeDelta(
       );
       return undefined;
     }
-    delta += wrappedAfter - wrappedBefore;
+    const wrappedDelta = wrappedAfter - wrappedBefore;
+    delta += measurement.wrappedDebitOnly
+      ? MathLib.min(0n, wrappedDelta)
+      : wrappedDelta;
   }
   return delta;
 }

@@ -11,8 +11,11 @@ import {
   validateMidnightAddress,
 } from "../../../helpers/validateMidnightAccount.js";
 import type { ERC20ApprovalAction, Transaction } from "../../../types/index.js";
-import { getRequirementsApproval } from "../getRequirementsApproval.js";
-import { validateClientChainId } from "../validateClientChainId.js";
+import { type ChainCheck, createChainCheck } from "../chainCheck.js";
+import {
+  getParsedRequirementsApproval,
+  parseRequirementsApproval,
+} from "../getRequirementsApproval.js";
 
 /** Parameters for {@link getMidnightApprovalRequirements}. */
 export interface GetMidnightApprovalRequirementsParams {
@@ -23,6 +26,38 @@ export interface GetMidnightApprovalRequirementsParams {
   readonly spender: Address;
   readonly amount: bigint;
 }
+
+declare const midnightApprovalRequirementsInput: unique symbol;
+/** Complete checked Midnight allowance resolver invocation. @internal */
+export type MidnightApprovalRequirementsInput =
+  Readonly<GetMidnightApprovalRequirementsParams> & {
+    readonly [midnightApprovalRequirementsInput]: true;
+  };
+
+/** Owns the complete invocation's account, address, chain, amount and target checks. @internal */
+export const parseMidnightApprovalRequirements = (
+  params: GetMidnightApprovalRequirementsParams,
+): MidnightApprovalRequirementsInput => {
+  const input = {
+    viemClient: params.viemClient,
+    chainId: params.chainId,
+    token: params.token,
+    owner: params.owner,
+    spender: params.spender,
+    amount: params.amount,
+  };
+  validateMidnightAccount("owner", input.owner);
+  validateMidnightAddress("token", input.token);
+  validateMidnightAddress("spender", input.spender);
+  validateChainId(input.viemClient.chain?.id, input.chainId);
+  validateUint256Field("amount", input.amount);
+  validateRequirementSpender({
+    chainId: input.chainId,
+    spender: input.spender,
+    allowed: ["midnight", "midnightBundlesV2"],
+  });
+  return { ...input } as MidnightApprovalRequirementsInput;
+};
 
 /**
  * Resolves classic ERC20 approval requirements for a Midnight spender.
@@ -77,23 +112,20 @@ export interface GetMidnightApprovalRequirementsParams {
 export const getMidnightApprovalRequirements = async (
   params: GetMidnightApprovalRequirementsParams,
 ): Promise<readonly Readonly<Transaction<ERC20ApprovalAction>>[]> => {
-  // Reject the zero account before reading state for it.
-  validateMidnightAccount("owner", params.owner);
-  // Reject malformed addresses typed before the spender comparison and the allowance read.
-  validateMidnightAddress("token", params.token);
-  validateMidnightAddress("spender", params.spender);
-  validateChainId(params.viemClient.chain?.id, params.chainId);
-  validateUint256Field("amount", params.amount);
-  // Validate the target even when no approval transaction needs to be encoded.
-  validateRequirementSpender({
-    chainId: params.chainId,
-    spender: params.spender,
-    allowed: ["midnight", "midnightBundlesV2"],
-  });
+  return getParsedMidnightApprovalRequirements(
+    parseMidnightApprovalRequirements(params),
+  );
+};
+
+/** Consumes the complete checked allowance invocation, retaining all RPC checks. @internal */
+export const getParsedMidnightApprovalRequirements = async (
+  params: MidnightApprovalRequirementsInput,
+  chainCheck: ChainCheck = createChainCheck(params.viemClient, params.chainId),
+): Promise<readonly Readonly<Transaction<ERC20ApprovalAction>>[]> => {
   if (params.amount === 0n) {
     return [];
   }
-  await validateClientChainId(params.viemClient, params.chainId);
+  await chainCheck();
 
   const allowance = await readContract(params.viemClient, {
     address: params.token,
@@ -102,13 +134,15 @@ export const getMidnightApprovalRequirements = async (
     args: [params.owner, params.spender],
   });
 
-  return getRequirementsApproval({
-    address: params.token,
-    chainId: params.chainId,
-    args: {
-      spender: params.spender,
-      spendAmount: params.amount,
-    },
-    allowances: allowance,
-  });
+  return getParsedRequirementsApproval(
+    parseRequirementsApproval({
+      address: params.token,
+      chainId: params.chainId,
+      args: {
+        spender: params.spender,
+        spendAmount: params.amount,
+      },
+      allowances: allowance,
+    }),
+  );
 };

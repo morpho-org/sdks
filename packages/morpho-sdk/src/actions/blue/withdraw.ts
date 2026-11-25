@@ -1,29 +1,15 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
-import { type Address, encodeFunctionData } from "viem";
-import { blueBundlesV1Abi } from "../../abis.js";
-import {
-  validateMarketParamsId,
-  validateUint256Field,
-} from "../../helpers/validate.js";
-import {
-  type AuthorizationRequirementSignature,
-  type BlueWithdrawAction,
-  InputExceedsMaxError,
-  type Metadata,
-  MutuallyExclusiveWithdrawAmountsError,
-  NonPositiveInputError,
-  type Transaction,
-  type VaultV2BlueReallocation,
+import type { Address } from "viem";
+import type {
+  AuthorizationRequirementSignature,
+  BlueWithdrawAction,
+  Metadata,
+  Transaction,
+  VaultV2BlueReallocation,
 } from "../../types/index.js";
-import { getBundlesReferralFeeAssets } from "../bundles/common.js";
-import {
-  type BlueBundlesV1CommonParams,
-  finalizeBlueBundlesV1Transaction,
-  getBlueBundlesV1PenaltyAssets,
-  getBlueBundlesV1PublicAllocations,
-  getBlueBundlesV1SignedAuthorization,
-  normalizeBlueBundlesV1CommonParams,
-} from "./common.js";
+import { encodeBlueWithdraw } from "./encode.js";
+
+import { parseBlueWithdraw } from "./withdraw.internal.js";
 
 /** Parameters for {@link blueWithdraw}. */
 export interface BlueWithdrawParams {
@@ -76,7 +62,8 @@ export interface BlueWithdrawParams {
  * @param params.metadata - Optional transaction metadata.
  * @returns A deep-frozen `Readonly<Transaction<BlueWithdrawAction>>` whose `to` address is
  *   BlueBundlesV1 and whose `action` records the normalized withdrawal inputs.
- * @throws {MarketIdMismatchError} when `marketParams.id` does not hash from its tuple fields.
+ * @throws {MarketIdMismatchError} when the target market or a reallocation source market has an
+ *   `id` that does not hash from its tuple fields.
  * @throws {NegativeInputError} when an amount, fee, or reallocation penalty is negative.
  * @throws {MutuallyExclusiveWithdrawAmountsError} when assets and shares are both nonzero.
  * @throws {NonPositiveInputError} when neither mode, no valid deadline, or a non-positive
@@ -113,92 +100,8 @@ export interface BlueWithdrawParams {
  * // tx satisfies Readonly<Transaction<BlueWithdrawAction>>
  * ```
  */
+
 export const blueWithdraw = (
   params: BlueWithdrawParams,
-): Readonly<Transaction<BlueWithdrawAction>> => {
-  const { chainId, marketParams } = params.market;
-  validateMarketParamsId(marketParams);
-  const {
-    userAddress,
-    withdrawAssets,
-    withdrawShares,
-    authorizationSignature,
-  } = params.args;
-  validateUint256Field("withdrawAssets", withdrawAssets);
-  validateUint256Field("withdrawShares", withdrawShares);
-  if (withdrawAssets > 0n && withdrawShares > 0n) {
-    throw new MutuallyExclusiveWithdrawAmountsError(marketParams.id);
-  }
-  if (withdrawAssets === 0n && withdrawShares === 0n) {
-    throw new NonPositiveInputError("withdrawAssets or withdrawShares", 0n);
-  }
-
-  const common: BlueBundlesV1CommonParams = {
-    chainId,
-    userAddress,
-    deadline: params.args.deadline,
-    referralFeePct: params.args.referralFeePct,
-    referralFeeRecipient: params.args.referralFeeRecipient,
-    metadata: params.metadata,
-  };
-  const { referralFeePct, referralFeeRecipient } =
-    normalizeBlueBundlesV1CommonParams(common);
-  const signedAuthorization = getBlueBundlesV1SignedAuthorization({
-    chainId,
-    userAddress,
-    authorizationSignature,
-  });
-  const publicAllocations = getBlueBundlesV1PublicAllocations(
-    [...(params.args.reallocations ?? [])],
-    marketParams,
-  );
-  const reallocationPenaltyAssets =
-    getBlueBundlesV1PenaltyAssets(publicAllocations);
-  if (withdrawAssets > 0n && reallocationPenaltyAssets > withdrawAssets) {
-    throw new InputExceedsMaxError({
-      field: "reallocationPenaltyAssets",
-      value: reallocationPenaltyAssets,
-      max: withdrawAssets,
-    });
-  }
-
-  return finalizeBlueBundlesV1Transaction({
-    common,
-    value: 0n,
-    data: encodeFunctionData({
-      abi: blueBundlesV1Abi,
-      functionName: "blueBundlesV1Withdraw",
-      args: [
-        marketParams,
-        withdrawAssets,
-        withdrawShares,
-        signedAuthorization,
-        publicAllocations,
-        referralFeePct,
-        referralFeeRecipient,
-        params.args.deadline,
-      ],
-    }),
-    action: {
-      type: "blueWithdraw",
-      args: {
-        market: marketParams.id,
-        withdrawAssets,
-        withdrawShares,
-        onBehalf: userAddress,
-        reallocations: publicAllocations.length,
-        reallocationPenaltyAssets,
-        referralFeePct,
-        referralFeeRecipient,
-        referralFeeAssets:
-          withdrawAssets > 0n
-            ? getBundlesReferralFeeAssets(
-                withdrawAssets - reallocationPenaltyAssets,
-                referralFeePct,
-              )
-            : undefined,
-        deadline: params.args.deadline,
-      },
-    },
-  });
-};
+): Readonly<Transaction<BlueWithdrawAction>> =>
+  encodeBlueWithdraw(parseBlueWithdraw(params));

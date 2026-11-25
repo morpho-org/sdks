@@ -41,14 +41,10 @@ export function computeVaultV1InKindRedeemQuote({
   if (marketParamsList.length === 0) {
     throw new EmptyMarketParamsListError();
   }
-  const marketParamsListSnapshot = marketParamsList.map(
-    ({ loanToken, collateralToken, oracle, irm, lltv }) => ({
-      loanToken,
-      collateralToken,
-      oracle,
-      irm,
-      lltv,
-    }),
+  const marketParamsListSnapshot = Object.freeze(
+    marketParamsList.map(({ loanToken, collateralToken, oracle, irm, lltv }) =>
+      Object.freeze({ loanToken, collateralToken, oracle, irm, lltv }),
+    ),
   );
 
   const deadline = deadlineOverride ?? now + Time.s.from.h(2n);

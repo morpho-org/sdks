@@ -28,6 +28,20 @@ export interface VaultV2ForceRedeemParams {
   metadata?: Metadata;
 }
 
+declare const vaultV2ForceRedeemInput: unique symbol;
+/** Owned force-redeem inputs whose positive-only checks have completed. @internal */
+export type VaultV2ForceRedeemInput = {
+  readonly vault: Readonly<VaultV2ForceRedeemParams["vault"]>;
+  readonly args: {
+    readonly deallocations: readonly Readonly<Deallocation>[];
+    readonly redeem: Readonly<VaultV2ForceRedeemParams["args"]["redeem"]>;
+    readonly onBehalf: Address;
+  };
+  readonly deallocationCalls: readonly Hex[];
+  readonly metadata?: Metadata;
+  readonly [vaultV2ForceRedeemInput]: true;
+};
+
 /**
  * Prepares a force-redeem transaction for a VaultV2 contract via the vault's native `multicall`.
  *
@@ -73,26 +87,65 @@ export interface VaultV2ForceRedeemParams {
  * // tx satisfies Readonly<Transaction<VaultV2ForceRedeemAction>>
  * ```
  */
-export const vaultV2ForceRedeem = ({
-  vault: { address: vaultAddress },
-  args: { deallocations, redeem, onBehalf },
-  metadata,
-}: VaultV2ForceRedeemParams): Readonly<
-  Transaction<VaultV2ForceRedeemAction>
-> => {
-  if (deallocations.length === 0) {
-    throw new EmptyDeallocationsError(vaultAddress);
-  }
+export const vaultV2ForceRedeem = (
+  params: VaultV2ForceRedeemParams,
+): Readonly<Transaction<VaultV2ForceRedeemAction>> =>
+  buildVaultV2ForceRedeem(parseVaultV2ForceRedeem(params));
 
+/** Preserves empty-list, shares, then per-deallocation validation and ABI order. @internal */
+export const parseVaultV2ForceRedeem = (
+  params: VaultV2ForceRedeemParams,
+): VaultV2ForceRedeemInput => {
+  const {
+    vault,
+    args: { deallocations, redeem, onBehalf },
+    metadata,
+  } = params;
+  if (deallocations.length === 0) {
+    throw new EmptyDeallocationsError(vault.address);
+  }
   if (redeem.shares <= 0n) {
     throw new NonPositiveInputError("redeem.shares", redeem.shares);
   }
+  // Encode the same owned entry used in metadata, even for caller-owned getters.
+  // Preserve the original per-deallocation validation and ABI error order.
+  const deallocationCalls: Hex[] = [];
+  const deallocationSnapshots = Object.freeze(
+    // Visit sparse entries too: a missing deallocation must fail before encoding a transaction.
+    Array.from(deallocations, ({ adapter, marketParams, amount }) => {
+      const snapshot = Object.freeze({
+        adapter,
+        amount,
+        ...(marketParams && {
+          marketParams: Object.freeze({ ...marketParams }),
+        }),
+      });
+      deallocationCalls.push(encodeForceDeallocateCall(snapshot, onBehalf));
+      return snapshot;
+    }),
+  );
+  return {
+    vault: { address: vault.address },
+    args: {
+      deallocations: deallocationSnapshots,
+      redeem: { shares: redeem.shares, recipient: redeem.recipient },
+      onBehalf,
+    },
+    deallocationCalls: Object.freeze(deallocationCalls),
+    metadata,
+  } as VaultV2ForceRedeemInput;
+};
 
-  const calls: Hex[] = [];
-
-  for (const deallocation of deallocations) {
-    calls.push(encodeForceDeallocateCall(deallocation, onBehalf));
-  }
+/** Encodes owned force-redeem inputs without rechecking them. @internal */
+export const buildVaultV2ForceRedeem = ({
+  vault: { address: vaultAddress },
+  args: { deallocations, redeem, onBehalf },
+  deallocationCalls,
+  metadata,
+}: VaultV2ForceRedeemInput): Readonly<
+  Transaction<VaultV2ForceRedeemAction>
+> => {
+  const calls: Hex[] = [...deallocationCalls];
 
   calls.push(
     encodeFunctionData({

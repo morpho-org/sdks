@@ -28,7 +28,6 @@ import {
   toHex,
   zeroAddress,
 } from "viem";
-import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { base } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
@@ -54,7 +53,7 @@ const setterRatifier = getChainAddress(ChainId.BaseMainnet, "setterRatifier");
 const ORACLE = "0x0000000000000000000000000000000000080000" as Address;
 const ORACLE_PRICE = 10n ** 36n;
 
-const offerMaker = privateKeyToAccount(generatePrivateKey()).address;
+const offerMaker = "0x9000000000000000000000000000000000000000" as Address;
 
 interface MarketFixture {
   readonly params: MarketParams;

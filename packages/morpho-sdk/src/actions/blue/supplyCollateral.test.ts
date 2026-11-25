@@ -3,6 +3,10 @@ import { decodeFunctionData, getAddress, maxUint256 } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { blueBundlesV1Abi } from "../../abis.js";
+import {
+  ReallocationsRequireBorrowError,
+  type VaultV2BlueReallocation,
+} from "../../types/index.js";
 import { blueSupplyCollateral } from "./supplyCollateral.js";
 import { blueSupplyCollateralBorrow } from "./supplyCollateralBorrow.js";
 
@@ -19,6 +23,26 @@ const market = {
 const userAddress = getAddress("0x00000000000000000000000000000000000000A1");
 
 describe("blueSupplyCollateral", () => {
+  test("rejects reallocations retained in reused combined-operation arguments", () => {
+    const reallocation: VaultV2BlueReallocation = {
+      vault: userAddress,
+      from: { type: "idle" },
+      to: { adapter: userAddress },
+      assets: 1n,
+      penalty: 0n,
+    };
+    const args = {
+      userAddress,
+      collateralAssets: 1n,
+      deadline: 1_900_000_000n,
+      reallocations: [reallocation],
+    };
+
+    expect(() => blueSupplyCollateral({ market, args })).toThrow(
+      ReallocationsRequireBorrowError,
+    );
+  });
+
   test("default", () => {
     const args = {
       userAddress,

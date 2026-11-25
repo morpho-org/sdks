@@ -11,10 +11,13 @@ import {
   zeroAddress,
   zeroHash,
 } from "viem";
+import { addTransactionMetadata } from "../../helpers/index.js";
+import type { BlueMarket } from "../../helpers/parse.js";
 import {
-  addTransactionMetadata,
-  validateNativeAsset,
-} from "../../helpers/index.js";
+  parseBlueMarket,
+  parseDeadline,
+  parseReferralFee,
+} from "../../helpers/parse.js";
 import { validateVaultV2BlueReallocations } from "../../helpers/validate.js";
 import {
   AmbiguousRequirementSignaturesError,
@@ -24,23 +27,45 @@ import {
   type BundlesTokenRequirementSignature,
   DepositOwnerMismatchError,
   type Metadata,
-  NativeFundingAmountMismatchError,
-  NegativeInputError,
   ReallocationLoanTokenMismatchError,
   type RequirementSignature,
   selectRequirementSignatures,
   type Transaction,
-  UnexpectedRequirementSignatureError,
   type VaultV2BlueReallocation,
 } from "../../types/index.js";
-import {
-  normalizeBundlesCommonParams,
-  normalizeBundlesSignature,
-} from "../bundles/common.js";
+import { normalizeBundlesSignature } from "../bundles/common.js";
 import {
   type BundlesTokenPermit,
   getBundlesTokenPermit,
 } from "../bundles/index.js";
+
+/** Normalized clock-free common fields; only complete operations carry a witness. @internal */
+interface BlueCommonInput {
+  readonly deadline: bigint;
+  readonly referralFeePct: bigint;
+  readonly referralFeeRecipient: Address;
+}
+/** Immutable market snapshots and normalized public allocation calls. @internal */
+export interface BlueAllocations {
+  readonly publicAllocations: readonly {
+    readonly vault: Address;
+    readonly adapter: Address;
+    readonly marketParams: BlueMarket;
+    readonly fromIdle: boolean;
+    readonly sourceAdapter: Address;
+    readonly sourceMarketParams: BlueMarket;
+    readonly assets: bigint;
+    readonly penalty: bigint;
+  }[];
+  readonly penaltyAssets: bigint;
+}
+/** Shared fields of a completed Blue write input. @internal */
+export interface BlueOperationInput extends BlueCommonInput {
+  readonly chainId: number;
+  readonly userAddress: Address;
+  readonly marketParams: BlueMarket;
+  readonly metadata?: Metadata;
+}
 
 /** @internal */
 export interface BlueBundlesV1CommonParams {
@@ -52,15 +77,10 @@ export interface BlueBundlesV1CommonParams {
   metadata?: Metadata;
 }
 
-/** @internal */
-export interface NormalizedBlueBundlesV1CommonParams {
-  referralFeePct: bigint;
-  referralFeeRecipient: Address;
-}
-
 type BlueBundlesV1TokenPermit = BundlesTokenPermit;
 
-interface BlueBundlesV1SignedAuthorization {
+/** Normalized authorization consumed by the encode-only builders. @internal */
+export interface BlueBundlesV1SignedAuthorization {
   signature: { v: number; r: Hex; s: Hex };
   nonce: bigint;
   deadline: bigint;
@@ -72,46 +92,12 @@ const EMPTY_SIGNED_AUTHORIZATION: BlueBundlesV1SignedAuthorization = {
   deadline: 0n,
 };
 
-/** @internal */
-export const normalizeBlueBundlesV1CommonParams = (
-  params: BlueBundlesV1CommonParams,
-): NormalizedBlueBundlesV1CommonParams => {
-  const normalized = normalizeBundlesCommonParams(params);
-  return {
-    referralFeePct: normalized.referralFeePct,
-    referralFeeRecipient: normalized.referralFeeRecipient,
-  };
-};
-
-/** @internal */
-export const validateBlueBundlesV1NativeFunding = (params: {
-  chainId: number;
-  token: Address;
-  fundedAmount: bigint;
-  nativeAmount?: bigint;
-  requirementSignature?: BundlesTokenRequirementSignature;
-}): bigint => {
-  const nativeAmount = params.nativeAmount ?? 0n;
-  if (nativeAmount < 0n) {
-    throw new NegativeInputError("nativeAmount", nativeAmount);
-  }
-  if (nativeAmount === 0n) {
-    return 0n;
-  }
-
-  validateNativeAsset(params.chainId, params.token);
-  if (nativeAmount !== params.fundedAmount) {
-    throw new NativeFundingAmountMismatchError(
-      nativeAmount,
-      params.fundedAmount,
-    );
-  }
-  if (params.requirementSignature != null) {
-    throw new UnexpectedRequirementSignatureError(
-      params.requirementSignature.action.type,
-    );
-  }
-  return nativeAmount;
+/** Parses deadline shape and the normalized referral pair without checking expiry. @internal */
+export const parseBlueBundlesV1Common = (params: BlueBundlesV1CommonParams) => {
+  const deadline = parseDeadline(params.deadline);
+  const { referralFeePct, referralFeeRecipient } = parseReferralFee(params);
+  const result = { referralFeePct, referralFeeRecipient, deadline } as const;
+  return result;
 };
 
 /** @internal */
@@ -205,45 +191,54 @@ export const getBlueBundlesV1SignedAuthorization = (params: {
   };
 };
 
-/** @internal */
-export const getBlueBundlesV1PublicAllocations = (
+/** Parses an ordered reallocation plan and its aggregate penalty once. @internal */
+export const parseBlueAllocations = (
   reallocations: readonly VaultV2BlueReallocation[],
-  targetMarketParams: MarketParams,
+  targetMarketParams: BlueMarket,
 ) => {
+  // Reject malformed plans before constructing allocation calls.
   validateVaultV2BlueReallocations(reallocations, targetMarketParams.id);
   // Hoisted out of the map: idle sources all reference the same synthetic idle market, whose
   // construction eagerly hashes the market id — computing it once per call instead of per entry.
-  const idleMarketParams = MarketParams.idle(targetMarketParams.loanToken);
-  return reallocations.map((reallocation) => {
-    if (
-      reallocation.from.type === "market" &&
-      !isAddressEqual(
-        reallocation.from.marketParams.loanToken,
-        targetMarketParams.loanToken,
-      )
-    ) {
-      throw new ReallocationLoanTokenMismatchError(
-        targetMarketParams.loanToken,
-        reallocation.from.marketParams.loanToken,
-      );
-    }
-    return {
-      vault: reallocation.vault,
-      adapter: reallocation.to.adapter,
-      marketParams: targetMarketParams,
-      fromIdle: reallocation.from.type === "idle",
-      sourceAdapter:
-        reallocation.from.type === "market"
-          ? reallocation.from.adapter
-          : zeroAddress,
-      sourceMarketParams:
-        reallocation.from.type === "market"
-          ? reallocation.from.marketParams
-          : idleMarketParams,
-      assets: reallocation.assets,
-      penalty: reallocation.penalty,
-    };
-  });
+  const idleMarketParams = parseBlueMarket(
+    MarketParams.idle(targetMarketParams.loanToken),
+  );
+  const publicAllocations: BlueAllocations["publicAllocations"] =
+    reallocations.map((reallocation) => {
+      if (
+        reallocation.from.type === "market" &&
+        !isAddressEqual(
+          reallocation.from.marketParams.loanToken,
+          targetMarketParams.loanToken,
+        )
+      ) {
+        throw new ReallocationLoanTokenMismatchError(
+          targetMarketParams.loanToken,
+          reallocation.from.marketParams.loanToken,
+        );
+      }
+      return {
+        vault: reallocation.vault,
+        adapter: reallocation.to.adapter,
+        marketParams: targetMarketParams,
+        fromIdle: reallocation.from.type === "idle",
+        sourceAdapter:
+          reallocation.from.type === "market"
+            ? reallocation.from.adapter
+            : zeroAddress,
+        sourceMarketParams:
+          reallocation.from.type === "market"
+            ? parseBlueMarket(reallocation.from.marketParams)
+            : idleMarketParams,
+        assets: reallocation.assets,
+        penalty: reallocation.penalty,
+      };
+    });
+  const result = {
+    publicAllocations,
+    penaltyAssets: getBlueBundlesV1PenaltyAssets(publicAllocations),
+  } as const;
+  return result;
 };
 
 /** @internal */

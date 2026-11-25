@@ -101,6 +101,19 @@ describe("planExecution", () => {
     ]);
   });
 
+  test("after-only reads skip the before phase", () => {
+    const calls = planExecution({
+      request: makeRequest(1),
+      owner: OWNER,
+      preparations: [],
+      reads,
+      afterOnlyReadIds: new Set([reads[0]!.id]),
+    }).calls;
+    expect(calls.filter((call) => call.type === "stateRead")).toEqual([
+      expect.objectContaining({ phase: "after", read: reads[0] }),
+    ]);
+  });
+
   test("user txs keep public transactionIndex; reads run from owner", () => {
     const calls = plan(1).calls;
     const tx = calls.find((c) => c.type === "transaction");

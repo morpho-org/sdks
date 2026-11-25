@@ -1,5 +1,12 @@
 import { addressesRegistry, getChainAddresses } from "@morpho-org/blue-sdk";
-import { type Address, ethAddress, getAddress, zeroAddress } from "viem";
+import {
+  type Address,
+  decodeFunctionData,
+  erc20Abi,
+  ethAddress,
+  getAddress,
+  zeroAddress,
+} from "viem";
 import { describe, vi } from "vitest";
 
 // Overrides are keyed by chainId rather than queued as `mockReturnValueOnce`,
@@ -30,6 +37,7 @@ import { parseTransfers as parseRawTransfers } from "../parsing/transfers.js";
 import {
   assertNoBundlesRetention,
   checkBundlesRetention,
+  planBundlesRetentionReads,
 } from "./bundles-retention.js";
 
 const parseTransfers = (calls: Parameters<typeof parseRawTransfers>[0]) =>
@@ -648,5 +656,189 @@ describe("checkBundlesRetention", () => {
       { address, token: zeroAddress, netRetained: 102n },
     ]);
     expect(() => assertNoBundlesRetention(input)).toThrowError(failures[0]);
+  });
+});
+
+describe("planBundlesRetentionReads", () => {
+  test("default: one balanceOf read per restricted intermediary and token", () => {
+    const reads = planBundlesRetentionReads({
+      chainId: ONLY_MIDNIGHT_CHAIN_ID,
+      tokens: [USDC, DAI, USDC.toLowerCase() as Address],
+    });
+    expect(reads.map(({ id, to }) => ({ id, to }))).toEqual([
+      { id: `retention:${USDC}:${MIDNIGHT_BUNDLES}`.toLowerCase(), to: USDC },
+      { id: `retention:${DAI}:${MIDNIGHT_BUNDLES}`.toLowerCase(), to: DAI },
+    ]);
+    expect(reads[0]).toMatchObject({
+      kind: "erc20.balance",
+      token: USDC,
+      account: MIDNIGHT_BUNDLES,
+    });
+    for (const read of reads) {
+      expect(
+        decodeFunctionData({ abi: erc20Abi, data: read.data }),
+      ).toStrictEqual({ functionName: "balanceOf", args: [MIDNIGHT_BUNDLES] });
+    }
+  });
+
+  test("behavior: covers every restricted intermediary of the chain", () => {
+    const reads = planBundlesRetentionReads({
+      chainId: BUNDLES_AND_MIDNIGHT_CHAIN_ID,
+      tokens: [USDC],
+    });
+    expect(
+      reads.map((read) => read.kind === "erc20.balance" && read.account),
+    ).toEqual(
+      expect.arrayContaining([
+        BUNDLES_TARGET,
+        BLUE_BUNDLES,
+        VAULT_EXIT_BUNDLES,
+        MIDNIGHT_BUNDLES,
+      ]),
+    );
+    for (const read of reads) {
+      expect(
+        decodeFunctionData({ abi: erc20Abi, data: read.data }).args,
+      ).toStrictEqual([read.kind === "erc20.balance" && read.account]);
+    }
+  });
+
+  test("behavior: plans nothing without tokens, for native ETH, or without restricted intermediaries", () => {
+    expect(planBundlesRetentionReads({ chainId: 1, tokens: [] })).toEqual([]);
+    expect(
+      planBundlesRetentionReads({ chainId: 1, tokens: [ethAddress] }),
+    ).toEqual([]);
+    expect(
+      planBundlesRetentionReads({
+        chainId: NO_BUNDLES_CHAIN_ID,
+        tokens: [USDC],
+      }),
+    ).toEqual([]);
+    expect(planBundlesRetentionReads({ chainId: -1, tokens: [USDC] })).toEqual(
+      [],
+    );
+  });
+});
+
+describe("checkBundlesRetention with in-block balances", () => {
+  const [read] = planBundlesRetentionReads({
+    chainId: ONLY_MIDNIGHT_CHAIN_ID,
+    tokens: [USDC],
+  });
+  const balances = (before: bigint, after: bigint) => ({
+    reads: [read!],
+    before: new Map([[read!.id, before]]),
+    after: new Map([[read!.id, after]]),
+  });
+  const forgedPair = parseTransfers([
+    makeCall([
+      makeTransferLog({
+        token: USDC,
+        from: USER,
+        to: MIDNIGHT_BUNDLES,
+        amount: 1_000_000n,
+      }),
+      makeTransferLog({
+        token: USDC,
+        from: MIDNIGHT_BUNDLES,
+        to: VAULT,
+        amount: 1_000_000n,
+      }),
+    ]),
+  ]);
+
+  test("error: BlacklistViolationError when a forged equal-and-opposite log pair hides a retained balance", () => {
+    const params = {
+      chainId: ONLY_MIDNIGHT_CHAIN_ID,
+      transfers: forgedPair,
+      assetChanges: [],
+    };
+    expect(checkBundlesRetention(params).failures).toEqual([]);
+
+    const { failures } = checkBundlesRetention({
+      ...params,
+      balances: balances(5n, 1_000_005n),
+    });
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toBeInstanceOf(BlacklistViolationError);
+    expect(failures[0]?.assetChanges).toEqual([
+      { address: MIDNIGHT_BUNDLES, token: USDC, netRetained: 1_000_000n },
+    ]);
+  });
+
+  test("behavior: passes when state confirms the pass-through", () => {
+    expect(
+      checkBundlesRetention({
+        chainId: ONLY_MIDNIGHT_CHAIN_ID,
+        transfers: forgedPair,
+        assetChanges: [],
+        balances: balances(5n, 5n),
+      }).failures,
+    ).toEqual([]);
+  });
+
+  test("behavior: tolerates dust and swept balances in state", () => {
+    for (const [before, after] of [
+      [0n, 100n],
+      [1_000n, 0n],
+    ] as const) {
+      expect(
+        checkBundlesRetention({
+          chainId: ONLY_MIDNIGHT_CHAIN_ID,
+          transfers: [],
+          assetChanges: [],
+          balances: balances(before, after),
+        }).failures,
+      ).toEqual([]);
+    }
+  });
+
+  test("behavior: reports the larger amount once when logs and state both flag a pair", () => {
+    const transfers = parseTransfers([
+      makeCall([
+        makeTransferLog({
+          token: USDC,
+          from: USER,
+          to: MIDNIGHT_BUNDLES,
+          amount: 500n,
+        }),
+      ]),
+    ]);
+    const failure = (after: bigint) =>
+      checkBundlesRetention({
+        chainId: ONLY_MIDNIGHT_CHAIN_ID,
+        transfers,
+        assetChanges: [],
+        balances: balances(0n, after),
+      }).failures[0]?.assetChanges;
+    expect(failure(900n)).toEqual([
+      { address: MIDNIGHT_BUNDLES, token: USDC, netRetained: 900n },
+    ]);
+    expect(failure(200n)).toEqual([
+      { address: MIDNIGHT_BUNDLES, token: USDC, netRetained: 500n },
+    ]);
+  });
+
+  test("behavior: skips a pair whose balance read is missing in either phase and marks coverage incomplete", () => {
+    const result = checkBundlesRetention({
+      chainId: ONLY_MIDNIGHT_CHAIN_ID,
+      transfers: [],
+      assetChanges: [],
+      balances: {
+        reads: [read!],
+        before: new Map(),
+        after: new Map([[read!.id, 10_000n]]),
+      },
+    });
+    expect(result.failures).toEqual([]);
+    expect(result).toMatchObject({ status: "checked", incomplete: true });
+    expect(
+      checkBundlesRetention({
+        chainId: ONLY_MIDNIGHT_CHAIN_ID,
+        transfers: [],
+        assetChanges: [],
+        balances: balances(5n, 5n),
+      }),
+    ).not.toHaveProperty("incomplete");
   });
 });

@@ -1,10 +1,8 @@
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData } from "viem";
 import { vaultBundlesV1Abi } from "../../abis.js";
-import {
-  validateNativeVaultAsset,
-  validateUint256Field,
-} from "../../helpers/validate.js";
+import { parseUint256 } from "../../helpers/parse.js";
+import { validateNativeVaultAsset } from "../../helpers/validate.js";
 import {
   type BundlesFundingArgs,
   type BundlesTokenRequirementSignature,
@@ -39,6 +37,19 @@ export interface VaultV2DepositParams {
     readonly deadline: bigint;
   };
   readonly metadata?: Metadata;
+}
+
+declare const vaultV2DepositInput: unique symbol;
+/** Validated deposit values without a carried signature. @internal */
+export interface VaultV2DepositInput {
+  readonly vault: Readonly<VaultV2DepositParams["vault"]>;
+  readonly userAddress: Address;
+  readonly funding: { readonly assets: bigint; readonly value: bigint };
+  readonly maxSharePrice: bigint;
+  readonly common: ReturnType<typeof normalizeBundlesCommonParams>;
+  readonly metadata?: Metadata;
+  readonly requirementSignature?: VaultV2DepositParams["args"]["requirementSignature"];
+  readonly [vaultV2DepositInput]: true;
 }
 
 /**
@@ -109,27 +120,74 @@ export interface VaultV2DepositParams {
  */
 export const vaultV2Deposit = (
   params: VaultV2DepositParams,
-): Readonly<Transaction<VaultV2DepositAction>> => {
+): Readonly<Transaction<VaultV2DepositAction>> =>
+  buildVaultV2Deposit(parseVaultV2DepositInput(params));
+
+/** Constructs the complete standalone deposit from raw funding and bounds. @internal */
+export const parseVaultV2DepositInput = (
+  params: VaultV2DepositParams,
+): VaultV2DepositInput => {
   const funding = resolveBundlesFunding(params.args);
   if (params.args.maxSharePrice <= 0n) {
     throw new NonPositiveInputError("maxSharePrice", params.args.maxSharePrice);
   }
-  // Reject ABI overflow with SDK errors before calldata encoding.
-  validateUint256Field(
-    funding.value > 0n ? "nativeAmount" : "amount",
-    funding.assets,
+  // Check ABI bounds after both positive-only checks, preserving first-error order.
+  parseUint256(funding.value > 0n ? "nativeAmount" : "amount", funding.assets);
+  const maxSharePrice = parseUint256(
+    "maxSharePrice",
+    params.args.maxSharePrice,
   );
-  validateUint256Field("maxSharePrice", params.args.maxSharePrice);
   if (funding.value > 0n) {
-    // Reject native funding unless the vault accepts the chain's wrapped-native asset.
+    // Native deposits must wrap the vault's underlying asset.
     validateNativeVaultAsset(params.vault.chainId, params.vault.asset);
-    if (params.args.requirementSignature != null) {
-      throw new UnexpectedRequirementSignatureError(
-        params.args.requirementSignature.action.type,
-      );
-    }
+  }
+  // Standalone native/signature exclusivity precedes common-field validation.
+  if (funding.value > 0n && params.args.requirementSignature != null) {
+    throw new UnexpectedRequirementSignatureError(
+      params.args.requirementSignature.action.type,
+    );
   }
   const common = normalizeBundlesCommonParams(params.args);
+  return {
+    vault: {
+      chainId: params.vault.chainId,
+      address: params.vault.address,
+      asset: params.vault.asset,
+    },
+    userAddress: params.args.userAddress,
+    funding,
+    maxSharePrice,
+    common,
+    metadata: params.metadata,
+    requirementSignature: params.args.requirementSignature,
+  } as VaultV2DepositInput;
+};
+
+/** Encodes parsed funding and binds the supplied token signature. @internal */
+export const buildVaultV2Deposit = (
+  parsed: VaultV2DepositInput,
+  signatures: Pick<
+    VaultV2DepositParams["args"],
+    "requirementSignature"
+  > = parsed,
+): Readonly<Transaction<VaultV2DepositAction>> => {
+  const { funding, common, maxSharePrice, vault, userAddress, metadata } =
+    parsed;
+  const params = {
+    vault,
+    args: {
+      maxSharePrice,
+      userAddress,
+      requirementSignature: signatures.requirementSignature,
+    },
+    metadata,
+  };
+  // Signatures are supplied independently of parsed funding.
+  if (funding.value > 0n && signatures.requirementSignature != null) {
+    throw new UnexpectedRequirementSignatureError(
+      signatures.requirementSignature.action.type,
+    );
+  }
   const referralFeeAssets = getBundlesReferralFeeAssets(
     funding.assets,
     common.referralFeePct,

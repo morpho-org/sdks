@@ -30,6 +30,7 @@ import {
   ExcessiveSlippageToleranceError,
   InconsistentReallocationPenaltyError,
   InputExceedsMaxError,
+  InvalidMidnightNativeAmountTypeError,
   InvalidReallocationAddressError,
   InvalidReallocationSourceTypeError,
   InvalidVaultV2BlueReallocationShapeError,
@@ -558,6 +559,14 @@ describe("validateMidnightNativeAmount", () => {
         pulls: [{ token: wNative, assets: 1_000n }],
       }),
     ).toEqual({ value: 0n, wrappedNative: zeroAddress });
+  });
+
+  test.each([0, "1"])("rejects non-bigint amounts %j", (nativeAmount) => {
+    expect(() =>
+      Reflect.apply(validateMidnightNativeAmount, undefined, [
+        { chainId: mainnet.id, nativeAmount, pulls: [] },
+      ]),
+    ).toThrow(InvalidMidnightNativeAmountTypeError);
   });
 
   test("rejects negative amounts", () => {

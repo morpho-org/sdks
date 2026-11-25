@@ -538,6 +538,7 @@ export function getLastDefined<T>(array: T[]) {
  *
  * @param field - Field name used in the thrown error message.
  * @param value - Bigint value to validate.
+ * @returns Nothing. Returns normally when the value is zero or positive.
  * @throws NegativeValueError when `value` is negative.
  * @example
  * ```ts

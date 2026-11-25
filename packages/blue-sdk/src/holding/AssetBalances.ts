@@ -3,7 +3,7 @@ import type { Token } from "../token/Token.js";
 /** Balance conversion category for a requested token and related peripheral tokens. */
 export type PeripheralBalanceType =
   | "base" // The balance of the requested token (ETH for ETH, wstETH for wstETH).
-  | "wrapped" // The balance of the unwrapped token (none for DAI, wstETH for wstETH).
+  | "wrapped" // The balance of the unwrapped token (none for DAI, stETH for wstETH).
   | "staked-wrapped" // The balance of the unstaked token staked then wrapped (none for WETH, ETH for wstETH).
   | "vault" // The balance of the underlying token deposited into the vault (none for WETH, WETH for re7WETH).
   | "wrapped-vault" // The balance of the unwrapped token wrapped then deposited into the vault (none for sparkDAI, ETH for re7WETH).

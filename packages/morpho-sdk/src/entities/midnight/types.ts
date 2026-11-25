@@ -297,6 +297,15 @@ export interface SupplyCollateralParams extends MarketActionParams {
   readonly collateralIndex?: bigint;
 }
 
+/** Parameters for a Midnight collateral supply with native wrapping. */
+export interface SupplyCollateralWithNativeParams
+  extends SupplyCollateralParams {
+  /** Positive native funding in wei, capped at the supplied wNative collateral. */
+  readonly nativeAmount: bigint;
+  /** Bundle execution deadline. Pass `maxUint256` explicitly for no expiry. */
+  readonly deadline: bigint;
+}
+
 /** Parameters for an atomic direct Midnight collateral supply batch. */
 export interface SupplyCollateralBatchParams extends MarketActionParams {
   readonly collateralSupplies: readonly {
