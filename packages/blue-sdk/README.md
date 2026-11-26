@@ -6,7 +6,7 @@
         <img src="https://img.shields.io/npm/v/@morpho-org/blue-sdk?colorA=f6f8fa&colorB=f6f8fa&style=flat" alt="Version">
     </picture>
 </a>
-<a href="https://github.com/morpho-org/blue-sdk/blob/main/LICENSE">
+<a href="https://github.com/morpho-org/sdks/blob/main/LICENSE">
     <picture>
         <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/npm/l/@morpho-org/blue-sdk?colorA=21262d&colorB=21262d&style=flat">
         <img src="https://img.shields.io/npm/l/@morpho-org/blue-sdk?colorA=f6f8fa&colorB=f6f8fa&style=flat" alt="MIT License">
@@ -23,18 +23,21 @@
 
 ## Overview
 
-Framework-agnostic package that defines Morpho-related entity classes:
+Framework-agnostic package that defines Morpho Blue and vault entity classes:
 
-- [**`MarketParams`**](./src/market/MarketParams.ts): represents the immutable configuration of a market on Morpho
-- [**`Market`**](./src/market/Market.ts): represents the state of a market on Morpho
-- [**`Token`**](./src/token/Token.ts): represents a ERC20 token
-- [**`User`**](./src/user/User.ts): represents a user of Morpho
-- [**`VaultConfig`**](./src/vault/VaultConfig.ts): represents the configuration of a Morpho Vault
-- [**`Vault`**](./src/vault/Vault.ts): represents the state of a Morpho Vault
-- [**`VaultUser`**](./src/vault/VaultUser.ts): represents the state of a user on a Morpho Vault
-- [**`VaultMarketAllocation`**](./src/vault/VaultMarketAllocation.ts): represents the allocation (and configuration) of a Morpho Vault on a Morpho market
+- [**`MarketParams`**](./src/market/MarketParams.ts): the immutable configuration of a Morpho Blue market
+- [**`Market`**](./src/market/Market.ts): the state of a Morpho Blue market
+- [**`Position`**, **`AccrualPosition`**](./src/position/Position.ts): a user's position on a market, raw or with its market for accrual and health checks
+- [**`Token`**](./src/token/Token.ts): an ERC-20 token, with [wrapped-token](./src/token/WrappedToken.ts) and [vault-token](./src/token/VaultToken.ts) variants
+- [**`User`**](./src/user/User.ts): a user of Morpho
+- [**`Holding`**](./src/holding/Holding.ts): a user's balance and allowances for a token
+- [**`VaultConfig`**](./src/vault/VaultConfig.ts), [**`Vault`**](./src/vault/Vault.ts): the configuration and state of a Vault V1 (MetaMorpho)
+- [**`VaultUser`**](./src/vault/VaultUser.ts): the state of a user on a Vault V1
+- [**`VaultMarketConfig`**](./src/vault/VaultMarketConfig.ts), [**`VaultMarketAllocation`**](./src/vault/VaultMarketAllocation.ts): a Vault V1's configuration and allocation on a market
+- [**`VaultV2`**](./src/vault/v2/VaultV2.ts): the state of a Vault V2, with its [adapters](./src/vault/v2/)
+- [**`MathLib`**](./src/math/MathLib.ts), [**`SharesMath`**](./src/math/SharesMath.ts), [**`AdaptiveCurveIrmLib`**](./src/math/AdaptiveCurveIrmLib.ts): protocol math
 
-Upgrading from v6? Read the [v6 → v7 migration guide](./MIGRATION-v6-to-v7.md).
+Upgrading? Read the [v7 → v8 migration guide](./MIGRATION-v7-to-v8.md). Older guide: [v6 → v7](./MIGRATION-v6-to-v7.md).
 
 ## Installation
 
@@ -122,7 +125,7 @@ that need no interest accrual.
 Leverage the [`Position`](./src/position/Position.ts) class to manipulate the position of a user on a given market:
 
 ```typescript
-import { Position } from "@morpho-org/blue-sdk";
+import { AccrualPosition, Position } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
 
 const position = new AccrualPosition(
@@ -142,7 +145,7 @@ position.maxBorrowableAssets; // e.g. 2100_000000000000000000n (in loan assets).
 
 const accruedPosition = position.accrueInterest(Time.timestamp()); // Accrue interest to the latest's timestamp.
 
-position.borrowAssets; // e.g. 20_400000000000000000n (in loan assets).
+accruedPosition.borrowAssets; // e.g. 20_400000000000000000n (in loan assets).
 ```
 
 ### Addresses customization

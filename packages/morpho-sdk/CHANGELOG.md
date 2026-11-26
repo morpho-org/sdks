@@ -1,5 +1,11 @@
 # @morpho-org/morpho-sdk
 
+## 10.3.0
+
+### Minor Changes
+
+- Export the bundle token permit kinds and payload ABI parameters from `@morpho-org/morpho-sdk/abis`.
+
 ## 10.2.0
 
 ### Minor Changes

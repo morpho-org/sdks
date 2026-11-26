@@ -2,7 +2,7 @@
 
 TransactionPlan prepares immutable, serializable recipes for Vault V1 and V2 deposits, asset withdrawals and
 exact-share redemptions, plus Vault V1 to V2 migrations, Vault V2 forced asset exits and force redemptions,
-and supplying loan assets to Blue markets. Consumers own the client, wallet, storage and submission. The SDK
+and Blue supply, collateral, borrow, repay, withdrawal and refinance operations. Consumers own the client, wallet, storage and submission. The SDK
 does not sign or retain a client in a plan. Stable entity handles remain the recommended path
 during beta. See the [package guide](../../README.md#transactionplan-sign-and-verify-permits)
 for signature attachment and transaction building.
@@ -79,39 +79,12 @@ Force-redeem plans fix caller-supplied deallocations before the exact-share rede
 multicall. They need no snapshot, approval or signature request. They have no share-price floor;
 expiry is plan metadata, not an on-chain deadline.
 
-## Breaking rename for stored version 2
+## Stored format and validation
 
-These APIs may break in minor releases. The denomination-explicit format uses `version: 2`.
-Version 1, including plans saved by SDK 9.7.0, is rejected with
-`UnsupportedTransactionPlanVersionError` before stored action fields are interpreted; there is no
-legacy parser. SDK 9.7.0 shipped only deposit and withdrawal preparation. Update those calls and
-migrate trusted stored plans to the new fields and version before parsing them with the new SDK:
-
-- Deposit: `amount` → `assets` in preparation, `amount` → `assets` and `nativeAmount` →
-  `nativeAssets` in stored inputs.
-- Withdrawal: `amount` → `assets` in preparation and stored inputs.
-- Deposit approval inputs (underlying token): `amount` → `assets`.
-- Withdrawal approval inputs (vault-share token): `amount` → `shares`.
-
-Do not rename ERC-2612 request `args.amount`, typed-data `value`, or the low-level
-action/transaction `args`: those retain their ABI names. Encoded calldata, permit signatures and
-stable entity APIs are unchanged by this representation-only rename.
-
-For SDK 9.7.0 V2 deposit and withdrawal preparation calls, replace `vault` plus `vaultData` with
-the snapshot as `vault`, and remove the unused `deployless` option from withdrawal calls. These
-preparation-input changes do not change format-2 stored vault addresses or transaction bytes.
-
-Redemption is new in format 2: it takes `shareToken: Token` and `shares` from the start, and its
-stored inputs and vault-share approvals use `shares`. For V2, an address-only `Token` is sufficient.
-For V1 permits, supply share-permit domain metadata, for example from `fetchToken`.
-
-Vault V2 force withdrawal is also new in format 2. Its preparation and stored inputs use
-penalty-inclusive `assets`. Optional `slippageTolerance` derives the stored `minSharePriceE27` floor,
-using the entity default when omitted. Its share approval inputs use `shares`.
-
-New force-redemption plans take `vaultAddress`, top-level `shares`, and asset-denominated
-`deallocations[].assets`. Stored inputs use `vault` and `redeem.shares`. No `supportSignature` or
-`deployless` option is accepted because this native vault multicall needs no token permissions.
+Preparers emit stored format `version: 2`. Parsing rejects a version that is missing or not a safe integer with
+`InvalidTransactionPlanError`, and any other safe-integer version with
+`UnsupportedTransactionPlanVersionError`, before stored action fields are interpreted. Version 1
+field renames are listed in the package [CHANGELOG](../../CHANGELOG.md).
 
 `parseTransactionPlan`, inspection and builders validate structure and internal consistency and
 reject stored signatures from the wrong signer offline. Permits bind owner, token, spender, value, nonce, deadline

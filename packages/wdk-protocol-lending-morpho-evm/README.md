@@ -156,14 +156,13 @@ Use `prepareSupply` to deposit through VaultBundlesV1. Supply exactly one of `am
 `nativeAmount`, resolve requirements on the returned handle, then call its `submit` or `quote`.
 The standard WDK `supply` and `quoteSupply` methods use the same VaultBundlesV1 route for
 approved ERC-20 assets or native funding; signed deposits use the prepared handle.
-ERC-20 approvals and ERC-2612 permits target VaultBundlesV1. The SDK no longer requests Permit2 funding.
-See [MIGRATION.md](./MIGRATION.md) for migration from the removed legacy supply route.
+ERC-20 approvals and ERC-2612 permits target VaultBundlesV1. See [MIGRATION.md](./MIGRATION.md) for upgrade notes.
 
 ## Morpho SDK Requirements
 
 Morpho SDK actions can require approvals, ERC-2612 permit signatures, or Morpho authorization before the final action. This module exposes those requirements through `get*Requirements` methods — and, for vault deposits, through the `prepareSupply` handle's own `getRequirements` — rather than reimplementing allowance or authorization logic.
 
-Unsupported ERC-2612 tokens fall back to direct ERC-20 approvals. The legacy `permit2Nonce` option is deprecated and ignored.
+Unsupported ERC-2612 tokens fall back to direct ERC-20 approvals.
 
 Token funding checks the bundles allowance first on every route. If it already covers the amount,
 no token requirement is returned and ERC-2612 support is not probed.
@@ -199,8 +198,7 @@ an on-chain burn bound. Migration and in-kind redemption are morpho-sdk flows; s
 
 Morpho SDK enforces a builder/executor invariant for bundled actions. For that reason, `onBehalfOf` and vault/collateral withdrawal `to` must equal the connected wallet address in this WDK adapter.
 
-Borrow reallocations use Vault V2 BluePublicAllocator exclusively. Vault V1
-reallocation types are no longer accepted. Positive WAD-scaled penalties require
+Borrow reallocations use Vault V2 BluePublicAllocator exclusively. Positive WAD-scaled penalties require
 an explicit `maxPenalty`; the bound defaults to zero:
 
 ```typescript

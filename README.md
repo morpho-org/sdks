@@ -13,13 +13,7 @@
 
 ### ⭐ [`@morpho-org/morpho-sdk`](./packages/morpho-sdk/) — the recommended entry point
 
-**Start here.** `@morpho-org/morpho-sdk` is the abstraction layer that simplifies the Morpho protocol: it builds ready-to-send transactions for **VaultV1** (MetaMorpho), **VaultV2**, and **Blue** (Morpho Blue) on any EVM-compatible chain.
-
-### Removed legacy flows
-
-Vault V1 PublicAllocator shared-liquidity APIs, low-level Bundler3 composition and migration adapters,
-and legacy MORPHO token wrapping are not part of the next major SDK surfaces. Use Vault V2
-BluePublicAllocator APIs, the standalone Blue/Vault bundle actions, and the current MORPHO token.
+**Start here.** `@morpho-org/morpho-sdk` is the abstraction layer that simplifies the Morpho protocol: it reads on-chain state and builds ready-to-send transactions for **Midnight** (fixed-rate markets), **Blue** (Morpho Blue), **VaultV2**, and **VaultV1** (MetaMorpho) on every chain with the required deployments.
 
 ---
 
@@ -29,28 +23,23 @@ The packages below are lower-level building blocks. Use them only if `@morpho-or
 
 #### Viem
 
+- [**`@morpho-org/midnight-sdk`**](./packages/midnight-sdk/): Viem-based package for Morpho Midnight that exports protocol utilities, offer construction and signing, fetch helpers, and Midnight API utilities
 - [**`@morpho-org/blue-sdk-viem`**](./packages/blue-sdk-viem/): Viem-based augmentation of `@morpho-org/blue-sdk` that exports (and optionally injects) viem-based fetch methods
-- [**`@morpho-org/midnight-sdk`**](./packages/midnight-sdk/): Viem-based package for Morpho Midnight that exports protocol utilities, fetch helpers, and Midnight API utilities
 
 #### WDK (Tether Wallet Development Kit)
 
 - [**`@morpho-org/wdk-protocol-lending-morpho-evm`**](./packages/wdk-protocol-lending-morpho-evm/) `(Apache-2.0)`: WDK lending module that bridges WDK EVM accounts (`@tetherto/wdk-wallet-evm`, `@tetherto/wdk-wallet-evm-erc-4337`) to `@morpho-org/morpho-sdk`, exposing vault and market flows (`supply`, `withdraw`, `borrow`, `repay`, collateral): supply and withdraw use `prepareSupply` / `prepareWithdraw` prepared-operation handles, while borrow, repay, and collateral flows keep matching `quote*` / `get*Requirements`. Ships a Bare runtime entry alongside Node.
 
-#### Development
+#### Core
 
-For a local checkout, run `bun run install:checked` to validate the entire lockfile before a frozen install. The repository's Bun security scanner also checks publication ages before raw Bun commands install dependencies.
-
-- [**`@morpho-org/morpho-ts`**](./packages/morpho-ts/): TypeScript package to handle all things time & format-related
-
-- [**`@morpho-org/blue-sdk`**](./packages/blue-sdk/): Framework-agnostic package that defines Morpho-related entity classes (such as `Market`, `Token`, `Vault`)
-
+- [**`@morpho-org/blue-sdk`**](./packages/blue-sdk/): Framework-agnostic package that defines Morpho Blue and vault entity classes (such as `Market`, `Position`, `Token`, `Vault`, `VaultV2`)
+- [**`@morpho-org/morpho-ts`**](./packages/morpho-ts/): Shared primitives used by every package: address and deployment registries, fixed-point math, typed errors, time conversion and numeric formatting
 - [**`@morpho-org/evm-simulation`**](./packages/evm-simulation/): EVM simulation engine for Morpho transactions, backed by `eth_simulateV1`, signature authorization handling, and bundle-periphery retention checks
 
 ### Testing
 
 - [**`@morpho-org/test`**](./packages/test/): Viem-based package that exports utilities to build Vitest & Playwright fixtures that spawn anvil forks as child processes
-
-- [**`@morpho-org/morpho-test`**](./packages/morpho-test/): Framework-agnostic extension of `@morpho-org/blue-sdk` that exports test fixtures useful for E2E tests on forks
+- [**`@morpho-org/morpho-test`**](./packages/morpho-test/): Framework-agnostic extension of `@morpho-org/blue-sdk` that exports fork test fixtures (Blue and Midnight) and registry-driven E2E chain matrices
 
 ### Test coverage
 
@@ -61,6 +50,8 @@ For a local checkout, run `bun run install:checked` to validate the entire lockf
 ## Developer
 
 ### Contributing
+
+For a local checkout, run `bun run install:checked` to validate the entire lockfile before a frozen install. The repository's Bun security scanner also checks publication ages before raw Bun commands install dependencies.
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup, contribution workflow, and the inline checklist for listing a new chain to support.
 
@@ -98,6 +89,6 @@ Here's a tutorial on how to link a specific package to debug at runtime:
 
 ## License
 
-MIT — see [LICENSE](/LICENSE).
+MIT — see [LICENSE](./LICENSE).
 
 Exception: `packages/wdk-protocol-lending-morpho-evm` ships under Apache-2.0 (see its [LICENSE](./packages/wdk-protocol-lending-morpho-evm/LICENSE)).

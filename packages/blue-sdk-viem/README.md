@@ -6,7 +6,7 @@
         <img src="https://img.shields.io/npm/v/@morpho-org/blue-sdk-viem?colorA=f6f8fa&colorB=f6f8fa&style=flat" alt="Version">
     </picture>
 </a>
-<a href="https://github.com/morpho-org/blue-sdk-viem/blob/main/LICENSE">
+<a href="https://github.com/morpho-org/sdks/blob/main/LICENSE">
     <picture>
         <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/npm/l/@morpho-org/blue-sdk-viem?colorA=21262d&colorB=21262d&style=flat">
         <img src="https://img.shields.io/npm/l/@morpho-org/blue-sdk-viem?colorA=f6f8fa&colorB=f6f8fa&style=flat" alt="MIT License">
@@ -25,7 +25,7 @@
 
 Viem-based augmentation of [`@morpho-org/blue-sdk`](../blue-sdk/) that exports (and optionally injects) viem-based fetch methods.
 
-Upgrading from v6? Read the [v6 → v7 migration guide](./MIGRATION-v6-to-v7.md). Upgrading from v5? Read the [v5 → v6 migration guide](./MIGRATION-v5-to-v6.md).
+Upgrading? Read the [v6 → v7 migration guide](./MIGRATION-v6-to-v7.md). Older guide: [v5 → v6](./MIGRATION-v5-to-v6.md).
 
 ## Installation
 
@@ -41,7 +41,7 @@ yarn add @morpho-org/blue-sdk-viem
 
 ### Augment blue-sdk entity classes with fetchers
 
-Opt in classes augmentation to easily fetch an entire entity of the Morpho Blue & MetaMorpho ecosystem using viem:
+Opt in classes augmentation to easily fetch an entire Morpho Blue or vault entity using viem:
 
 ```typescript
 // Granular, opt-in, per-entity class augmentation:
@@ -126,13 +126,8 @@ position.maxBorrowableAssets; // e.g. 2100_000000n (in loan assets).
 
 const accruedPosition = position.accrueInterest(Time.timestamp()); // Accrue interest to the latest's timestamp.
 
-position.borrowAssets; // e.g. 23_500000n (in loan assets).
+accruedPosition.borrowAssets; // e.g. 23_500000n (in loan assets).
 ```
-
-[downloads-img]: https://img.shields.io/npm/dt/@morpho-org/blue-sdk-viem
-[downloads-url]: https://www.npmtrends.com/@morpho-org/blue-sdk-viem
-[npm-img]: https://img.shields.io/npm/v/@morpho-org/blue-sdk-viem
-[npm-url]: https://www.npmjs.com/package/@morpho-org/blue-sdk-viem
 
 ## Development
 

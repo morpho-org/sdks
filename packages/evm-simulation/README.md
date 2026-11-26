@@ -212,10 +212,9 @@ code or storage can fake use events or hide approval grants. Integrators must
 control the overrides; a passing result with untrusted overrides does not prove
 signatures were used or that the broadcast transaction grants only allowed permissions.
 
-Upgrading from v4? Start with the [v4 → v5 migration guide](../../docs/migrations/evm-simulation-v4-to-v5.md) for the backend cutover, then apply the [v5 → v6](../../docs/migrations/evm-simulation-v5-to-v6.md), [v6 → v7](../../docs/migrations/evm-simulation-v6-to-v7.md), and [v7 → v8](../../docs/migrations/evm-simulation-v7-to-v8.md) guides in order.
-Upgrading from v5? Apply the [v5 → v6 migration guide](../../docs/migrations/evm-simulation-v5-to-v6.md) first (retention-guard address change and 6.1.0 fail-closed RPC responses), then the [v6 → v7 migration guide](../../docs/migrations/evm-simulation-v6-to-v7.md) for simplified errors and original revert bytes, then the [v7 → v8 migration guide](../../docs/migrations/evm-simulation-v7-to-v8.md) for required limits.
-Upgrading from v6? See the [v6 → v7 migration guide](../../docs/migrations/evm-simulation-v6-to-v7.md) for simplified errors and original revert bytes, then the [v7 → v8 migration guide](../../docs/migrations/evm-simulation-v7-to-v8.md) for required limits.
-Upgrading from v7? See the [v7 → v8 migration guide](../../docs/migrations/evm-simulation-v7-to-v8.md) for required limits.
+Upgrading from v8? Read [Migrating to 9.0](#migrating-to-90). Older guides, to apply in order:
+[v4 → v5](../../docs/migrations/evm-simulation-v4-to-v5.md), [v5 → v6](../../docs/migrations/evm-simulation-v5-to-v6.md),
+[v6 → v7](../../docs/migrations/evm-simulation-v6-to-v7.md), [v7 → v8](../../docs/migrations/evm-simulation-v7-to-v8.md).
 
 ### API surface
 
@@ -226,7 +225,7 @@ All symbols below are re-exported from the package root.
 
 - `simulate(client, params, options?)` — run a bundle through the simulation pipeline.
 - Client, option and diagnostic types: `SimulationClient`, `SimulationOptions`, `SimulationWarning`, `SimulationReportVerification`; deprecated `SimulationLogger` remains exported.
-- Input types: `SimulateParams` (v5 shape: `mode`, `SimulationAuthorization` requests, `SimulationLimits`), `SimulationMode`, `SimulationTransaction`, `Assertion`, `LogAssertion`, `AssertionBounds`, `StateBlock` (the optional `SimulateParams.block`: `{ number, hash, timestamp }`), `SimulationStateOverrides` (the optional `SimulateParams.stateOverrides` account map), and `SimulationAccountOverride` (per-account `code`, `balance`, `nonce`, `state` and `stateDiff`).
+- Input types: `SimulateParams` (`mode`, `SimulationAuthorization` requests, `SimulationLimits`), `SimulationMode`, `SimulationTransaction`, `Assertion`, `LogAssertion`, `AssertionBounds`, `StateBlock` (the optional `SimulateParams.block`: `{ number, hash, timestamp }`), `SimulationStateOverrides` (the optional `SimulateParams.stateOverrides` account map), and `SimulationAccountOverride` (per-account `code`, `balance`, `nonce`, `state` and `stateDiff`).
 - Assertion helpers: `erc20BalanceAssertion` (token balance), `nativeBalanceAssertion` (native balance), and `maxDepositAssertion` (vault deposit cap); all use inclusive `min`/`max` bounds.
 - `toSimulationAuthorizations({ owner, requirements })` — map morpho-sdk `ActionRequirement[]` onto `SimulationAuthorization[]` straight from `action.args` — nothing is decoded or validated; validation happens in `simulate()`'s request parser.
 - Authorizations and limits: `SimulationAuthorization` and its members (`Erc20ApprovalAuthorization`, `Erc2612PermitAuthorization`, `Permit2TransferAuthorization`, `BlueAuthorization`, `BlueAuthorizationSignature`, `MidnightAuthorizationSignature`) with their EIP-712 payloads (`Eip712Domain`, `Eip712Field`, `Erc2612PermitTypedData`, `Permit2TransferTypedData`, `BlueAuthorizationTypedData`); `SimulationLimits`, `ApprovalLimit`, `OperationLimit`, and the shared `SlippageLimits`, `CheckedSlippageLimits` (the checked result carrying the applied `slippageTolerance`), `CheckedOperationLimit` and `CheckedSimulationLimits` (the type of `verification.limits` on a checked run), `SlippageQuote`, `SharePriceLimit`, `InKindPositionQuote`, `ForceExitDeallocationQuote`, `BluePositionBounds`, `MidnightPositionBounds`, `MidnightDebtPositionBounds`, `MidnightMarketStruct`, and `MidnightCollateralAmount`.

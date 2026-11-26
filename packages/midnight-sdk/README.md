@@ -1,6 +1,17 @@
 # @morpho-org/midnight-sdk
 
-Viem-based package for Morpho Midnight that exports protocol utilities, fetch helpers, and Midnight API utilities.
+Viem-based package for Morpho Midnight, Morpho's fixed-rate lending protocol. It exports:
+
+- Offer construction and signing: `Offer`, `Group`, `Tree`, `Payload` and the ratifier helpers: `PriceRatifierV1` and `RateRatifierV1` (the trees `morpho-sdk` maker flows accept), `EcrecoverRatifierUtils` and `SetterRatifierUtils`.
+- Market and position entities, protocol math, constants and typed errors.
+- Fetch helpers for on-chain market and position state, and the Midnight ABIs (including `midnightBundlesV2Abi`).
+- Midnight HTTP API helpers (`MidnightApi`) from `@morpho-org/midnight-sdk/api`.
+
+For ready-to-send transactions, use [`@morpho-org/morpho-sdk`](../morpho-sdk/) and
+`client.morpho.midnight(chainId)`: each action's `getRequirements()` returns the approvals and
+authorizations to submit before the final transaction.
+
+Upgrading from v1? Read the [v1 → v2 migration guide](./MIGRATION-v1-to-v2.md).
 
 ## Installation
 

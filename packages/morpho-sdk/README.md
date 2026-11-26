@@ -7,16 +7,7 @@
 
 > 📖 **Full documentation → [docs.morpho.org/developers/sdks/morpho-sdk](https://docs.morpho.org/developers/sdks/morpho-sdk/)**
 
-Build transactions for Morpho's **VaultV1** (MetaMorpho), **VaultV2**, **Blue**, and **Midnight** fixed-rate markets on chains with the required protocol and periphery deployments. Custom deployments can be added with `registerCustomAddresses` from `@morpho-org/morpho-sdk/addresses`.
-
-## Removed in v6
-
-Vault V1 PublicAllocator APIs, low-level Bundler3 composition, migration adapters, and legacy
-MORPHO wrapping were removed. Use Vault V2 BluePublicAllocator APIs:
-`getVaultV2BlueReallocationData()` fetches the state and `getVaultV2BlueReallocations()` prepares a
-plan for a Blue action.
-
-General Vault V1 operations remain supported.
+Build transactions for Morpho's **Midnight** fixed-rate markets, **Blue** markets, **VaultV2**, and **VaultV1** (MetaMorpho) on chains with the required protocol and periphery deployments. Custom deployments can be added with `registerCustomAddresses` from `@morpho-org/morpho-sdk/addresses`.
 
 ## Installation
 
@@ -28,36 +19,18 @@ Read [Dead-share validators](./DEAD-SHARE-PROTECTION.md) for the exported checks
 enforce the dead-deposit rule; integrators should validate their snapshot before building.
 Snapshot-free Blue `supply` remains deprecated.
 
-Upgrading from v9? Read the [v9 → v10 migration guide](./MIGRATION-v9-to-v10.md) for the direct
-Midnight `cancelOffers` route.
-
-Upgrading from v8? Read the [v8 → v9 migration guide](./MIGRATION-v8-to-v9.md) for the approval
-API removals and the new unlimited-approval behavior.
-
-Upgrading from v6? Read the [v6 → v7 migration guide](./MIGRATION-v6-to-v7.md) before updating
-Midnight maker integrations. Upgrading from v7? Read the
-[v7 → v8 migration guide](./MIGRATION-v7-to-v8.md) before relying on fail-closed token metadata or
-permit requirement errors. The guide also covers wrong-chain RPC checks (`eth_chainId`)
-on entity reads and requirement resolvers. It also covers missing-contract checks. Upgrading from
-v5? Read the
-[v5 → v6 migration guide](./MIGRATION-v5-to-v6.md) before updating vault deposit or Blue write
-integrations.
+Upgrading? Read the [v9 → v10 migration guide](./MIGRATION-v9-to-v10.md). Older guides:
+[v8 → v9](./MIGRATION-v8-to-v9.md), [v7 → v8](./MIGRATION-v7-to-v8.md),
+[v6 → v7](./MIGRATION-v6-to-v7.md), [v5 → v6](./MIGRATION-v5-to-v6.md).
 
 ## Actions
 
-Each entity exposes a set of actions. Common vault writes call VaultBundlesV1, Blue writes call
-BlueBundlesV1, and the remaining rows identify their destination.
+Each entity exposes a set of actions. Midnight takes and makes call MidnightBundlesV2, Blue writes
+call BlueBundlesV1, common vault writes call VaultBundlesV1, and the remaining rows identify their
+destination.
 
 | Entity | Actions | Route |
 | --- | --- | --- |
-| **VaultV1** (MetaMorpho) | `deposit`, `withdraw`, `redeem`, `migrateToV2` | VaultBundlesV1 |
-| | `inKindRedeem` | VaultExitBundlesV1 |
-| **VaultV2** | `deposit`, `withdraw`, `redeem` | VaultBundlesV1 |
-| | `forceWithdraw` | VaultExitBundlesV1 |
-| | `forceRedeem` | Vault multicall |
-| | `inKindRedeem` | VaultExitBundlesV1 |
-| **Blue** | `supply`, `withdraw`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`, `repayWithdrawCollateral`, `refinance` | BlueBundlesV1 |
-| **Blue** | `withdrawBuyCallback` | Morpho Blue (direct `withdraw` for a BlueBuyCallback's owner) |
 | **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `takeRepayWithdrawCollateral`, `repayWithdrawCollateral`, `takeWithdraw` | MidnightBundlesV2 (Ethereum, Base, Arbitrum, Arc, Robinhood, Tempo) |
 | | `supplyCollateral` | Midnight Core; ERC-20 only, no wrapping |
 | | `supplyCollateralWithNative` | MidnightBundlesV2 `midnightBundlesV2CancelAndMake`; wraps a positive `nativeAmount` into registered wNative, requires a `deadline`, and uses bundle approval and Midnight authorization |
@@ -65,6 +38,14 @@ BlueBundlesV1, and the remaining rows identify their destination.
 | | `supplyCollateralBatch`, `withdrawCollateralBatch` | Midnight multicall |
 | | `cancelOffers` | Direct call for one group (`setConsumed`), Midnight multicall for several; every Midnight chain |
 | | `makeLend`, `makeBorrow`, `makeWithdraw`, `makeRepay`, `supplyCollateralMakeBorrow`, `supplyBlueMakeLend` | MidnightBundlesV2 (Ethereum, Base, Arbitrum, Arc, Robinhood, Tempo) |
+| **Blue** | `supply`, `withdraw`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`, `repayWithdrawCollateral`, `refinance` | BlueBundlesV1 |
+| | `withdrawBuyCallback` | Morpho Blue (direct `withdraw` for a BlueBuyCallback's owner) |
+| **VaultV2** | `deposit`, `withdraw`, `redeem` | VaultBundlesV1 |
+| | `forceWithdraw` | VaultExitBundlesV1 |
+| | `forceRedeem` | Vault multicall |
+| | `inKindRedeem` | VaultExitBundlesV1 |
+| **VaultV1** (MetaMorpho) | `deposit`, `withdraw`, `redeem`, `migrateToV2` | VaultBundlesV1 |
+| | `inKindRedeem` | VaultExitBundlesV1 |
 
 `makeBorrow` publishes without collateral; `supplyCollateralMakeBorrow` requires collateral and
 supplies it in the same transaction.
@@ -157,14 +138,14 @@ const walletClient = createWalletClient({
 
 Create an entity — every factory takes a chain ID as its last argument:
 
-- `client.morpho.vaultV1(address, chainId)` / `client.morpho.vaultV2(address, chainId)`
-- `client.morpho.blue(marketParams, chainId)`
 - `client.morpho.midnight(chainId)`
+- `client.morpho.blue(marketParams, chainId)`
+- `client.morpho.vaultV2(address, chainId)` / `client.morpho.vaultV1(address, chainId)`
 
 ### Vault deposit / withdraw
 
 Deposit calls VaultBundlesV1 and may require an approval or permit. ERC-20 approvals and ERC-2612
-permits authorize VaultBundlesV1. The SDK no longer requests Permit2 funding.
+permits authorize VaultBundlesV1.
 
 ```typescript
 const vault = client.morpho.vaultV2("0xVault...", 1);
@@ -232,6 +213,81 @@ async function withdrawUsdc(provider: EIP1193Provider, supportSignature = false)
 For wNative vaults, pass `nativeAmount` instead of `amount`. The transaction sends that amount as
 `tx.value` to VaultBundlesV1, which wraps it internally; native deposits require no token permit.
 
+### Midnight: take a fixed-rate offer
+
+```typescript
+const midnight = client.morpho.midnight(8453);
+const marketData = await midnight.getMarketData(marketId);
+
+const output = midnight.takeLend({
+  accountAddress: lender,
+  marketData,
+  target: { type: "assets", assets: 1_000_000n, minUnits: 900_000n },
+  takeableOffers: quote.data.takeableOffers,
+  maxContinuousFee: maxUint256,
+  deadline,
+});
+
+const requirements = await output.getRequirements();
+const tx = output.buildTx();
+```
+
+### Midnight: collateral batches
+
+`supplyCollateralBatch` and `withdrawCollateralBatch` move several collaterals of one position in
+one transaction: a Midnight core `multicall` of direct `supplyCollateral` or `withdrawCollateral`
+calls that reverts as a whole. Pass one entry per collateral index; duplicates throw
+`DuplicateMidnightCollateralIndexError`, unlike the bundle flows, which sum them.
+
+A supply batch returns one unlimited Midnight approval per collateral token whose allowance is
+below that token's total:
+
+```typescript
+const supply = midnight.supplyCollateralBatch({
+  accountAddress: user,
+  marketData,
+  collateralSupplies: [
+    { collateralIndex: 0n, assets: 1_000_000n },
+    { collateralIndex: 1n, assets: 2_000_000_000_000_000_000n },
+  ],
+});
+
+for (const approval of await supply.getRequirements()) {
+  const hash = await walletClient.sendTransaction({ ...approval, account: user });
+  await client.waitForTransactionReceipt({ hash });
+}
+await walletClient.sendTransaction({ ...supply.buildTx(), account: user });
+```
+
+A withdraw batch checks every entry against `positionData` and, when the position has debt, checks
+the remaining collateral against the LLTV buffer using `collateralPrices`. `maxUint256` withdraws
+that index's whole balance. It needs no requirements:
+
+```typescript
+import { blueOracleAbi } from "@morpho-org/morpho-sdk/abis";
+import { maxUint256 } from "viem";
+
+const positionData = await midnight.getPositionData({ marketId, accountAddress: user });
+const collateralPrices = await Promise.all(
+  marketData.params.collateralParams.map(({ oracle }) =>
+    client.readContract({ address: oracle, abi: blueOracleAbi, functionName: "price" }),
+  ),
+);
+
+const withdrawal = midnight.withdrawCollateralBatch({
+  accountAddress: user,
+  marketData,
+  positionData,
+  collateralPrices,
+  collateralWithdrawals: [
+    { collateralIndex: 0n, assets: 500_000n },
+    { collateralIndex: 1n, assets: maxUint256 },
+  ],
+  receiver: user,
+});
+await walletClient.sendTransaction({ ...withdrawal.buildTx(), account: user });
+```
+
 ### Blue: BlueBundlesV1 writes
 
 ```typescript
@@ -273,24 +329,20 @@ borrowing. That path may also require Morpho authorization for BlueBundlesV1. Op
 instant liquidation. Blue writes do not accept `slippageTolerance`, `minSharePrice`, or
 `maxSharePrice` because BlueBundlesV1 has no share-price-bound inputs.
 
-> High-level Blue writes and shared-liquidity planning use Vault V2 only. Vault V1 allocator and
-> low-level composition surfaces were removed in v6; direct Vault V1 flows remain.
-
 ### TransactionPlan: sign and verify permits
 
 > **Beta:** TransactionPlan is experimental; breaking changes may ship in minor releases.
 > Existing entity flows remain the recommended stable path during the shadow-mode rollout.
 
-Preparers emit stored format `version: 2`. Version 1 (including SDK 9.7.0 plans) is rejected with
-`UnsupportedTransactionPlanVersionError`; migrate trusted saved plans' fields and version before
-restoring them. There is no legacy parser.
+Preparers emit stored format `version: 2`. Parsing rejects a version that is missing or not a safe integer
+with `InvalidTransactionPlanError` and any other safe-integer version with `UnsupportedTransactionPlanVersionError`.
 
 Prepare a Vault V2 deposit, withdrawal, force-withdraw or exact-share redemption plan, or a Vault V1 deposit or withdrawal plan with
 `prepareVaultV1Deposit` or `prepareVaultV1Withdraw` and a `fetchAccrualVault` snapshot, then sign its pending requests with your wallet.
 Deposit and withdrawal preparers take `assets`; redemption takes `shares`. Stored operation inputs
 use the same names, except native-funded deposits store `nativeAssets` instead of `assets`.
 Stored ERC-20 approval inputs likewise use `assets` for underlying-token approvals or `shares`
-for vault-share approvals. See the [TransactionPlan format and migration notes](./src/transactionPlan/README.md).
+for vault-share approvals. See the [TransactionPlan format notes](./src/transactionPlan/README.md).
 Pass the caller-fetched `AccrualVault` (V1) or `AccrualVaultV2` (V2) once as `vault` for deposits,
 and the matching snapshot as `vault` for withdrawals;
 the contract address comes from `vault.address`. Only deposit preparation accepts `deployless`.
@@ -333,7 +385,8 @@ constraints. A successful parse does not prove intent or protect unsigned fields
 must still protect stored plans.
 
 Supported action types are `erc20Approval`, `morphoAuthorization`, `blueSupply`,
-`blueSupplyCollateral`, `blueSupplyCollateralBorrow`, `vaultV1Deposit`, `vaultV1Withdraw`,
+`blueSupplyCollateral`, `blueBorrow`, `blueSupplyCollateralBorrow`, `blueRepay`, `blueWithdraw`,
+`blueWithdrawCollateral`, `blueRepayWithdrawCollateral`, `blueRefinance`, `vaultV1Deposit`, `vaultV1Withdraw`,
 `vaultV1Redeem`, `vaultV1InKindRedeem`, `vaultV1MigrateToV2`,
 `vaultV2Deposit`, `vaultV2Withdraw`, `vaultV2Redeem`,
 `vaultV2ForceWithdraw`, `vaultV2ForceRedeem` and `vaultV2InKindRedeem`. Builders return plain `Readonly<Transaction>` objects without step metadata.
@@ -342,7 +395,13 @@ Supported action types are `erc20Approval`, `morphoAuthorization`, `blueSupply`,
 | --- | --- |
 | `prepareBlueSupply` | Supply loan assets to a Blue market |
 | `prepareBlueSupplyCollateral` | Supply collateral to a Blue market without borrowing |
+| `prepareBlueBorrow` | Borrow from a Blue market against existing collateral |
 | `prepareBlueSupplyCollateralBorrow` | Supply collateral, borrow, or perform both atomically on Blue |
+| `prepareBlueRepay` | Repay Blue debt by assets or shares |
+| `prepareBlueWithdraw` | Withdraw supplied loan assets from a Blue market |
+| `prepareBlueWithdrawCollateral` | Withdraw collateral from a Blue market |
+| `prepareBlueRepayWithdrawCollateral` | Repay, withdraw collateral, or perform both atomically on Blue |
+| `prepareBlueRefinance` | Move a Blue borrow position to another market |
 | `prepareVaultV2Deposit` | Deposit assets into Vault V2 |
 | `prepareVaultV2Withdraw` | Withdraw assets from Vault V2 |
 | `prepareVaultV2Redeem` | Redeem an exact number of Vault V2 shares |
@@ -448,84 +507,9 @@ intent. Empty signature input still validates all requests and returns the origi
 IDs retain their existing signatures. Supplied IDs can replace invalid stored signatures, but every
 replacement is verified.
 
-### Midnight: take a fixed-rate offer
+### Import paths
 
 Protocol-specific names are qualified in shared facades, for example `fetchBluePosition` and `fetchMidnightPosition` from `@morpho-org/morpho-sdk/fetch`. Canonical raw upstream names remain available under `/blue/{abis,addresses,constants,entities,errors,fetch,types,utils}` and `/midnight/{abis,constants,entities,errors,fetch,types,utils}`.
-
-Morpho-ts registers MidnightBundlesV2 on Ethereum, Base, Arbitrum, Arc, Robinhood, and Tempo.
-
-```typescript
-const midnight = client.morpho.midnight(8453);
-const marketData = await midnight.getMarketData(marketId);
-
-const output = midnight.takeLend({
-  accountAddress: lender,
-  marketData,
-  target: { type: "assets", assets: 1_000_000n, minUnits: 900_000n },
-  takeableOffers: quote.data.takeableOffers,
-  maxContinuousFee: maxUint256,
-  deadline,
-});
-
-const requirements = await output.getRequirements();
-const tx = output.buildTx();
-```
-
-### Midnight: collateral batches
-
-`supplyCollateralBatch` and `withdrawCollateralBatch` move several collaterals of one position in
-one transaction: a Midnight core `multicall` of direct `supplyCollateral` or `withdrawCollateral`
-calls that reverts as a whole. Pass one entry per collateral index; duplicates throw
-`DuplicateMidnightCollateralIndexError`, unlike the bundle flows, which sum them.
-
-A supply batch returns one unlimited Midnight approval per collateral token whose allowance is
-below that token's total:
-
-```typescript
-const supply = midnight.supplyCollateralBatch({
-  accountAddress: user,
-  marketData,
-  collateralSupplies: [
-    { collateralIndex: 0n, assets: 1_000_000n },
-    { collateralIndex: 1n, assets: 2_000_000_000_000_000_000n },
-  ],
-});
-
-for (const approval of await supply.getRequirements()) {
-  const hash = await walletClient.sendTransaction({ ...approval, account: user });
-  await client.waitForTransactionReceipt({ hash });
-}
-await walletClient.sendTransaction({ ...supply.buildTx(), account: user });
-```
-
-A withdraw batch checks every entry against `positionData` and, when the position has debt, checks
-the remaining collateral against the LLTV buffer using `collateralPrices`. `maxUint256` withdraws
-that index's whole balance. It needs no requirements:
-
-```typescript
-import { blueOracleAbi } from "@morpho-org/morpho-sdk/abis";
-import { maxUint256 } from "viem";
-
-const positionData = await midnight.getPositionData({ marketId, accountAddress: user });
-const collateralPrices = await Promise.all(
-  marketData.params.collateralParams.map(({ oracle }) =>
-    client.readContract({ address: oracle, abi: blueOracleAbi, functionName: "price" }),
-  ),
-);
-
-const withdrawal = midnight.withdrawCollateralBatch({
-  accountAddress: user,
-  marketData,
-  positionData,
-  collateralPrices,
-  collateralWithdrawals: [
-    { collateralIndex: 0n, assets: 500_000n },
-    { collateralIndex: 1n, assets: maxUint256 },
-  ],
-  receiver: user,
-});
-await walletClient.sendTransaction({ ...withdrawal.buildTx(), account: user });
-```
 
 See the [documentation](https://docs.morpho.org/developers/sdks/morpho-sdk/) for the full API:
 native wrapping, Vault V2 BluePublicAllocator reallocations, borrow-position migration, vault V1 →
@@ -537,10 +521,10 @@ V2 migration, force withdraw/redeem, and Midnight maker flows.
 graph LR
     MC["client.morpho<br/>(morphoViemExtension)"]
 
-    MC -->|.vaultV1| MV1
-    MC -->|.vaultV2| MV2
-    MC -->|.blue| MM1
     MC -->|.midnight| MN1
+    MC -->|.blue| MM1
+    MC -->|.vaultV2| MV2
+    MC -->|.vaultV1| MV1
 
     subgraph VaultV1 Flow
         MV1[MorphoVaultV1]
@@ -574,31 +558,6 @@ graph LR
         V2FR -->|multicall| V2C[VaultV2 Contract]
     end
 
-    subgraph Blue Flow
-        MM1[MorphoBlue]
-        MM1 --> M1S[supply]
-        MM1 --> M1SC[supplyCollateral]
-        MM1 --> M1B[borrow]
-        MM1 --> M1SCB[supplyCollateralBorrow]
-        MM1 --> M1R[repay]
-        MM1 --> M1WC[withdrawCollateral]
-        MM1 --> M1RW[repayWithdrawCollateral]
-        MM1 --> M1W[withdraw]
-        MM1 --> M1M[refinance]
-
-        M1S --> BBV1[BlueBundlesV1]
-        M1SC --> BBV1
-        M1B --> BBV1
-        M1SCB --> BBV1
-        M1R --> BBV1
-        M1WC --> BBV1
-        M1RW --> BBV1
-        M1W --> BBV1
-        M1M --> BBV1
-
-        BBV1 -.->|reallocate / allocateFromIdle| BPA[Blue Public Allocator]
-    end
-
     subgraph Midnight Flow
         MN1[MorphoMidnight]
         MN1 --> MNT[fixed-rate taker actions]
@@ -613,6 +572,33 @@ graph LR
         MNS --> MNB2
         MNP --> MNC[Midnight]
         MNCB -->|multicall| MNC
+    end
+
+    subgraph Blue Flow
+        MM1[MorphoBlue]
+        MM1 --> M1S[supply]
+        MM1 --> M1SC[supplyCollateral]
+        MM1 --> M1B[borrow]
+        MM1 --> M1SCB[supplyCollateralBorrow]
+        MM1 --> M1R[repay]
+        MM1 --> M1WC[withdrawCollateral]
+        MM1 --> M1RW[repayWithdrawCollateral]
+        MM1 --> M1W[withdraw]
+        MM1 --> M1M[refinance]
+        MM1 --> M1WBC[withdrawBuyCallback]
+
+        M1S --> BBV1[BlueBundlesV1]
+        M1SC --> BBV1
+        M1B --> BBV1
+        M1SCB --> BBV1
+        M1R --> BBV1
+        M1WC --> BBV1
+        M1RW --> BBV1
+        M1W --> BBV1
+        M1M --> BBV1
+
+        M1WBC -->|direct call| MB[Morpho Blue]
+        BBV1 -.->|reallocate / allocateFromIdle| BPA[Blue Public Allocator]
     end
 
 
