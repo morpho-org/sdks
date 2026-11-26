@@ -283,7 +283,7 @@ describe("midnightCancelOffers", () => {
   test("error: UnknownAddressError on a chain without Midnight", () => {
     expect(() =>
       midnightCancelOffers({
-        chainId: ChainId.OptimismMainnet,
+        chainId: ChainId.XLayerMainnet,
         groups: [groupA],
         onBehalf: maker,
       }),

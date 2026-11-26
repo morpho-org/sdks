@@ -262,9 +262,10 @@ export type MidnightMarketIntent = MidnightMarket &
             readonly referral_fee?: never;
           }
       ))
-    | ({ readonly action: "midnight.supply_collateral" } & MidnightCollateral<
-        Amount<"assets">
-      >)
+    | ({
+        readonly action: "midnight.supply_collateral";
+        readonly funding?: Funding;
+      } & MidnightCollateral<Amount<"assets">>)
     | ({
         readonly action: "midnight.withdraw_collateral";
       } & MidnightWithdrawals)

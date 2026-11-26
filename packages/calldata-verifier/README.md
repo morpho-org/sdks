@@ -58,6 +58,7 @@ For Blue and Midnight, pass the market ID as `market` and the chain separately a
 - Blue reallocations with a nonzero penalty are rejected.
 - Midnight accepts `slippage` or no guard, and checks explicit `min_units`/`max_assets` on buys and `max_units`/`min_assets` on sells and direct withdrawals. Unknown and wrong-side guards throw `CalldataUnsupportedError`.
 - For Midnight, an approval, if included, must cover the encoded loan-token or collateral pull.
+- Standalone `midnight.supply_collateral` accepts direct Midnight `supplyCollateral` (zero native value, no authorization prerequisite) or native-funded `MidnightBundlesV2.midnightBundlesV2CancelAndMake` (positive native value on the chain's wrapped-native collateral up to `funding.max_native_assets` and the collateral amount, with all Blue-parking, offer-publication, and cancellation fields zero or empty, plus optional wrapped-native approval and `MidnightBundlesV2` authorization prerequisites).
 - Midnight `min_rate` and `max_rate` guards throw `CalldataUnsupportedError`: the rate is not encoded directly in the bundle, and its conversion depends on the quote and execution context.
 - Midnight core withdrawals transfer one loan asset per unit withdrawn after the contract updates the account's credit for losses. The verifier accepts exact asset and exact unit requests for this route.
 - The verifier does not check slippage, expiry or attribution tags, or verify typed-data signing requests.

@@ -3,6 +3,7 @@ import {
   midnightAbi,
   midnightBundlesV2Abi,
 } from "@morpho-org/midnight-sdk";
+import { getChainAddresses } from "@morpho-org/morpho-ts";
 import {
   decodeFunctionData,
   encodeFunctionData,
@@ -1764,4 +1765,400 @@ describe("verifyCalldata on Midnight markets", () => {
       );
     },
   );
+
+  describe("native-funded midnight.supply_collateral", () => {
+    const chainId = 1;
+    const chain = getChainAddresses(chainId);
+    const wNative = chain.wNative!;
+    const midnight = chain.midnight!;
+    const bundlesV2 = chain.midnightBundlesV2!;
+    const account = "0x1000000000000000000000000000000000000001" as const;
+    const loanToken = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as const;
+    const nonNativeCollateral =
+      "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599" as const;
+    const wNativeMarket = {
+      chainId: BigInt(chainId),
+      midnight,
+      loanToken,
+      collateralParams: [
+        {
+          token: nonNativeCollateral,
+          lltv: 770000000000000000n,
+          liquidationCursor: 0n,
+          oracle: otherAddress,
+        },
+        {
+          token: wNative,
+          lltv: 770000000000000000n,
+          liquidationCursor: 0n,
+          oracle: otherAddress,
+        },
+      ],
+      maturity: 2000n,
+      rcfThreshold: 0n,
+      enterGate: zeroAddress,
+      liquidatorGate: zeroAddress,
+    } as const;
+    const marketId = MarketUtils.toId(wNativeMarket);
+    const emptyBlueMarket: {
+      readonly loanToken: `0x${string}`;
+      readonly collateralToken: `0x${string}`;
+      readonly oracle: `0x${string}`;
+      readonly irm: `0x${string}`;
+      readonly lltv: bigint;
+    } = {
+      loanToken: zeroAddress,
+      collateralToken: zeroAddress,
+      oracle: zeroAddress,
+      irm: zeroAddress,
+      lltv: 0n,
+    };
+    const baseIntent = {
+      action: "midnight.supply_collateral",
+      chain_id: chainId,
+      account,
+      market: marketId,
+      max_fee_bps: 0,
+      collateral: { address: wNative },
+      amount: { unit: "assets", value: "100" },
+      funding: { type: "native", max_native_assets: "100" },
+      expires_at: 2000,
+    } as const;
+
+    function buildCancelAndMakeArgs(
+      overrides?: Partial<{
+        blueMarket: typeof emptyBlueMarket;
+        assetsToPark: bigint;
+        callbackSalt: `0x${string}`;
+        market: typeof wNativeMarket;
+        supplies: readonly { collateralIndex: bigint; assets: bigint }[];
+        ratifier: `0x${string}`;
+        newRoot: `0x${string}`;
+        signatureHeight: bigint;
+        signatureNonce: bigint;
+        signatureDeadline: bigint;
+        v: number;
+        r: `0x${string}`;
+        s: `0x${string}`;
+        groupsToCancel: readonly {
+          group: `0x${string}`;
+          maxConsumed: bigint;
+        }[];
+        payload: `0x${string}`;
+        deadline: bigint;
+        wrappedNative: `0x${string}`;
+      }>,
+    ) {
+      return [
+        overrides?.blueMarket ?? emptyBlueMarket,
+        overrides?.assetsToPark ?? 0n,
+        overrides?.callbackSalt ?? zeroHash,
+        overrides?.market ?? wNativeMarket,
+        overrides?.supplies ?? [{ collateralIndex: 1n, assets: 100n }],
+        overrides?.ratifier ?? zeroAddress,
+        overrides?.newRoot ?? zeroHash,
+        overrides?.signatureHeight ?? 0n,
+        overrides?.signatureNonce ?? 0n,
+        overrides?.signatureDeadline ?? 0n,
+        overrides?.v ?? 0,
+        overrides?.r ?? zeroHash,
+        overrides?.s ?? zeroHash,
+        overrides?.groupsToCancel ?? [],
+        overrides?.payload ?? "0x",
+        overrides?.deadline ?? 2000n,
+        overrides?.wrappedNative ?? wNative,
+      ] as const;
+    }
+
+    function nativeCall(
+      overrides?: Parameters<typeof buildCancelAndMakeArgs>[0],
+      value = "100",
+    ): CalldataCall {
+      return {
+        id: "supply_collateral_with_native",
+        kind: "midnightSupplyCollateralWithNative",
+        to: bundlesV2,
+        data: encodeFunctionData({
+          abi: midnightBundlesV2Abi,
+          functionName: "midnightBundlesV2CancelAndMake",
+          args: buildCancelAndMakeArgs(overrides),
+        }),
+        value,
+      };
+    }
+
+    it("verifies native and auto-funded bundle supply with optional prerequisites", () => {
+      const main = nativeCall(undefined, "60");
+      const approveZero: CalldataCall = {
+        id: "approve_reset",
+        kind: "approval",
+        to: wNative,
+        data: encodeFunctionData({
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [bundlesV2, 0n],
+        }),
+        value: "0",
+      };
+      const approve: CalldataCall = {
+        id: "approve",
+        kind: "approval",
+        to: wNative,
+        data: encodeFunctionData({
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [bundlesV2, maxUint256],
+        }),
+        value: "0",
+      };
+      const authorize: CalldataCall = {
+        id: "authorize",
+        kind: "authorization",
+        to: midnight,
+        data: encodeFunctionData({
+          abi: midnightAbi,
+          functionName: "setIsAuthorized",
+          args: [bundlesV2, true, account],
+        }),
+        value: "0",
+      };
+      const verified = verifyCalldata(baseIntent, [
+        approveZero,
+        approve,
+        authorize,
+        main,
+      ]);
+      expect(verified.map((entry) => entry.functionName)).toEqual([
+        "approve",
+        "approve",
+        "setIsAuthorized",
+        "midnightBundlesV2CancelAndMake",
+      ]);
+      expect(
+        verifyCalldata(
+          { ...baseIntent, funding: { type: "auto", max_native_assets: "60" } },
+          [main],
+        )[0]?.functionName,
+      ).toBe("midnightBundlesV2CancelAndMake");
+    });
+
+    it("still accepts direct core supplyCollateral when funding and expires_at are set", () => {
+      const { intent, calls } = midnightCases.borrow_directSupply;
+      for (const funding of [
+        undefined,
+        { type: "erc20" },
+        { type: "auto", max_native_assets: intent.amount.value },
+        { type: "native", max_native_assets: intent.amount.value },
+      ] as const) {
+        expect(
+          verifyCalldata({ ...intent, funding, expires_at: 2000 }, calls).at(-1)
+            ?.functionName,
+        ).toBe("supplyCollateral");
+      }
+    });
+
+    const nonZeroHash =
+      "0x0000000000000000000000000000000000000000000000000000000000000001" as const;
+    it.each([
+      {
+        label: "blueMarket.loanToken",
+        overrides: { blueMarket: { ...emptyBlueMarket, loanToken } },
+      },
+      {
+        label: "blueMarket.collateralToken",
+        overrides: {
+          blueMarket: { ...emptyBlueMarket, collateralToken: wNative },
+        },
+      },
+      {
+        label: "blueMarket.oracle",
+        overrides: {
+          blueMarket: { ...emptyBlueMarket, oracle: otherAddress },
+        },
+      },
+      {
+        label: "blueMarket.irm",
+        overrides: { blueMarket: { ...emptyBlueMarket, irm: otherAddress } },
+      },
+      {
+        label: "blueMarket.lltv",
+        overrides: { blueMarket: { ...emptyBlueMarket, lltv: 1n } },
+      },
+      { label: "assetsToPark", overrides: { assetsToPark: 1n } },
+      { label: "callbackSalt", overrides: { callbackSalt: nonZeroHash } },
+      { label: "ratifier", overrides: { ratifier: otherAddress } },
+      { label: "newRoot", overrides: { newRoot: nonZeroHash } },
+      { label: "signatureHeight", overrides: { signatureHeight: 1n } },
+      { label: "signatureNonce", overrides: { signatureNonce: 1n } },
+      { label: "signatureDeadline", overrides: { signatureDeadline: 1n } },
+      { label: "v", overrides: { v: 27 } },
+      { label: "r", overrides: { r: nonZeroHash } },
+      { label: "s", overrides: { s: nonZeroHash } },
+      {
+        label: "groupsToCancel",
+        overrides: {
+          groupsToCancel: [{ group: nonZeroHash, maxConsumed: 1n }],
+        },
+      },
+      { label: "payload", overrides: { payload: "0x12" as const } },
+    ])(
+      "rejects non-empty $label in midnightBundlesV2CancelAndMake",
+      ({ overrides }) => {
+        expect(() =>
+          verifyCalldata(baseIntent, [nativeCall(overrides)]),
+        ).toThrow(
+          expect.objectContaining({
+            constructor: CalldataCallError,
+            field: "cancel_and_make",
+          }),
+        );
+      },
+    );
+
+    it("rejects zero deadline, zero value, budget overrun, non-wNative collateral, and unauthorized funding", () => {
+      expect(() =>
+        verifyCalldata(baseIntent, [nativeCall({ deadline: 0n })]),
+      ).toThrow(
+        expect.objectContaining({
+          constructor: CalldataAmountError,
+          field: "deadline",
+        }),
+      );
+      expect(() =>
+        verifyCalldata(baseIntent, [
+          nativeCall({ wrappedNative: zeroAddress }, "0"),
+        ]),
+      ).toThrow(
+        expect.objectContaining({
+          constructor: CalldataAmountError,
+          field: "value",
+        }),
+      );
+      expect(() =>
+        verifyCalldata(baseIntent, [nativeCall(undefined, "0")]),
+      ).toThrow(CalldataAmountError);
+      expect(() =>
+        verifyCalldata(
+          {
+            ...baseIntent,
+            funding: { type: "native", max_native_assets: "200" },
+          },
+          [nativeCall(undefined, "101")],
+        ),
+      ).toThrow(CalldataAmountError);
+      expect(() =>
+        verifyCalldata(
+          {
+            ...baseIntent,
+            funding: { type: "native", max_native_assets: "50" },
+          },
+          [nativeCall(undefined, "60")],
+        ),
+      ).toThrow(CalldataAmountError);
+      expect(() =>
+        verifyCalldata({ ...baseIntent, funding: undefined }, [nativeCall()]),
+      ).toThrow(CalldataAmountError);
+      expect(() =>
+        verifyCalldata({ ...baseIntent, funding: { type: "erc20" } }, [
+          nativeCall(),
+        ]),
+      ).toThrow(CalldataAmountError);
+      expect(() =>
+        verifyCalldata(baseIntent, [
+          nativeCall({ wrappedNative: otherAddress }),
+        ]),
+      ).toThrow(CalldataAmountError);
+      expect(() =>
+        verifyCalldata(
+          {
+            ...baseIntent,
+            collateral: { address: nonNativeCollateral },
+          },
+          [nativeCall({ supplies: [{ collateralIndex: 0n, assets: 100n }] })],
+        ),
+      ).toThrow(CalldataAmountError);
+      expect(() =>
+        verifyCalldata(baseIntent, [nativeCall({ supplies: [] })]),
+      ).toThrow(
+        expect.objectContaining({
+          constructor: CalldataCallError,
+          field: "collateral",
+        }),
+      );
+      expect(() =>
+        verifyCalldata(
+          {
+            ...midnightCases.borrow_exactAssets.intent,
+            market: marketId,
+          },
+          [nativeCall()],
+        ),
+      ).toThrow(
+        expect.objectContaining({
+          constructor: CalldataCallError,
+          field: "function",
+        }),
+      );
+    });
+
+    it("rejects tampered prerequisites on native supply_collateral", () => {
+      const main = nativeCall();
+      const wrongSpenderApproval: CalldataCall = {
+        id: "approve",
+        kind: "approval",
+        to: wNative,
+        data: encodeFunctionData({
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [midnight, maxUint256],
+        }),
+        value: "0",
+      };
+      const insufficientApproval: CalldataCall = {
+        id: "approve",
+        kind: "approval",
+        to: wNative,
+        data: encodeFunctionData({
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [bundlesV2, 99n],
+        }),
+        value: "0",
+      };
+      const wrongOwnerAuth: CalldataCall = {
+        id: "auth",
+        kind: "authorization",
+        to: midnight,
+        data: encodeFunctionData({
+          abi: midnightAbi,
+          functionName: "setIsAuthorized",
+          args: [bundlesV2, true, otherAddress],
+        }),
+        value: "0",
+      };
+      const revokeAuth: CalldataCall = {
+        id: "auth",
+        kind: "authorization",
+        to: midnight,
+        data: encodeFunctionData({
+          abi: midnightAbi,
+          functionName: "setIsAuthorized",
+          args: [bundlesV2, false, account],
+        }),
+        value: "0",
+      };
+      expect(() =>
+        verifyCalldata(baseIntent, [wrongSpenderApproval, main]),
+      ).toThrow(CalldataTargetError);
+      expect(() =>
+        verifyCalldata(baseIntent, [insufficientApproval, main]),
+      ).toThrow(CalldataAmountError);
+      expect(() => verifyCalldata(baseIntent, [wrongOwnerAuth, main])).toThrow(
+        CalldataRecipientError,
+      );
+      expect(() => verifyCalldata(baseIntent, [revokeAuth, main])).toThrow(
+        CalldataCallError,
+      );
+    });
+  });
 });

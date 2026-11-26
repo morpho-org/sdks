@@ -1,5 +1,18 @@
 # @morpho-org/calldata-verifier
 
+## 0.2.0
+
+### Minor Changes
+
+- Support native funding (`funding` and `MidnightBundlesV2.midnightBundlesV2CancelAndMake`) on `midnight.supply_collateral` while preserving direct Midnight core `supplyCollateral` verification.
+
+### Patch Changes
+
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.5.1
+  - @morpho-org/midnight-sdk@2.9.1
+  - @morpho-org/morpho-sdk@10.3.1
+
 ## 0.1.0
 
 ### Minor Changes

@@ -4,7 +4,7 @@ import {
   midnightBundlesV2Abi,
 } from "@morpho-org/midnight-sdk";
 import type { ChainAddresses } from "@morpho-org/morpho-ts";
-import { type Address, maxUint256, zeroAddress } from "viem";
+import { type Address, maxUint256, zeroAddress, zeroHash } from "viem";
 import {
   approval,
   checked,
@@ -357,10 +357,20 @@ function checkCoreWithdrawals(
 
 function checkNative(
   wrappedNative: Address,
-  { intent, chain, call, cap }: Context & { cap: bigint },
+  {
+    intent,
+    chain,
+    call,
+    cap,
+    requireValue = false,
+  }: Context & { cap: bigint; requireValue?: boolean },
 ) {
   const value = uint(call.value, { field: "value", call });
-  if (value === 0n && sameAddress(wrappedNative, zeroAddress)) {
+  if (
+    !requireValue &&
+    value === 0n &&
+    sameAddress(wrappedNative, zeroAddress)
+  ) {
     return;
   }
   if (
@@ -673,6 +683,81 @@ function checkSell(
   return collateral;
 }
 
+function checkSupplyCollateralWithNative(
+  decoded: Extract<
+    BundleCall,
+    { functionName: "midnightBundlesV2CancelAndMake" }
+  >,
+  context: Context,
+) {
+  const { intent, call } = context;
+  if (intent.action !== "midnight.supply_collateral") {
+    throw new CalldataCallError("function", call.id);
+  }
+  const [
+    blueMarket,
+    assetsToPark,
+    callbackSalt,
+    market,
+    supplies,
+    ratifier,
+    newRoot,
+    signatureHeight,
+    signatureNonce,
+    signatureDeadline,
+    v,
+    r,
+    s,
+    groupsToCancel,
+    payload,
+    deadline,
+    wrappedNative,
+  ] = decoded.args;
+  const emptyBlueMarket =
+    sameAddress(blueMarket.loanToken, zeroAddress) &&
+    sameAddress(blueMarket.collateralToken, zeroAddress) &&
+    sameAddress(blueMarket.oracle, zeroAddress) &&
+    sameAddress(blueMarket.irm, zeroAddress) &&
+    blueMarket.lltv === 0n;
+  const emptyPublication =
+    sameAddress(ratifier, zeroAddress) &&
+    sameHex(newRoot, zeroHash) &&
+    signatureHeight === 0n &&
+    signatureNonce === 0n &&
+    signatureDeadline === 0n &&
+    v === 0 &&
+    sameHex(r, zeroHash) &&
+    sameHex(s, zeroHash) &&
+    groupsToCancel.length === 0 &&
+    sameHex(payload, "0x");
+  if (
+    !emptyBlueMarket ||
+    assetsToPark !== 0n ||
+    !sameHex(callbackSalt, zeroHash) ||
+    !emptyPublication
+  ) {
+    throw new CalldataCallError("cancel_and_make", call.id);
+  }
+  if (deadline === 0n) {
+    throw new CalldataAmountError("deadline", call.id);
+  }
+  requireMarket(market, context);
+  const collateral = checkCollateral(supplies, {
+    requested: [intent],
+    market,
+    call,
+  });
+  const nativeCollateral = collateral.find(({ token }) =>
+    sameAddress(token, wrappedNative),
+  );
+  checkNative(wrappedNative, {
+    ...context,
+    cap: nativeCollateral?.assets ?? 0n,
+    requireValue: true,
+  });
+  return collateral;
+}
+
 function checkFills(
   fills: readonly {
     readonly offer: {
@@ -776,6 +861,9 @@ function verifyMidnight(
     case "midnightBundlesV2SupplyCollateralAndSellWithAssetsTarget":
     case "midnightBundlesV2SupplyCollateralAndSellWithUnitsTarget":
       pulls = checkSell(decoded, context);
+      break;
+    case "midnightBundlesV2CancelAndMake":
+      pulls = checkSupplyCollateralWithNative(decoded, context);
       break;
     default:
       throw new CalldataCallError("function", call.id);

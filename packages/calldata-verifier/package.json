@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/calldata-verifier",
   "description": "Verify Morpho action calldata locally before signing.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "Morpho Association <contact@morpho.org>",
   "repository": {
     "type": "git",

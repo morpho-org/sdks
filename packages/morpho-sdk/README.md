@@ -31,13 +31,13 @@ destination.
 
 | Entity | Actions | Route |
 | --- | --- | --- |
-| **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `takeRepayWithdrawCollateral`, `repayWithdrawCollateral`, `takeWithdraw` | MidnightBundlesV2 (Ethereum, Base, Arbitrum, Arc, Robinhood, Tempo) |
+| **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `takeRepayWithdrawCollateral`, `repayWithdrawCollateral`, `takeWithdraw` | MidnightBundlesV2 (every chain with a registered `midnightBundlesV2`) |
 | | `supplyCollateral` | Midnight Core; ERC-20 only, no wrapping |
-| | `supplyCollateralWithNative` | MidnightBundlesV2 `midnightBundlesV2CancelAndMake`; wraps a positive `nativeAmount` into registered wNative, requires a `deadline`, and uses bundle approval and Midnight authorization |
+| | `supplyCollateralWithNative` | MidnightBundlesV2 `midnightBundlesV2CancelAndMake`; wraps a positive `nativeAmount` into registered wNative (unavailable on chains without one, such as Alpen), requires a `deadline`, and uses bundle approval and Midnight authorization |
 | | `withdrawCollateral`, `redeem` | Direct Midnight call |
 | | `supplyCollateralBatch`, `withdrawCollateralBatch` | Midnight multicall |
 | | `cancelOffers` | Direct call for one group (`setConsumed`), Midnight multicall for several; every Midnight chain |
-| | `makeLend`, `makeBorrow`, `makeWithdraw`, `makeRepay`, `supplyCollateralMakeBorrow`, `supplyBlueMakeLend` | MidnightBundlesV2 (Ethereum, Base, Arbitrum, Arc, Robinhood, Tempo) |
+| | `makeLend`, `makeBorrow`, `makeWithdraw`, `makeRepay`, `supplyCollateralMakeBorrow`, `supplyBlueMakeLend` | MidnightBundlesV2 (every chain with a registered `midnightBundlesV2`) |
 | **Blue** | `supply`, `withdraw`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`, `repayWithdrawCollateral`, `refinance` | BlueBundlesV1 |
 | | `withdrawBuyCallback` | Morpho Blue (direct `withdraw` for a BlueBuyCallback's owner) |
 | **VaultV2** | `deposit`, `withdraw`, `redeem` | VaultBundlesV1 |

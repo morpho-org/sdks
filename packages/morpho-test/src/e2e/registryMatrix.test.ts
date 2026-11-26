@@ -110,7 +110,7 @@ describe("getE2eEligibility", () => {
       }),
     ).toMatchObject({
       status: "missingDeployments",
-      missing: ["midnight", "midnightBundlesV2", "setterRatifier"],
+      missing: ["setterRatifier"],
     });
   });
 
@@ -118,11 +118,11 @@ describe("getE2eEligibility", () => {
     expect(
       getE2eEligibility({
         scenario: midnightScenario,
-        chainId: ChainId.PolygonMainnet,
+        chainId: ChainId.XLayerMainnet,
       }),
     ).toStrictEqual({
       status: "missingDeployments",
-      chainId: ChainId.PolygonMainnet,
+      chainId: ChainId.XLayerMainnet,
       missing: ["midnight", "midnightBundlesV2", "setterRatifier"],
     });
   });

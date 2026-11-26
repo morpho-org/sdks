@@ -1952,7 +1952,7 @@ describe.sequential("runSimulation", () => {
     async (type) => {
       const { fetch } = stubFetch([]);
       await expect(
-        simulateOrThrow(simulationClientFor(RPC_URL, ChainId.OptimismMainnet), {
+        simulateOrThrow(simulationClientFor(RPC_URL, ChainId.XLayerMainnet), {
           transactions: [TRANSACTION],
           limits: {
             operations: [
@@ -1973,7 +1973,7 @@ describe.sequential("runSimulation", () => {
   test("error: midnightRedeem on a chain without a Midnight address", async () => {
     const { fetch } = stubFetch([]);
     await expect(
-      simulateOrThrow(simulationClientFor(RPC_URL, ChainId.OptimismMainnet), {
+      simulateOrThrow(simulationClientFor(RPC_URL, ChainId.XLayerMainnet), {
         transactions: [TRANSACTION],
         limits: {
           operations: [
@@ -2035,7 +2035,7 @@ describe.sequential("runSimulation", () => {
                     quote: { assetsPaid: 1n, debtRepaid: 1n },
                   };
       await expect(
-        simulateOrThrow(simulationClientFor(RPC_URL, ChainId.OptimismMainnet), {
+        simulateOrThrow(simulationClientFor(RPC_URL, ChainId.XLayerMainnet), {
           transactions: [TRANSACTION],
           limits: { operations: [operation] },
         }),

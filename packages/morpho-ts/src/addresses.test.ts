@@ -134,14 +134,14 @@ describe("getChainAddress", () => {
     let error: unknown;
 
     try {
-      getChainAddress(ChainId.OptimismMainnet, "midnight");
+      getChainAddress(ChainId.XLayerMainnet, "midnight");
     } catch (caught) {
       error = caught;
     }
 
     expect(error).toBeInstanceOf(UnknownAddressError);
     expect(error).toMatchObject({
-      chainId: ChainId.OptimismMainnet,
+      chainId: ChainId.XLayerMainnet,
       label: "midnight",
     });
   });
@@ -186,6 +186,37 @@ describe("addressesRegistry", () => {
       "0xd4e98ec7974F21c94069B155C49fFa5178398FFc",
       1_531_753n,
     ],
+    ["midnight", "0xa6237B6144DEA11E2Bb84CB6417a055fd82948d8", 1_648_951n],
+    [
+      "midnightBundlesV2",
+      "0xC712289F7FF7184132daD2B0314d333b715d5cBE",
+      1_649_909n,
+    ],
+    [
+      "midnightBlueBuyCallbackFactory",
+      "0x3A3BC9444E70a7a035103047912318A9AcCa4f4E",
+      1_649_866n,
+    ],
+    [
+      "midnightMempool",
+      "0x7117E7D13179d8dAaBCCC5bceDFbbeeB94985f48",
+      1_600_872n,
+    ],
+    [
+      "ecrecoverAuthorizer",
+      "0xB67d25079c08Ea8341F23d5deAC536836d65828B",
+      1_649_777n,
+    ],
+    [
+      "priceRatifierV1",
+      "0x3114cA110E06a8468e6fCCD3e4a7C0f9aD2430bc",
+      1_649_821n,
+    ],
+    [
+      "rateRatifierV1",
+      "0x368Fa9Ca641A31b1d48920aC9102f60FeCa12fF6",
+      1_649_799n,
+    ],
   ] as const)(
     "behavior: exposes Alpen %s and its creation block",
     (...[label, address, block]) => {
@@ -212,15 +243,8 @@ describe("addressesRegistry", () => {
     "morphoMarketV1AdapterFactory",
     "permit2",
     "wNative",
-    "midnight",
-    "midnightBundlesV2",
-    "midnightBlueBuyCallbackFactory",
-    "midnightMempool",
     "ecrecoverRatifier",
-    "ecrecoverAuthorizer",
     "setterRatifier",
-    "priceRatifierV1",
-    "rateRatifierV1",
   ] as const)("error: Alpen has no registered %s", (label) => {
     expect(getChainAddresses(ChainId.AlpenMainnet)[label]).toBeUndefined();
     expect(() => getChainAddress(ChainId.AlpenMainnet, label)).toThrow(
@@ -1179,7 +1203,7 @@ describe("addressesRegistry", () => {
 
   test("behavior: registers Blue and Midnight addresses alongside each other", () => {
     const chainId = 31_337_004;
-    const blueAddresses = addressesRegistry[ChainId.PolygonMainnet];
+    const blueAddresses = addressesRegistry[ChainId.XLayerMainnet];
     const chainAddresses = {
       ...createMidnightAddresses(),
       permit2: blueAddresses.permit2,
@@ -1206,22 +1230,22 @@ describe("deployments", () => {
 
   test("behavior: registers Blue and Midnight deployments alongside each other", () => {
     const chainId = 31_337_102;
-    const polygonDeployments = deployments[ChainId.PolygonMainnet];
+    const xLayerDeployments = deployments[ChainId.XLayerMainnet];
     const chainDeployments = {
       ...createMidnightDeployments(),
-      permit2: polygonDeployments.permit2,
+      permit2: xLayerDeployments.permit2,
     };
 
     registerCustomAddresses({
       deployments: {
         [chainId]: {
-          ...polygonDeployments,
+          ...xLayerDeployments,
           ...chainDeployments,
         },
       },
     });
 
-    expect(deployments[chainId]).toMatchObject(polygonDeployments);
+    expect(deployments[chainId]).toMatchObject(xLayerDeployments);
     expect(deployments[chainId]).toMatchObject(chainDeployments);
   });
 });

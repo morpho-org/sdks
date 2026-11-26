@@ -3,6 +3,7 @@ import {
   midnightRedeem,
   midnightRepayWithdrawCollateral,
   midnightSupplyCollateral,
+  midnightSupplyCollateralWithNative,
   midnightTakeBorrow,
   midnightTakeLend,
   midnightTakeRepayWithdrawCollateral,
@@ -328,3 +329,61 @@ it.each(cases)(
     }
   },
 );
+
+it("verifies SDK-built native midnight.supply_collateral and rejects modified parameters", () => {
+  const intent = {
+    ...base,
+    action: "midnight.supply_collateral",
+    ...collateralTransfer,
+    funding: { type: "native", max_native_assets: "10" },
+    expires_at: Number(deadline),
+  } as const satisfies CalldataIntent;
+  const call = sdkCall(
+    midnightSupplyCollateralWithNative({
+      ...args,
+      collateralIndex: 0n,
+      assets: 10n,
+      accountAddress: account,
+      nativeAmount: 10n,
+    }),
+  );
+  expect(verifyCalldata(intent, [call]).map((decoded) => decoded.call)).toEqual(
+    [call],
+  );
+  expect(
+    verifyCalldata(
+      { ...intent, funding: { type: "auto", max_native_assets: "10" } },
+      [call],
+    ).map((decoded) => decoded.call),
+  ).toEqual([call]);
+  expect(() => verifyCalldata({ ...intent, chain_id: 0 }, [call])).toThrow(
+    CalldataChainError,
+  );
+  expect(() => verifyCalldata({ ...intent, market: zeroHash }, [call])).toThrow(
+    CalldataTargetError,
+  );
+  expect(() => verifyCalldata(intent, [{ ...call, to: maker }])).toThrow(
+    CalldataTargetError,
+  );
+  expect(() =>
+    verifyCalldata(intent, [{ ...call, data: "0xdeadbeef" }]),
+  ).toThrow(CalldataDecodeError);
+  expect(() => verifyCalldata(intent, [{ ...call, value: "0" }])).toThrow(
+    CalldataAmountError,
+  );
+  expect(() => verifyCalldata(intent, [{ ...call, value: "11" }])).toThrow(
+    CalldataAmountError,
+  );
+  expect(() =>
+    verifyCalldata({ ...intent, funding: { type: "erc20" } }, [call]),
+  ).toThrow(CalldataAmountError);
+  expect(() =>
+    verifyCalldata({ ...intent, funding: undefined }, [call]),
+  ).toThrow(CalldataAmountError);
+  expect(() =>
+    verifyCalldata({ ...intent, amount: { unit: "assets", value: "9" } }, [
+      call,
+    ]),
+  ).toThrow(CalldataAmountError);
+  expect(() => verifyCalldata(intent, [])).toThrow(CalldataCallError);
+});

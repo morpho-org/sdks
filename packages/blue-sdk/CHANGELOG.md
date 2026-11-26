@@ -1,5 +1,24 @@
 # @morpho-org/blue-sdk
 
+## 8.4.1
+
+### Patch Changes
+
+- Register the Optimism (10), Polygon (137), World Chain (480), Unichain (130),
+  Katana (747474), Monad (143), and Stable (988) Midnight deployments from
+  morpho-org/deployments address-book.json at commit 2ab1800: `midnight`,
+  `midnightBundlesV2`, `midnightBlueBuyCallbackFactory`, `midnightMempool`,
+  `ecrecoverAuthorizer`, `priceRatifierV1`, and `rateRatifierV1`, each with its
+  deployment block in the registry. Addresses and deployment blocks were
+  verified on-chain.
+- Register the Alpen (29032) Midnight deployment: `midnight`,
+  `midnightBundlesV2`, `midnightBlueBuyCallbackFactory`, `midnightMempool`,
+  `ecrecoverAuthorizer`, `priceRatifierV1`, and `rateRatifierV1`, each with
+  its deployment block in the registry. Addresses and deployment blocks were
+  verified on-chain.
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.5.1
+
 ## 8.4.0
 
 ### Minor Changes
