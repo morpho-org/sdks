@@ -1,0 +1,14 @@
+{
+  "keys": [
+    {
+      "kty": "EC",
+      "crv": "P-256",
+      "x": "gVFx7xCpjV3h3EMFA_5tTWV__XZNXYRs69M9EH2l3-Q",
+      "y": "gAPCFIO07MH-P46JH1BjT7i-J9jyL7buzopu7Iu7p8E",
+      "alg": "ES256",
+      "kid": "morpho-actions-test-vectors",
+      "key_ops": ["verify"],
+      "use": "sig"
+    }
+  ]
+}

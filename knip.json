@@ -3,6 +3,7 @@
   "ignoreBinaries": ["genhtml", "pgrep"],
   "ignoreIssues": {
     "packages/blue-sdk-viem/src/MetaMorphoAction.ts": ["duplicates"],
+    "packages/calldata-verifier/src/version.ts": ["files"],
     "packages/morpho-ts/src/addresses.ts": ["duplicates"]
   },
   "workspaces": {

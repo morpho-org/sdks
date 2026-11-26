@@ -12,6 +12,7 @@ import {
   size,
   zeroHash,
 } from "viem";
+import { BundlesPermitKind, bundlesPermitParameters } from "../../abis.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import { parseDeadline } from "../../helpers/parse.js";
 import {
@@ -43,16 +44,7 @@ import {
   UnsupportedRequirementSignatureError,
 } from "../../types/index.js";
 
-/** Numeric permit kinds consumed by `TokenLib.pullToken`. */
-export const BundlesPermitKind = {
-  None: 0,
-  ERC2612: 1,
-  Permit2: 2,
-} as const;
-
-/** A numeric permit kind consumed by `TokenLib.pullToken`. */
-export type BundlesPermitKind =
-  (typeof BundlesPermitKind)[keyof typeof BundlesPermitKind];
+export { BundlesPermitKind } from "../../abis.js";
 
 /** ABI-ready token permit consumed by fixed bundles deposit and funding entrypoints. */
 export interface BundlesTokenPermit {
@@ -272,11 +264,7 @@ export const getBundlesTokenPermit = (params: {
     return {
       kind: BundlesPermitKind.Permit2,
       data: encodeAbiParameters(
-        [
-          { type: "uint256", name: "nonce" },
-          { type: "uint256", name: "deadline" },
-          { type: "bytes", name: "signature" },
-        ],
+        bundlesPermitParameters[BundlesPermitKind.Permit2],
         [
           requirementSignature.args.nonce,
           requirementSignature.args.deadline,
@@ -303,12 +291,7 @@ export const getBundlesTokenPermit = (params: {
   return {
     kind: BundlesPermitKind.ERC2612,
     data: encodeAbiParameters(
-      [
-        { type: "uint256", name: "deadline" },
-        { type: "uint8", name: "v" },
-        { type: "bytes32", name: "r" },
-        { type: "bytes32", name: "s" },
-      ],
+      bundlesPermitParameters[BundlesPermitKind.ERC2612],
       [
         requirementSignature.args.deadline,
         signature.v,

@@ -1,5 +1,31 @@
 import type { Abi } from "viem";
 
+/** Numeric permit kinds consumed by `TokenLib.pullToken`. */
+export const BundlesPermitKind = {
+  None: 0,
+  ERC2612: 1,
+  Permit2: 2,
+} as const;
+
+/** A numeric permit kind consumed by `TokenLib.pullToken`. */
+export type BundlesPermitKind =
+  (typeof BundlesPermitKind)[keyof typeof BundlesPermitKind];
+
+/** ABI parameters for nonempty `TokenLib` token permit payloads. */
+export const bundlesPermitParameters = {
+  [BundlesPermitKind.ERC2612]: [
+    { type: "uint256", name: "deadline" },
+    { type: "uint8", name: "v" },
+    { type: "bytes32", name: "r" },
+    { type: "bytes32", name: "s" },
+  ],
+  [BundlesPermitKind.Permit2]: [
+    { type: "uint256", name: "nonce" },
+    { type: "uint256", name: "deadline" },
+    { type: "bytes", name: "signature" },
+  ],
+} as const;
+
 export { marketParamsAbi as blueMarketParamsAbi } from "@morpho-org/blue-sdk";
 export {
   adaptiveCurveIrmAbi as blueAdaptiveCurveIrmAbi,

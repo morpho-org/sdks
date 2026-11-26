@@ -18,6 +18,8 @@ Every PR is measured against the rules below. A change that violates an architec
 
 Repo-wide principles. The `Client → Entity → Action` layering of `morpho-sdk`, its stateless entity flows and its frozen `Transaction` outputs are specified in [`packages/morpho-sdk/AGENTS.md`](./packages/morpho-sdk/AGENTS.md#architecture).
 
+**Actions API changes require a verifier update in the same PR.** When adding or modifying an Actions API action, including its corresponding SDK action or transaction builder, update [`packages/calldata-verifier`](./packages/calldata-verifier) as specified in its [`AGENTS.md`](./packages/calldata-verifier/AGENTS.md).
+
 ### Modularity
 
 - Every package has one clear job. If a package needs a paragraph to describe, split it.

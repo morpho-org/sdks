@@ -146,6 +146,14 @@ export default defineConfig({
       {
         extends: true,
         test: {
+          name: "calldata-verifier",
+          include: ["packages/calldata-verifier/src/**/*.test.ts"],
+          environment: "node",
+        },
+      },
+      {
+        extends: true,
+        test: {
           name: "evm-simulation",
           setupFiles: [
             "./packages/evm-simulation/test/structured-limit-violation.setup.ts",

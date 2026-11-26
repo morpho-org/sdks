@@ -85,6 +85,7 @@ If you are unsure whether an activity is covered, ask security@morpho.org first.
 | [`@morpho-org/morpho-ts`](./packages/morpho-ts) | Yes | Shared utilities, ABIs and the per-chain address registry. |
 | [`@morpho-org/midnight-sdk`](./packages/midnight-sdk) | Yes | Midnight offers, signatures and bundles. |
 | [`@morpho-org/evm-simulation`](./packages/evm-simulation) | Yes | Transaction simulation and balance-change checks. |
+| [`@morpho-org/calldata-verifier`](./packages/calldata-verifier) | Yes | Local checks that calldata matches the requested action before signing. |
 | [`@morpho-org/wdk-protocol-lending-morpho-evm`](./packages/wdk-protocol-lending-morpho-evm) | Yes | WDK lending module, including ERC-4337 and paymaster flows. |
 | [`@morpho-org/test`](./packages/test), [`@morpho-org/morpho-test`](./packages/morpho-test) | No | Test fixtures and harnesses, not meant for production. Supply-chain issues in their published tarballs are still in scope. |
 | `@morpho-org/consumer-sdk` | No | Legacy predecessor of `@morpho-org/morpho-sdk`; not maintained in this repository. |
@@ -152,6 +153,7 @@ Security fixes ship only in the latest major line of each maintained package. Pr
 | `@morpho-org/morpho-ts` | Latest major |
 | `@morpho-org/midnight-sdk` | Latest major |
 | `@morpho-org/evm-simulation` | Latest major |
+| `@morpho-org/calldata-verifier` | Latest major |
 | `@morpho-org/wdk-protocol-lending-morpho-evm` | Latest major |
 | `@morpho-org/test`, `@morpho-org/morpho-test` | Test utilities; not covered |
 | `@morpho-org/consumer-sdk` | Not maintained in this repository |

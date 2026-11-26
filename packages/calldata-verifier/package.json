@@ -1,0 +1,55 @@
+{
+  "name": "@morpho-org/calldata-verifier",
+  "description": "Verify Morpho action calldata locally before signing.",
+  "version": "0.0.0",
+  "author": "Morpho Association <contact@morpho.org>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/morpho-org/sdks.git",
+    "directory": "packages/calldata-verifier"
+  },
+  "homepage": "https://github.com/morpho-org/sdks",
+  "bugs": {
+    "url": "https://github.com/morpho-org/sdks/issues",
+    "email": "contact@morpho.org"
+  },
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "src/index.ts",
+  "files": [
+    "lib"
+  ],
+  "scripts": {
+    "prepublish": "bun run build",
+    "build": "tsc --noEmit && bun run build:cjs && bun run build:esm",
+    "build:cjs": "tsc --build tsconfig.build.cjs.json && echo '{\"type\":\"commonjs\"}' > lib/cjs/package.json",
+    "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json"
+  },
+  "dependencies": {
+    "@morpho-org/blue-sdk-viem": "workspace:^",
+    "@morpho-org/midnight-sdk": "workspace:^",
+    "@morpho-org/morpho-sdk": "workspace:^",
+    "@morpho-org/morpho-ts": "workspace:^",
+    "@noble/curves": "1.9.1"
+  },
+  "peerDependencies": {
+    "viem": "^2.9.2"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "viem": "^2.55.10",
+    "vitest": "catalog:"
+  },
+  "publishConfig": {
+    "main": "./lib/cjs/index.js",
+    "types": "./lib/esm/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./lib/esm/index.d.ts",
+        "import": "./lib/esm/index.js",
+        "require": "./lib/cjs/index.js"
+      }
+    }
+  }
+}
