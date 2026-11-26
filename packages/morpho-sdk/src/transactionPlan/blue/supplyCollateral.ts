@@ -63,7 +63,7 @@ export interface BlueSupplyCollateralPlanParams
  * @param params.marketData - Caller-fetched snapshot of the selected market and chain.
  * @param params.collateralAssets - Positive gross collateral amount in token base units.
  * @param params.funding.type - `"erc20"` (default) or `"native"` for wNative collateral.
- * @param params.referralFee.bps - Optional fee in integer basis points, below 10,000.
+ * @param params.referralFee.bps - Optional fee in integer basis points, at most 1,000.
  * @param params.referralFee.recipient - Non-zero recipient required for a positive fee.
  * @param params.supportSignature - Prefer an ERC-2612 permit where available; defaults to false.
  * @param params.now - Reference Unix timestamp in seconds; defaults to the device clock.
@@ -78,10 +78,9 @@ export interface BlueSupplyCollateralPlanParams
  * @throws {NonPositiveInputError} when the collateral amount or expiry is zero.
  * @throws {ExpiredDeadlineError} when expiry is at or before the reference time.
  * @throws {NegativeInputError} when the collateral amount or fee basis points are negative.
- * @throws {InputExceedsMaxError} when collateral exceeds uint256 or fee basis points exceed 10,000.
+ * @throws {InputExceedsMaxError} when collateral exceeds uint256 or `referralFee.bps` exceeds 1,000.
  * @throws {InvalidCalldataOriginError} when attribution bytes are empty or malformed.
  * @throws {InvalidTransactionPlanError} when `calldataOrigin` exceeds 1 MiB.
- * @throws {ReferralFeePctExceededError} when the referral fee is 100%.
  * @throws {ReferralFeeRecipientMissingError} when a positive fee has no non-zero recipient.
  * @throws {ChainWNativeMissingError} when native funding is requested on a chain with no wNative.
  * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets non-wNative collateral.

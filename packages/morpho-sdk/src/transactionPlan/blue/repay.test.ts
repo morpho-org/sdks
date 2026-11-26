@@ -26,7 +26,6 @@ import {
   InputExceedsMaxError,
   NativeAmountOnNonWNativeAssetError,
   NonPositiveInputError,
-  ReferralFeePctExceededError,
 } from "../../types/index.js";
 import {
   BlueSnapshotChainMismatchError,
@@ -207,14 +206,20 @@ describe("prepareBlueRepay", () => {
       }),
     ).rejects.toBeInstanceOf(ChainIdMismatchError);
   });
-  test("error: ReferralFeePctExceededError for a 100% referral fee before RPC", async () => {
+  test("error: InputExceedsMaxError for a 100% referral fee before RPC", async () => {
     const handle = mockAllowance();
     await expect(
       prepareBlueRepay(handle.client, {
         ...params,
         referralFee: { bps: 10_000, recipient: account },
       }),
-    ).rejects.toBeInstanceOf(ReferralFeePctExceededError);
+    ).rejects.toThrow(
+      new InputExceedsMaxError({
+        field: "referralFee.bps",
+        value: 10_000n,
+        max: 1_000n,
+      }),
+    );
     expect(handle.request).not.toHaveBeenCalled();
   });
   test.each([

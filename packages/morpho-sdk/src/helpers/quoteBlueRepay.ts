@@ -1,8 +1,4 @@
-import {
-  type AccrualPosition,
-  type MarketId,
-  MathLib,
-} from "@morpho-org/blue-sdk";
+import { AccrualPosition, type MarketId, MathLib } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
 import { maxUint256 } from "viem";
 import { InputExceedsMaxError } from "../types/error.js";
@@ -21,7 +17,10 @@ export function quoteBlueRepayFunding(
   return params.repayAssets;
 }
 
-/** @internal Quotes Blue repayment funding and the position used for withdrawal health checks. */
+/**
+ * @internal Quotes repayment funding at the deadline independently of an optional withdrawal-health timestamp.
+ * Debt-free positions retain their snapshot without projecting market-wide interest.
+ */
 export function quoteBlueRepay({
   positionData,
   marketId,
@@ -29,6 +28,7 @@ export function quoteBlueRepay({
   repayShares,
   deadline,
   now,
+  healthTimestamp,
 }: {
   readonly positionData: AccrualPosition;
   readonly marketId: MarketId;
@@ -36,6 +36,7 @@ export function quoteBlueRepay({
   readonly repayShares: bigint;
   readonly deadline: bigint;
   readonly now: bigint;
+  readonly healthTimestamp?: bigint;
 }) {
   const saturatedRepay = repayShares === maxUint256;
   const simulatedRepayShares = saturatedRepay
@@ -55,11 +56,26 @@ export function quoteBlueRepay({
       max: quoteHorizon,
     });
   }
-  const accrualTimestamp = repayShares > 0n ? deadline : quoteHorizon;
-  const accruedPosition = positionData.accrueInterest(accrualTimestamp);
-  const expectedRepayAssets =
-    repayAssets <= 0n && repayShares > 0n
-      ? accruedPosition.market.toBorrowAssets(simulatedRepayShares, "Up")
-      : repayAssets;
+  const accrualTimestamp =
+    healthTimestamp ?? (repayShares > 0n ? deadline : quoteHorizon);
+  const accruedPosition =
+    positionData.borrowShares === 0n
+      ? new AccrualPosition(positionData, positionData.market)
+      : positionData.accrueInterest(accrualTimestamp);
+  if (repayAssets > 0n || simulatedRepayShares <= 0n) {
+    return {
+      simulatedRepayShares,
+      accruedPosition,
+      expectedRepayAssets: repayAssets,
+    };
+  }
+  const fundingPosition =
+    accrualTimestamp === deadline
+      ? accruedPosition
+      : positionData.accrueInterest(deadline);
+  const expectedRepayAssets = fundingPosition.market.toBorrowAssets(
+    simulatedRepayShares,
+    "Up",
+  );
   return { simulatedRepayShares, accruedPosition, expectedRepayAssets };
 }

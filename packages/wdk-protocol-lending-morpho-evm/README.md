@@ -200,7 +200,8 @@ an on-chain burn bound. Migration and in-kind redemption are morpho-sdk flows; s
 Morpho SDK enforces a builder/executor invariant for bundled actions. For that reason, `onBehalfOf` and vault/collateral withdrawal `to` must equal the connected wallet address in this WDK adapter.
 
 Borrow reallocations use Vault V2 BluePublicAllocator exclusively. Vault V1
-reallocation types are no longer accepted:
+reallocation types are no longer accepted. Positive WAD-scaled penalties require
+an explicit `maxPenalty`; the bound defaults to zero:
 
 ```typescript
 import type { MorphoBorrowOptions } from '@morpho-org/wdk-protocol-lending-morpho-evm'
@@ -208,6 +209,7 @@ import type { MorphoBorrowOptions } from '@morpho-org/wdk-protocol-lending-morph
 const options = {
   token: usdc,
   amount: 1_000_000n,
+  maxPenalty: 1_000_000_000_000_000n,
   reallocations: [{
     vault,
     from: { type: 'idle' },

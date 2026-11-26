@@ -25,7 +25,8 @@ import {
   whitelistControllerAggregatorV2Abi,
   wrappedBackedTokenAbi,
 } from "../abis.js";
-import { abi, code } from "../queries/GetHolding.js";
+import { readDeploylessContract } from "../deployless.js";
+import { abi, code, deployedCode } from "../queries/GetHolding.js";
 import type { DeploylessFetchParameters, FetchParameters } from "../types.js";
 import { catchRevertOnly, isTransportError } from "../utils.js";
 
@@ -107,10 +108,11 @@ export async function fetchHolding(
 
     try {
       const { balance, erc20Allowances, isErc2612, erc2612Nonce, canTransfer } =
-        await readContract(client, {
+        await readDeploylessContract(client, {
           ...parameters,
           abi,
           code,
+          deployedCode,
           functionName: "query",
           args: [
             token,

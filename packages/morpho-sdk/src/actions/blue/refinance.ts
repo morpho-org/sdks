@@ -30,9 +30,11 @@ export interface BlueRefinanceParams {
     readonly maxLtv: bigint;
     /** Optional Vault V2 reallocations into the destination market. */
     readonly reallocations?: Iterable<VaultV2BlueReallocation>;
+    /** Maximum WAD-scaled penalty rate per reallocation, defaulting to zero; it does not bound the total penalty added to destination debt. */
+    readonly maxPenalty?: bigint;
     /** Final call deadline in Unix seconds. */
     readonly deadline: bigint;
-    /** Optional WAD-scaled referral fee, strictly below 100%. */
+    /** Optional WAD-scaled referral fee, at most 10%. */
     readonly referralFeePct?: bigint;
     /** Recipient required when `referralFeePct` is positive. */
     readonly referralFeeRecipient?: Address;
@@ -59,8 +61,9 @@ export interface BlueRefinanceParams {
  *   BlueBundlesV1 always migrates `msg.sender`.
  * @param params.args.maxLtv - Maximum destination LTV.
  * @param params.args.reallocations - Vault V2 reallocations into the destination.
+ * @param params.args.maxPenalty - Maximum WAD-scaled penalty rate per reallocation in [0, WAD], defaulting to zero. Each rate applies to that reallocation's assets, so it does not bound the total penalty added to destination debt.
  * @param params.args.deadline - Final call deadline in Unix seconds.
- * @param params.args.referralFeePct - Optional WAD-scaled fee below 100%.
+ * @param params.args.referralFeePct - Optional WAD-scaled fee at most 10%.
  * @param params.args.referralFeeRecipient - Recipient required for a positive fee.
  * @param params.args.authorizationSignature - Optional Blue authorization signature.
  * @param params.metadata - Optional transaction metadata.
@@ -69,11 +72,16 @@ export interface BlueRefinanceParams {
  * @throws {MarketIdMismatchError} when the migration source, destination, or a reallocation
  *   source market has an `id` that does not hash from its tuple fields.
  * @throws {RefinanceSameMarketError} when source and destination IDs match.
+ * @throws {InvalidBigIntInputError} when a supplied maxPenalty is not a bigint.
  * @throws {RefinanceTokenMismatchError} when their loan or collateral tokens differ.
  * @throws {NegativeInputError} when `maxLtv`, a referral fee, or a reallocation penalty is negative.
+ *   Also thrown when maxPenalty is negative.
  * @throws {NonPositiveInputError} when the deadline or a reallocation amount is not positive.
- * @throws {InputExceedsMaxError} when a fee, reallocation amount, or penalty exceeds its ABI bound.
+ * @throws {InputExceedsMaxError} when a reallocation amount or penalty exceeds its ABI bound.
+ *   Also thrown when maxPenalty exceeds WAD or a penalty exceeds maxPenalty (zero by default).
  * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
+ * @throws {ReferralFeePctExceededError} when the referral fee is at least WAD.
+ * @throws {MidnightReferralFeePctExceededError} when the referral fee is above 10% but below WAD.
  * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
  * @throws {InvalidVaultV2BlueReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
  * @throws {InvalidReallocationSourceTypeError} when a reallocation source is malformed.

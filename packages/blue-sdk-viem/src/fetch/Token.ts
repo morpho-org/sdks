@@ -25,11 +25,12 @@ import {
 } from "viem";
 import { call, getChainId, readContract } from "viem/actions";
 import { erc5267Abi, wstEthAbi } from "../abis.js";
+import { readDeploylessContract } from "../deployless.js";
 import {
   MalformedTokenMetadataError,
   type TokenMetadataField,
 } from "../error.js";
-import { abi, code } from "../queries/GetToken.js";
+import { abi, code, deployedCode } from "../queries/GetToken.js";
 import type { DeploylessFetchParameters, FetchParameters } from "../types.js";
 import {
   catchRevertOnly,
@@ -168,10 +169,11 @@ export async function fetchToken(
     isAddressEqual(address, wstEth);
 
   if (deployless) {
-    const token = await readContract(client, {
+    const token = await readDeploylessContract(client, {
       ...parameters,
       abi,
       code,
+      deployedCode,
       functionName: "query",
       args: [address, isWstEth],
     }).catch((error: unknown) => {

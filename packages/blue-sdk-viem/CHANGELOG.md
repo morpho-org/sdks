@@ -1,5 +1,25 @@
 # @morpho-org/blue-sdk-viem
 
+## 7.6.0
+
+### Minor Changes
+
+- Vault V2 fallback reads keep required-state and share-token metadata requests concurrent, but required-state errors take precedence over non-transport metadata errors when both fail. Unless a metadata read first fails with a transport error (such as HTTP 429), a code-less vault therefore rejects with `ContractFunctionExecutionError` regardless of response order. Metadata transport errors propagate immediately; other metadata errors still propagate when required-state reads succeed.
+
+### Patch Changes
+
+- Run deployless queries through runtime bytecode state overrides to avoid EIP-170 return-size limits and reduce execution gas. Providers that do not support state overrides retain the creation-bytecode fallback.
+
+  The state-override attempt has a 5 s deadline. After that deadline, the read retries with creation bytecode and races its outcome against a successfully decoded late override result. If the override succeeds before creation settles, its result is returned, even if creation would fail. Late override rejections, empty results and reverts never replace the creation outcome. Once creation settles, later override results are ignored for the read, but still update their own verdict as before. This race also applies to reads with caller state overrides. Creation results remain limited to 24,576 bytes; when creation wins with a size-limit failure, default mode falls back to direct reads, while `deployless: "force"` throws.
+
+  A transport `TimeoutError` raised on the state-override attempt retries the creation-bytecode call once without caching an unsupported verdict; any error from that retry, timeouts included, propagates as before.
+
+  Reads with non-empty caller state overrides still retry creation bytecode when eligible, but never write a client-wide unsupported verdict, including on deadline expiry. On a provider that hangs on overrides, such reads therefore pay the 5 s deadline on every read unless a plain read has already set the client's verdict.
+
+  Unsupported overrides are remembered per client for ten minutes. Empty results and the override deadline are cached immediately. RPC rejections and data-less reverts are cached only if creation bytecode succeeds or fails differently; the same query revert on both paths leaves overrides enabled. Subsequent reads on that client skip directly to creation bytecode until the verdict expires, avoiding repeated failed attempts in nested reads. Concurrent queries already in progress may each pay one attempt. Decoded override reverts and transport failures such as rate limits, server errors and transport timeouts do not cache an unsupported verdict. A hanging provider adds up to 5 s for the initial attempt, not each subsequent read during the cache interval.
+
+  A deadline verdict is provisional: if the original, uncancelled override later returns successfully decoded data, its own verdict is cleared immediately. A deadline does not replace another read's still-active verdict. A timed-out probe sharing a deadline may clear that deadline's provisional verdict or its subsequent transport backoff on late decoded success, but its failures cannot shorten the other probe's verdict. An on-time decoded success from a plain probe also clears a provisional or backoff verdict written while it was in flight, but never a definitive verdict; reads with non-empty caller overrides do not clear verdicts. Definitive verdicts remain protected; late settlements cannot clear unrelated deadlines. A late non-timeout transport error (such as a rate limit, server error or closed socket) replaces its own verdict with a 30 s backoff capped at the original expiry, suppressing repeated probes during transient failures without renewing expired verdicts. Late empty results, data-less or decoded reverts, and transport timeouts retain the full ten-minute verdict. Providers whose override calls never settle retain the same deadline, fallback and cache behavior.
+
 ## 7.5.1
 
 ### Patch Changes

@@ -26,7 +26,7 @@ export interface VaultV2DepositPlanParams
  * @param params.account - Non-zero account funding, signing and sending the deposit.
  * @param params.assets - Positive gross deposit in asset base units, before referral fees.
  * @param params.funding.type - Optional funding source: `"erc20"` (default) or `"native"`; native funding requires the vault asset to be wNative.
- * @param params.referralFee.bps - Optional integer fee in basis points of the gross assets; defaults to zero and must be below 10,000.
+ * @param params.referralFee.bps - Optional integer fee in basis points of the gross assets; defaults to zero and must be at most 1,000.
  * @param params.referralFee.recipient - Recipient of the optional fee; must be non-zero when the fee is positive.
  * @param params.slippageTolerance - Optional WAD-scaled tolerance for the share-price bound; defaults to `DEFAULT_SLIPPAGE_TOLERANCE` and must not exceed `MAX_SLIPPAGE_TOLERANCE`.
  * @param params.supportSignature - Optional ERC-2612 preference, defaulting to `false`; when enabled, falls back to direct approval if no permit is available.
@@ -35,16 +35,16 @@ export interface VaultV2DepositPlanParams
  * @param params.calldataOrigin - Optional non-empty, even-length hex bytes appended to each built transaction's calldata.
  * @param params.deployless - Optional permission to use deployless aggregation for token permit metadata reads.
  * @returns A plan with approvals, concrete signature requests and the deposit step.
+ * @throws {InvalidBigIntInputError} when `now` is not a bigint.
  * @throws {ZeroAccountError} when `account` is the zero address.
  * @throws {NonIntegerInputError} when `expiresAt` or `referralFee.bps` is not a safe integer.
  * @throws {NonPositiveInputError} when `expiresAt`, `assets`, net assets or previewed shares are not positive.
  * @throws {ExpiredDeadlineError} when `expiresAt` is at or before `now` (device clock when `now` is omitted).
  * @throws {NegativeInputError} when `referralFee.bps` or `slippageTolerance` is negative.
- * @throws {InputExceedsMaxError} when `referralFee.bps` exceeds 10,000 or `assets` exceeds uint256.
+ * @throws {InputExceedsMaxError} when `expiresAt` exceeds seven days after `now`, `referralFee.bps` exceeds 1,000 or `assets` exceeds uint256.
  * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance` exceeds `MAX_SLIPPAGE_TOLERANCE`.
  * @throws {InvalidCalldataOriginError} when `calldataOrigin` is empty, malformed or has an odd number of hex digits.
  * @throws {InvalidTransactionPlanError} when `account` is malformed or `calldataOrigin` exceeds 1 MiB.
- * @throws {ReferralFeePctExceededError} when `referralFee.bps` equals 10,000; the normalized fee must be below WAD.
  * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no recipient or a zero recipient.
  * @throws {NativeAmountOnNonWNativeVaultError} when native funding targets a vault whose asset is not wNative.
  * @throws {ChainIdMismatchError} when the client targets another chain.

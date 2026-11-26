@@ -57,10 +57,10 @@ export const amountArbitrary = fc.oneof(
   fc.bigInt({ min: 1n, max: UINT128_MAX }),
 );
 
-// Bundles reject referral fees >= WAD.
+// SDK bundle builders accept referral fees up to 10%, inclusive.
 export const referralFeeArbitrary = fc.oneof(
-  fc.constantFrom(0n, 1n, MathLib.WAD - 1n),
-  fc.bigInt({ min: 0n, max: MathLib.WAD - 1n }),
+  fc.constantFrom(0n, 1n, MathLib.WAD / 10n),
+  fc.bigInt({ min: 0n, max: MathLib.WAD / 10n }),
 );
 
 /** Blue MarketParams with non-zero addresses and LLTV in [0, WAD), edge-biased. */

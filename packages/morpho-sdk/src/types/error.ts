@@ -1,4 +1,4 @@
-import { type MarketId, MathLib, UnknownDataError } from "@morpho-org/blue-sdk";
+import { type MarketId, UnknownDataError } from "@morpho-org/blue-sdk";
 import { Payload } from "@morpho-org/midnight-sdk";
 import type { AddressLabel } from "@morpho-org/morpho-ts";
 import type { Address, BaseError, Hash, Hex } from "viem";
@@ -855,11 +855,12 @@ export class ReferralFeeRecipientMissingError extends Error {
 }
 
 /**
- * Thrown when a referral fee percentage is outside the contract's `[0, WAD)` range.
+ * Thrown when a referral fee percentage is at least WAD, the contract's exclusive upper bound.
+ * The SDK also rejects lower fees above 10% with {@link MidnightReferralFeePctExceededError}.
  *
- * Extends {@link InputExceedsMaxError} — and reports the same `field`, `value`, and `max` the
- * generic bound error used to carry for this input — so integrators already pattern-matching
- * `InputExceedsMaxError` keep catching this failure.
+ * Extends {@link InputExceedsMaxError} with `field: "referralFeePct"` so integrators already
+ * pattern-matching `InputExceedsMaxError` keep catching this failure. Its `max` is the SDK's 10%
+ * cap (`WAD / 10n`), the largest fee the SDK accepts.
  */
 export class ReferralFeePctExceededError extends InputExceedsMaxError {
   /** @param referralFeePct - WAD-scaled referral fee percentage supplied by the caller. */
@@ -867,16 +868,16 @@ export class ReferralFeePctExceededError extends InputExceedsMaxError {
     super({
       field: "referralFeePct",
       value: referralFeePct,
-      max: MathLib.WAD - 1n,
+      max: MIDNIGHT_MAX_REFERRAL_FEE_PCT,
     });
-    this.message = `Referral fee percentage "${referralFeePct}" must be below WAD. Reduce referralFeePct or disable the referral fee.`;
+    this.message = `Referral fee percentage "${referralFeePct}" must be below WAD; the SDK also caps referral fees at 10%. Reduce referralFeePct or disable the referral fee.`;
     this.name = "ReferralFeePctExceededError";
   }
 }
 
 /**
- * Thrown when the SDK's 10% (`WAD / 10n`) Midnight referral-fee cap is exceeded;
- * the contract itself only requires `referralFeePct < WAD`.
+ * Thrown when a referral fee below WAD exceeds the SDK's 10% (`WAD / 10n`) cap.
+ * The name is retained from the original Midnight-only cap.
  */
 export class MidnightReferralFeePctExceededError extends InputExceedsMaxError {
   /**
@@ -890,7 +891,7 @@ export class MidnightReferralFeePctExceededError extends InputExceedsMaxError {
       value: referralFeePct,
       max: MIDNIGHT_MAX_REFERRAL_FEE_PCT,
     });
-    this.message = `Referral fee "${referralFeePct}" exceeds the SDK's 10% Midnight referral-fee cap "${MIDNIGHT_MAX_REFERRAL_FEE_PCT}". Reduce referralFeePct.`;
+    this.message = `Referral fee "${referralFeePct}" exceeds the SDK's 10% referral-fee cap "${MIDNIGHT_MAX_REFERRAL_FEE_PCT}". Reduce referralFeePct.`;
     this.name = "MidnightReferralFeePctExceededError";
   }
 }

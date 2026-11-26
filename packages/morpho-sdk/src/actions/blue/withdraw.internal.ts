@@ -89,7 +89,10 @@ export const parseBlueWithdraw = (params: BlueWithdrawParams) => {
     authorizationSignature: params.args.authorizationSignature,
   });
   const allocations = parseBlueWithdrawPenalty(
-    parseBlueAllocations([...(params.args.reallocations ?? [])], marketParams),
+    parseBlueAllocations([...(params.args.reallocations ?? [])], {
+      marketParams,
+      maxPenalty: params.args.maxPenalty,
+    }),
     mode,
   );
   const fields: Omit<BlueWithdrawInput, symbol> = {

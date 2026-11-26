@@ -1,5 +1,6 @@
 import {
   AccrualPosition,
+  BlueErrors,
   Market,
   MarketParams,
   ORACLE_PRICE_SCALE,
@@ -42,6 +43,7 @@ import {
   type BlueRepayWithdrawCollateralPlanParams,
   prepareBlueRepayWithdrawCollateral,
 } from "./repayWithdrawCollateral.js";
+import { prepareBlueWithdrawCollateral } from "./withdrawCollateral.js";
 
 const owner = privateKeyToAccount(toHex(1n, { size: 32 }));
 const now = 1_900_000_000n;
@@ -89,6 +91,70 @@ const nativeParams = {
     position: new AccrualPosition(position, nativeMarket),
   },
 };
+
+test("behavior: debt-free withdrawal skips deadline accrual and retains collateral validation", async () => {
+  const deadline = now + 604_800n;
+  const maxTotal = (1n << 128n) - 1n;
+  const overflowingMarket = new Market({
+    ...market,
+    totalSupplyAssets: maxTotal / 2n,
+    totalSupplyShares: maxTotal / 2n,
+    totalBorrowAssets: maxTotal / 4n,
+    totalBorrowShares: maxTotal / 4n,
+    rateAtTarget: 100_000_000_000_000n,
+  });
+  const debtFree = new AccrualPosition(
+    { ...position, borrowShares: 0n },
+    overflowingMarket,
+  );
+  expect(() => debtFree.accrueInterest(now + 7200n)).not.toThrow();
+  expect(() => debtFree.accrueInterest(deadline)).toThrow(
+    BlueErrors.TotalOverflow,
+  );
+  const handle = createMockClient(mainnet);
+  mockRead(handle, {
+    address: getChainAddress(1, "blue"),
+    abi: blueAbi,
+    functionName: "isAuthorized",
+    result: true,
+  });
+  const inputs = {
+    ...params,
+    expiresAt: Number(deadline),
+    repayAssets: 0n,
+    collateralAssets: debtFree.collateral,
+    marketData: { chainId: 1, market: overflowingMarket },
+    positionData: { chainId: 1, position: debtFree },
+  };
+  const plan = await prepareBlueRepayWithdrawCollateral(handle.client, inputs);
+  const withdrawal = await prepareBlueWithdrawCollateral(handle.client, inputs);
+  expect(buildTransactions(plan)).toHaveLength(1);
+  expect(buildTransactions(plan)).toMatchObject(
+    buildTransactions(withdrawal).map(({ to, data, value }) => ({
+      to,
+      data,
+      value,
+    })),
+  );
+  expect(plan.steps.at(-1)?.action.inputs).toMatchObject({
+    collateralAssets: debtFree.collateral,
+    maxRepayAssets: 0n,
+    deadline,
+  });
+  await expect(
+    prepareBlueRepayWithdrawCollateral(handle.client, {
+      ...inputs,
+      collateralAssets: debtFree.collateral + 1n,
+    }),
+  ).rejects.toBeInstanceOf(WithdrawExceedsCollateralError);
+  await expect(
+    prepareBlueRepayWithdrawCollateral(handle.client, {
+      ...inputs,
+      collateralAssets: 0n,
+    }),
+  ).rejects.toBeInstanceOf(NonPositiveInputError);
+  expect(debtFree.market.lastUpdate).toBe(now);
+});
 
 test("behavior: exact repayment without withdrawal does not project an unsupported IRM", async () => {
   const unsupportedMarket = new Market({

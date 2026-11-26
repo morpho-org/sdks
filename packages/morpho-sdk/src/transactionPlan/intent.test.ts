@@ -81,14 +81,15 @@ describe("resolveIntent", () => {
     ).toThrow(NonIntegerInputError);
   });
 
-  test("error: referral fee bounds", () => {
+  test("[INV-10] error: referral fee bounds", () => {
     const fee = (bps: number) =>
       resolveIntent(
         { ...params, referralFee: { bps, recipient: zeroAddress } },
         now,
       );
     expect(() => fee(-1)).toThrow(NegativeInputError);
-    expect(() => fee(10_001)).toThrow(InputExceedsMaxError);
+    expect(fee(1_000).referralFeePct).toBe((1_000n * MathLib.WAD) / 10_000n);
+    expect(() => fee(1_001)).toThrow(InputExceedsMaxError);
     expect(() => fee(0.5)).toThrow(NonIntegerInputError);
   });
 

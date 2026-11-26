@@ -138,6 +138,7 @@ describe.skipIf(!forkSecret)(
             borrowAssets: BORROW_ASSETS,
             maxLtv: MAX_LTV,
             reallocations: plan.reallocations,
+            maxPenalty: MathLib.WAD,
             deadline: maxUint256,
           },
         });
@@ -251,6 +252,7 @@ describe.skipIf(!forkSecret)(
             borrowAssets: BORROW_ASSETS,
             maxLtv: MAX_LTV,
             reallocations: plan.reallocations,
+            maxPenalty: MathLib.WAD,
             deadline: maxUint256,
           },
         });

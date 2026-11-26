@@ -183,6 +183,7 @@ test("withdraw with market and idle reallocations pays aggregate penalties", asy
     assets: amount,
     now,
     reallocations,
+    maxPenalty: penalty,
   });
   const restored = parseTransactionPlan(serializeTransactionPlan(plan));
   const txs = buildTransactions(restored);

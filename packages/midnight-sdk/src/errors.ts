@@ -666,7 +666,7 @@ export class InvalidMidnightApiResponseError extends Error {
 }
 
 /**
- * Thrown when a Midnight API quote request does not target exactly one of `units` or `assets`.
+ * Thrown when a Midnight API quote request does not target exactly one positive amount in `units` or `assets`.
  *
  * @example
  * ```ts
@@ -678,7 +678,7 @@ export class InvalidMidnightApiResponseError extends Error {
 export class InvalidMidnightApiQuoteTargetError extends Error {
   public constructor(options?: ErrorOptions) {
     super(
-      "Midnight API quote requires exactly one of `units` or `assets`. Provide a single target amount.",
+      "Midnight API quote requires exactly one of `units` or `assets`. Provide a single positive target amount.",
       options,
     );
     this.name = "InvalidMidnightApiQuoteTargetError";

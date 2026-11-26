@@ -36,7 +36,7 @@ const netOfReferralFee = (assets: bigint, referralFeePct: bigint) =>
  *
  * @param params - Sell target and validated referral fee.
  * @param params.target - Sell target of `takeBorrow`, `takeWithdraw` or `supplyCollateralTakeBorrow`.
- * @param params.referralFeePct - WAD-scaled referral fee, already checked to be below WAD.
+ * @param params.referralFeePct - WAD-scaled referral fee, already checked to be at most 10%.
  * @returns Nothing when the target is reachable at some price.
  * @throws {MidnightTakeTargetUnreachableError} when `target.minSellerAssets` exceeds the most the
  *   units can yield, or `target.maxUnits` is below the units the assets need.
@@ -90,7 +90,7 @@ export type MidnightTakeFeasibilityParams<
   readonly now: bigint;
   /** Bundle deadline in seconds. */
   readonly deadline: bigint;
-  /** WAD-scaled referral fee, already checked to be below WAD. */
+  /** WAD-scaled referral fee, already checked to be at most 10%. */
   readonly referralFeePct: bigint;
   /**
    * Units the bundle fills without offers: withdrawn credit for sells, the direct repay at par for

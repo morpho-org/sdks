@@ -30,6 +30,7 @@ export const parseBlueBorrow = (
       borrowAssets: params.args.borrowAssets,
       maxLtv: params.args.maxLtv,
       reallocations: params.args.reallocations,
+      maxPenalty: params.args.maxPenalty,
       deadline: params.args.deadline,
       referralFeePct: params.args.referralFeePct,
       referralFeeRecipient: params.args.referralFeeRecipient,

@@ -13,6 +13,7 @@ import {
 } from "../../actions/blue/common.js";
 import { blueRepayWithdrawCollateral } from "../../actions/blue/repayWithdrawCollateral.js";
 import { validateClientChainId } from "../../actions/requirements/validateClientChainId.js";
+import { getBlueBundlesV1QuoteTimestamp } from "../../helpers/getBlueBundlesV1QuoteTimestamp.js";
 import {
   DEFAULT_LLTV_BUFFER,
   validateChainId,
@@ -72,6 +73,8 @@ export type BlueRepayWithdrawCollateralPlanParams = IntentParams & {
 
 /**
  * Prepares one BlueBundlesV1 repayment and collateral withdrawal from caller-fetched snapshots.
+ * Withdrawal health uses the expiry floored at max(now, lastUpdate); expiries more than
+ * 365 days out retain the legacy +2h projection. Repay-only funding is independent.
  * Full repayment uses `repayShares: maxUint256`; `funding: { type: "native" }` funds the computed cap.
  * Signatures are embedded in the operation; direct approvals and authorization precede it.
  * @param client - Viem client used only for prerequisite reads.
@@ -90,9 +93,8 @@ export type BlueRepayWithdrawCollateralPlanParams = IntentParams & {
  * @throws {NegativeInputError} when an amount or referral fee is negative.
  * @throws {NonPositiveInputError} when the expiry is not positive, both operation legs are zero,
  *   a repay leg has no positive funding cap, or native funding is set without a repay leg.
- * @throws {InputExceedsMaxError} when a value exceeds uint256, referral basis points exceed
- *   10,000, or a share-mode expiry exceeds the two-hour funding quote horizon.
- * @throws {ReferralFeePctExceededError} when referral basis points equal 10,000.
+ * @throws {InputExceedsMaxError} when a value exceeds uint256, `referralFee.bps` exceeds 1,000,
+ *   or a share-mode expiry exceeds the two-hour funding quote horizon.
  * @throws {ReferralFeeRecipientMissingError} when a positive fee has no non-zero recipient.
  * @throws {ChainIdMismatchError} when the client declares, or its RPC reports, another chain.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
@@ -333,7 +335,14 @@ function quoteWithdrawal(
       expectedRepayAssets: 0n,
     };
   }
-  return quoteBlueRepay(quoteParams);
+  return quoteBlueRepay({
+    ...quoteParams,
+    healthTimestamp: getBlueBundlesV1QuoteTimestamp({
+      lastUpdate: positionData.market.lastUpdate,
+      now: quoteParams.now,
+      deadline: quoteParams.deadline,
+    }),
+  });
 }
 
 function getRepayWithdrawAmounts(

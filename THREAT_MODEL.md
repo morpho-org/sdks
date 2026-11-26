@@ -64,6 +64,8 @@ Each finding below requires the endpoint to lie, unless its entry names another 
 
 #### Vault accounting read by deployless queries (`blue-sdk-viem`)
 
+Vault deposit and V1-to-V2 migration entity handles and TransactionPlan preparers reject deadlines more than seven days after their supplied reference time (or device-clock fallback), with `InputExceedsMaxError`. This limits caller-selected forward accrual, not a stale or forged snapshot's age or rate. Clock-free actions encode caller-supplied price bounds and do not apply this horizon.
+
 Each value comes from the same `eth_call` that returns the vault it describes. Deposit and force-withdraw price bounds are only as honest as these reads; an asset-mode exit's SDK-derived minimum share allowance is not an on-chain share-burn bound.
 
 - A stale `lastUpdate` widens the Vault V2 deposit `maxSharePrice`.
@@ -258,6 +260,8 @@ The API cannot change an offer's terms. When the take executes, Midnight checks 
 ### What the SDK checks
 
 - Book market params must hash to their returned ids; single-book requests also match the requested id, and book-list results satisfy requested filters. Each returned offer's market id is checked against its embedded market. Book quotes and book takeable-offer responses are bound to the requested market and side, and the general takeable-offer route enforces requested maker, market and group filters; mismatches raise `InvalidMidnightApiResponseError`.
+- `fetchBookQuote` requires exactly one positive caller target (`units` or `assets`) and rejects invalid targets before fetching with `InvalidMidnightApiQuoteTargetError`.
+- Takeable offers' `max_units`, `max_assets`, `continuous_fee_cap`, market `rcf_threshold`, and collateral `lltv` and `liquidation_cursor` must be non-negative uint256 decimal strings. Numeric `start`, `expiry`, market `chain_id` and `maturity` must be non-negative safe integers.
 - Each takeable offer must be executable: `receiverIfMakerIsSeller` is an address, and is non-zero on sell offers (the take builders also reject such an offer with `MidnightTakeableOfferZeroSellerReceiverError`), and its caps pass `OfferUtils.validateOfferCaps`.
 - A takeable offer's `units` must be a non-negative uint256 decimal string and cannot exceed the offer's own `maxUnits` when the offer is capped in units.
 - When `fetchBookQuote` is given `averageWorstPrice` or `slippage`, it recomputes the average price of the returned offers from the offers' own ticks and rejects a quote outside the guard. With an explicit `averageWorstPrice`, the returned `averageWorstPrice` is the caller's guard, so a bound derived from it is the one the SDK checked.
@@ -360,6 +364,8 @@ runs earlier, in the private release pipeline, before the sync App pushes a rele
   change those bytes could also encode a payload that no pattern scan recognizes.
 
 ## Integrator inputs and the address registry
+
+Midnight API quote requests require exactly one strictly positive `units` or `assets` target. Invalid targets throw `InvalidMidnightApiQuoteTargetError` before any HTTP request.
 
 The SDK trusts the configuration its integrator registers and the input choices the table below
 leaves to it (TB-INTEGRATOR). An attacker-chosen value in one of those choices is not a

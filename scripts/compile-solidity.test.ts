@@ -61,6 +61,25 @@ describe("compile-solidity", () => {
     }
   };
 
+  test("behavior: blue queries include runtime bytecode without changing creation output", () => {
+    const { root, scripts, queries } = setup();
+    try {
+      writeFileSync(
+        join(root, "packages/blue-sdk-viem/contracts/Example.sol"),
+        "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\ncontract Example { function query() external pure returns (uint256) { return 42; } }\n",
+      );
+      const result = runCompile(scripts);
+      expect(result).toEqual({ threw: false, stderr: "" });
+      const artifact = readFileSync(join(queries, "Example.ts"), "utf8");
+      expect(artifact).toMatch(/export const abi =/);
+      expect(artifact).toMatch(/export const code =\s*"0x[0-9a-f]+"/);
+      expect(artifact).toMatch(/@internal.*runtime bytecode/);
+      expect(artifact).toMatch(/export const deployedCode =\s*"0x[0-9a-f]+"/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("behavior: cleanup preserves query barrel files", () => {
     const { root, scripts, queries } = setup();
     try {

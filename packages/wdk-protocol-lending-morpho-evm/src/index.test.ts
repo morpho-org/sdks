@@ -5,9 +5,12 @@ import {
 } from "@morpho-org/blue-sdk-viem";
 import {
   ChainIdMismatchError as SdkChainIdMismatchError,
+  InputExceedsMaxError as SdkInputExceedsMaxError,
   InsufficientDeadSharesError as SdkInsufficientDeadSharesError,
+  InvalidBigIntInputError as SdkInvalidBigIntInputError,
   MissingContractCodeError as SdkMissingContractCodeError,
   MissingDeadSharesDataError as SdkMissingDeadSharesDataError,
+  NegativeInputError as SdkNegativeInputError,
 } from "@morpho-org/morpho-sdk";
 import {
   MaximumFeeExceededError as WdkMaximumFeeExceededError,
@@ -26,7 +29,9 @@ import {
 import {
   BlueBundlesV1DeadlineExceedsWindowError,
   ChainIdMismatchError,
+  InputExceedsMaxError,
   InsufficientDeadSharesError,
+  InvalidBigIntInputError,
   InvalidTransactionHashError,
   InvalidTransactionMaxFeeError,
   MalformedTokenMetadataError,
@@ -35,6 +40,7 @@ import {
   MissingDeadSharesDataError,
   MissingPermitDomainNameError,
   MissingWalletProviderError,
+  NegativeInputError,
   PaymasterApprovalGuardUnavailableError,
   PaymasterApprovalSpenderMismatchError,
   UnconfirmedBroadcastError,
@@ -44,6 +50,10 @@ import {
 
 test("re-exports ChainIdMismatchError by identity", () => {
   expect(ChainIdMismatchError).toBe(SdkChainIdMismatchError);
+});
+
+test("re-exports InvalidBigIntInputError by identity", () => {
+  expect(InvalidBigIntInputError).toBe(SdkInvalidBigIntInputError);
 });
 
 test("re-exports the dead-deposit errors by identity", () => {
@@ -112,4 +122,9 @@ test("re-exports PaymasterApprovalGuardUnavailableError by identity", () => {
   expect(PaymasterApprovalGuardUnavailableError).toBe(
     SourcePaymasterApprovalGuardUnavailableError,
   );
+});
+
+test("re-exports reallocation penalty bound errors by identity", () => {
+  expect(InputExceedsMaxError).toBe(SdkInputExceedsMaxError);
+  expect(NegativeInputError).toBe(SdkNegativeInputError);
 });

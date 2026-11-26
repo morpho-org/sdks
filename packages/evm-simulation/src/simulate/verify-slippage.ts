@@ -653,6 +653,178 @@ function measurementDelta(
   return stateReadDelta(check, measurement);
 }
 
+/** Native gross sends and conversion evidence shared by fallback and sibling caps. */
+function nativeCollateralConversions(
+  check: OperationCheck,
+  token: Address,
+): {
+  readonly gross: bigint;
+  readonly wraps: bigint;
+  readonly minted: bigint;
+  readonly burns: bigint;
+  readonly fallbackOffset: bigint;
+} {
+  const owner = check.params.ctx.owner;
+  let gross = 0n;
+  let wraps = 0n;
+  let unwrapped = 0n;
+  let minted = 0n;
+  let burns = 0n;
+  let externalWrappedCredits = 0n;
+  for (const transfer of check.params.transfers) {
+    if (
+      isAddressEqual(transfer.token, token) &&
+      isAddressEqual(transfer.from, owner) &&
+      isAddressEqual(transfer.to, zeroAddress)
+    ) {
+      burns += transfer.amount;
+    }
+    if (isAddressEqual(transfer.token, ethAddress)) {
+      if (
+        isAddressEqual(transfer.from, owner) &&
+        !isAddressEqual(transfer.to, owner)
+      ) {
+        gross += transfer.amount;
+        if (isAddressEqual(transfer.to, token)) {
+          wraps += transfer.amount;
+        }
+      }
+      if (
+        isAddressEqual(transfer.from, token) &&
+        isAddressEqual(transfer.to, owner)
+      ) {
+        unwrapped += transfer.amount;
+      }
+    }
+    if (
+      isAddressEqual(transfer.token, token) &&
+      isAddressEqual(transfer.to, owner)
+    ) {
+      if (isAddressEqual(transfer.from, zeroAddress)) {
+        minted += transfer.amount;
+      } else if (!isAddressEqual(transfer.from, owner)) {
+        externalWrappedCredits += transfer.amount;
+      }
+    }
+  }
+  const fallbackOffset = MathLib.min(
+    wraps,
+    MathLib.max(0n, unwrapped - externalWrappedCredits),
+  );
+  return { gross, wraps, minted, burns, fallbackOffset };
+}
+
+/** Wrapped funding and burns already covered by a sibling native collateral fallback. */
+function siblingNativeCollateralFunding(
+  check: OperationCheck,
+  token: Address,
+): bigint {
+  const owner = check.params.ctx.owner;
+  const covered = check.params.operations.some(
+    (operation, index) =>
+      index !== check.index &&
+      !check.params.skippedOperationIndices?.has(index) &&
+      operation.measurements.some(
+        (measurement) =>
+          measurement.field === "assetsPaid" &&
+          measurement.type === "native" &&
+          measurement.readId === undefined &&
+          measurement.collateralPayInToken !== undefined &&
+          isAddressEqual(measurement.collateralPayInToken, ethAddress) &&
+          measurement.nativeConversionWrapper !== undefined &&
+          isAddressEqual(measurement.nativeConversionWrapper, token) &&
+          isAddressEqual(measurement.account, owner),
+      ),
+  );
+  if (!covered) {
+    return 0n;
+  }
+  const { wraps, minted, burns, fallbackOffset } = nativeCollateralConversions(
+    check,
+    token,
+  );
+  return (
+    MathLib.min(minted, wraps - fallbackOffset) +
+    MathLib.min(burns, fallbackOffset)
+  );
+}
+
+/** Gross owner outflows, offsetting evidenced native/wrapped conversions only. */
+function grossCollateralPayIn(
+  check: OperationCheck,
+  {
+    measurement,
+    token,
+  }: {
+    readonly measurement: SlippageMeasurement;
+    readonly token: Address;
+  },
+): bigint {
+  const owner = check.params.ctx.owner;
+  const combined =
+    measurement.type === "native" && measurement.readId !== undefined;
+  const fallbackWrapper =
+    measurement.type === "native"
+      ? measurement.nativeConversionWrapper
+      : undefined;
+  if (fallbackWrapper !== undefined) {
+    const { gross, fallbackOffset } = nativeCollateralConversions(
+      check,
+      fallbackWrapper,
+    );
+    return gross - fallbackOffset;
+  }
+  const wrapper = combined ? token : undefined;
+  let gross = 0n;
+  let burns = 0n;
+  let unwrapped = 0n;
+  let wraps = 0n;
+  let minted = 0n;
+  for (const transfer of check.params.transfers) {
+    const wrapped = isAddressEqual(transfer.token, token);
+    const native =
+      wrapper !== undefined && isAddressEqual(transfer.token, ethAddress);
+    if (!wrapped && !native) {
+      continue;
+    }
+    if (isAddressEqual(transfer.to, owner)) {
+      if (
+        native &&
+        wrapper !== undefined &&
+        isAddressEqual(transfer.from, wrapper)
+      ) {
+        unwrapped += transfer.amount;
+      }
+      if (combined && wrapped && isAddressEqual(transfer.from, zeroAddress)) {
+        minted += transfer.amount;
+      }
+    }
+    if (
+      !isAddressEqual(transfer.from, owner) ||
+      isAddressEqual(transfer.to, owner)
+    ) {
+      continue;
+    }
+    gross += transfer.amount;
+    if (combined && wrapped && isAddressEqual(transfer.to, zeroAddress)) {
+      burns += transfer.amount;
+    }
+    if (
+      native &&
+      wrapper !== undefined &&
+      isAddressEqual(transfer.to, wrapper)
+    ) {
+      wraps += transfer.amount;
+    }
+  }
+  return (
+    gross -
+    MathLib.min(burns, unwrapped) -
+    MathLib.min(wraps, minted) -
+    (combined ? 0n : siblingNativeCollateralFunding(check, token))
+  );
+}
+
 /** Observed quote sides from the planned measurements. */
 function observeMeasurements(check: OperationCheck): ObservedQuote {
   const { limit, measurements } = check.reads;
@@ -675,9 +847,28 @@ function observeMeasurements(check: OperationCheck): ObservedQuote {
       }
       continue;
     }
-    observed[field] = QUOTE_FIELD_DIRECTION[field].output
+    const amount = QUOTE_FIELD_DIRECTION[field].output
       ? delta
       : MathLib.max(0n, -delta);
+    const collateralToken = measurement.collateralPayInToken;
+    const derivedNetPayIn =
+      check.reads.netWalletAssets === true &&
+      limit.type === "blueSupplyCollateralBorrow" &&
+      limit.inputs?.collateralAssets !== undefined &&
+      limit.inputs.borrowAssets !== undefined &&
+      limit.derivedFields?.includes("assetsPaid") === true;
+    observed[field] =
+      field === "assetsPaid" &&
+      collateralToken !== undefined &&
+      !derivedNetPayIn
+        ? MathLib.max(
+            amount,
+            grossCollateralPayIn(check, {
+              measurement,
+              token: collateralToken,
+            }),
+          )
+        : amount;
   }
   if (limit.quote.positions !== undefined) {
     observed.positions = observedPositions;

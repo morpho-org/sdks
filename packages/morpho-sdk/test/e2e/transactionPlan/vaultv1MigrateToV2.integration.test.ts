@@ -1,4 +1,4 @@
-import { getChainAddress, Time } from "@morpho-org/morpho-ts";
+import { getChainAddress } from "@morpho-org/morpho-ts";
 import { erc20Abi, maxUint256, parseUnits } from "viem";
 import { describe, expect } from "vitest";
 import { computeVaultV1MigrateToV2Quote } from "../../../src/entities/vaultV1/migrateToV2Quote.js";
@@ -43,7 +43,7 @@ describe("TransactionPlan Vault V1 migration on a pinned mainnet fork", () => {
       const sourceVaultData = await fetchAccrualVault(sourceVault, client);
       const targetVaultData = await fetchAccrualVaultV2(targetVault, client);
       const timestamp = await client.timestamp();
-      const deadline = Time.timestamp() + 7200n;
+      const deadline = timestamp + 7200n;
       const referralFee = {
         bps: 100,
         recipient: "0x0000000000000000000000000000000000000001",

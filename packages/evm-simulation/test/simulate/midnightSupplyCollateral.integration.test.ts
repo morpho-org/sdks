@@ -419,7 +419,12 @@ describe.sequential("midnightSupplyCollateral limits — Base fork", () => {
         transactions: [asTransaction(user, first), asTransaction(user, second)],
         limits: toSimulationLimits(first.action, { owner: user }),
       }),
-    ).rejects.toThrow(/slippage for "assetsPaid"/);
+    ).rejects.toMatchObject({
+      errors: expect.arrayContaining([
+        expect.objectContaining({ field: "assetsPaid" }),
+        expect.objectContaining({ field: "collateralSupplied" }),
+      ]),
+    });
   });
 
   test("collateral supplied for another owner verifies with the caller's onBehalf intent", async ({

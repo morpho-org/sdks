@@ -7,6 +7,7 @@ import { describe, expect, test } from "vitest";
 import { vaultBundlesV1Abi } from "../../abis.js";
 import {
   InputExceedsMaxError,
+  MidnightReferralFeePctExceededError,
   NonPositiveInputError,
 } from "../../types/index.js";
 import { vaultV1Withdraw } from "./withdraw.js";
@@ -18,9 +19,31 @@ const feeRecipient = "0x0000000000000000000000000000000000000023" as const;
 const positiveUint256 = fc.bigInt({ min: 1n, max: maxUint256 });
 
 describe("vaultV1Withdraw", () => {
+  test.each([0n, MathLib.WAD / 10n, MathLib.WAD / 10n + 1n])(
+    "checks referral fee %s against the 10% cap",
+    (referralFeePct) => {
+      const build = () =>
+        vaultV1Withdraw({
+          vault: { chainId, address: vault },
+          args: {
+            amount: 100n,
+            userAddress,
+            deadline: 1_900_000_000n,
+            referralFeePct,
+            referralFeeRecipient: feeRecipient,
+          },
+        });
+      if (referralFeePct > MathLib.WAD / 10n) {
+        expect(build).toThrow(MidnightReferralFeePctExceededError);
+      } else {
+        expect(build().action.args.referralFeePct).toBe(referralFeePct);
+      }
+    },
+  );
+
   test("default", () => {
     const deadline = 1_900_000_000n;
-    const referralFeePct = MathLib.WAD / 4n;
+    const referralFeePct = MathLib.WAD / 10n;
     const transaction = vaultV1Withdraw({
       vault: { chainId, address: vault },
       args: {
@@ -50,8 +73,8 @@ describe("vaultV1Withdraw", () => {
       ],
     });
     expect(transaction.action.args).toMatchObject({
-      referralFeeAssets: 25n,
-      netAssets: 75n,
+      referralFeeAssets: 10n,
+      netAssets: 90n,
     });
   });
 

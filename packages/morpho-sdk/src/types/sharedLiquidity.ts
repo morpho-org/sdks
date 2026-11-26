@@ -85,8 +85,13 @@ export interface VaultV2BluePublicAllocatorOptions {
    * plan on the destination-market handle (for example,
    * `client.morpho.blue(destination.marketParams, chainId)`), not the source
    * handle. Pass the source position's `borrowAssets` accrued to
-   * `max(now, source.lastUpdate, destination.lastUpdate) + 2h` as
-   * `operation.amount`; the optional `operation.referralFeePct` is WAD-scaled.
+   * the resolved plan expiry (or the required action deadline for entity
+   * `refinance`) as `operation.amount`. With
+   * `minTs = max(now, source.lastUpdate, destination.lastUpdate)`, the horizon is
+   * `max(minTs, resolved expiry)`. For `prepareBlueRefinance`, omitted `expiresAt`
+   * resolves to `now + 2h`, not `minTs + 2h`. Only when the resolved expiry exceeds
+   * `minTs + 365 days`, use `minTs + 2h` for unlimited-deadline sentinel
+   * compatibility. The optional `operation.referralFeePct` is WAD-scaled.
    * The planner includes the referral fee and its own allocator-leg penalties
    * in destination debt, so penalized legs also cover their own penalty.
    * Refinance never uses vaults with a 100% penalty.

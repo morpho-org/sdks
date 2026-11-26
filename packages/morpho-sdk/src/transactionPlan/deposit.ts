@@ -14,8 +14,10 @@ import { assertRegistryTargetsHaveCode } from "../entities/requirements/assertCo
 import { computeVaultMaxSharePrice } from "../helpers/index.js";
 import {
   validateNativeVaultAsset,
+  validateReferenceTime,
   validateSlippageTolerance,
   validateUint256Field,
+  validateVaultDepositDeadline,
 } from "../helpers/validate.js";
 import {
   NonPositiveInputError,
@@ -75,6 +77,8 @@ function resolveDepositInputs(
 ) {
   const { vault, chainId, assets } = params;
   const intent = resolveIntent(params, now);
+  // Bound forward accrual for both vault deposit plan kinds.
+  validateVaultDepositDeadline(intent.deadline, { now, field: "expiresAt" });
   const slippageTolerance =
     params.slippageTolerance ?? DEFAULT_SLIPPAGE_TOLERANCE;
   validateSlippageTolerance(slippageTolerance);
@@ -116,6 +120,8 @@ export async function prepareVaultDeposit<
   const { chainId, account, assets } = params;
   const vault = params.vault.address;
   const now = params.now ?? Time.timestamp();
+  // Reject a non-bigint clock before deriving the default expiry.
+  validateReferenceTime(now);
   const { intent, native, common, asset, maxSharePrice } = resolveDepositInputs(
     params,
     now,

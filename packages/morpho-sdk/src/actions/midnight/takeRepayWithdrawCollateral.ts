@@ -9,7 +9,6 @@ import {
 import { parseMidnightNativeFunding } from "../../helpers/parseMidnight.js";
 import { validateMidnightAddress } from "../../helpers/validateMidnightAccount.js";
 import {
-  validateMidnightReferralFeeCap,
   validateMidnightTakeableOfferBounds,
   validateMidnightUint128Field,
 } from "../../helpers/validateMidnightBounds.js";
@@ -252,7 +251,6 @@ export const parseMidnightTakeRepayWithdrawCollateral = (
     );
   }
   const { referralFeePct, referralFeeRecipient } = parseReferralFee(params);
-  validateMidnightReferralFeeCap(referralFeePct);
   if (referralFeePct > 0n) {
     // Rejects fee recipients that would strand the fee in a contract.
     validateMidnightReceiver({

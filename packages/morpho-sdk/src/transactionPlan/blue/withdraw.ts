@@ -76,6 +76,8 @@ export type BlueWithdrawPlanParams = IntentParams &
     /** Caller-fetched position used to validate the available supply balance. */
     readonly positionData: BluePositionSnapshot;
     readonly reallocations?: readonly VaultV2BlueReallocation[];
+    /** Maximum WAD-scaled penalty rate per reallocation in [0, WAD], defaulting to zero. Each rate applies to that reallocation's assets, so it does not bound total proceeds lost. */
+    readonly maxPenalty?: bigint;
     readonly now?: bigint;
   };
 
@@ -94,6 +96,7 @@ export type BlueWithdrawPlanParams = IntentParams &
  * @param params.assets - Exact positive gross loan assets withdrawn in base units; exclusive with `shares`.
  * @param params.shares - Exact positive supply shares burned; exclusive with `assets`, with no full-close sentinel or minimum-proceeds guarantee.
  * @param params.reallocations - Optional ordered Vault V2 BluePublicAllocator inputs; defaults to an empty list. Penalties reduce withdrawal proceeds.
+ * @param params.maxPenalty - Maximum WAD-scaled penalty rate per reallocation in [0, WAD], defaulting to zero. Each rate applies to that reallocation's assets, so it does not bound total proceeds lost.
  * @param params.reallocations[].vault - Vault whose liquidity the allocator moves.
  * @param params.reallocations[].from.type - Source discriminator: `market` or `idle`.
  * @param params.reallocations[].from.adapter - Source adapter, required only for a `market` source.
@@ -105,7 +108,7 @@ export type BlueWithdrawPlanParams = IntentParams &
  * @param params.reallocations[].to.adapter - Target adapter supplying the enclosing withdrawal market.
  * @param params.reallocations[].assets - Positive reallocated assets in loan-token base units, bounded by uint128.
  * @param params.reallocations[].penalty - Vault-configured WAD-scaled penalty, bounded by uint64 and applied with upward rounding per allocation.
- * @param params.referralFee.bps - Optional integer referral fee in basis points of gross proceeds after allocator penalties; defaults to zero and must be below 10,000.
+ * @param params.referralFee.bps - Optional integer referral fee in basis points of gross proceeds after allocator penalties; defaults to zero and must be at most 1,000.
  * @param params.referralFee.recipient - Optional fee recipient; required and non-zero when `referralFee.bps` is positive.
  * @param params.supportSignature - Optional Morpho authorization signature preference; defaults to `false`, selecting a direct authorization transaction when needed. Neither mode requests a token allowance or Permit2 signature.
  * @param params.now - Optional reference timestamp in seconds, normally the latest block timestamp; defaults to the device clock.
@@ -113,6 +116,7 @@ export type BlueWithdrawPlanParams = IntentParams &
  * @param params.calldataOrigin - Optional non-empty, even-length hex bytes appended to every built transaction; omitted by default.
  * @param params.deployless - Optional shared intent field; unused because withdrawal reads no token metadata.
  * @returns A deep-frozen, data-only `{ version, chainId, account, expiresAt, steps, signatureRequests, calldataOrigin? }` plan with a withdrawal step. Direct Morpho authorization is a preceding step; signed authorization is consumed inline by the withdrawal. Attach signatures before building.
+ * @throws {InvalidBigIntInputError} when a supplied maxPenalty is not a bigint.
  * @throws {ChainIdMismatchError} when the client declares or its transport serves another chain.
  * @throws {UnsupportedChainIdError} when `chainId` is absent from the registry.
  * @throws {UnknownAddressError} when Blue or BlueBundlesV1 is not registered on `chainId`.
@@ -123,8 +127,9 @@ export type BlueWithdrawPlanParams = IntentParams &
  * @throws {NonIntegerInputError} when `expiresAt` or `referralFee.bps` is not a safe integer.
  * @throws {NonPositiveInputError} when expiry, the selected withdrawal amount, or a reallocation amount is not positive.
  * @throws {ExpiredDeadlineError} when `expiresAt` is at or before `now`.
- * @throws {NegativeInputError} when the referral fee, a withdrawal amount, or a reallocation penalty is negative.
- * @throws {InputExceedsMaxError} when referral basis points exceed 10,000, an encoded amount or penalty exceeds its ABI bound, or aggregate allocator penalties exceed withdrawn assets (the snapshot's downward-rounded asset quote in shares mode).
+ * @throws {NegativeInputError} when the referral fee, a withdrawal amount, maxPenalty, or a reallocation penalty is negative.
+ * @throws {InputExceedsMaxError} when referral basis points exceed 1,000, an encoded amount or penalty exceeds its ABI bound, or aggregate allocator penalties exceed withdrawn assets (the snapshot's downward-rounded asset quote in shares mode).
+ * Also thrown when maxPenalty exceeds WAD or a penalty exceeds maxPenalty (zero by default).
  * @throws {InvalidCalldataOriginError} when `calldataOrigin` is empty, malformed or has an odd number of hex digits.
  * @throws {InvalidVaultV2BlueReallocationShapeError} when a reallocation entry is not an object or has a legacy Vault V1 shape.
  * @throws {InvalidReallocationAddressError} when a reallocation vault or adapter address is malformed.
@@ -132,7 +137,6 @@ export type BlueWithdrawPlanParams = IntentParams &
  * @throws {InconsistentReallocationPenaltyError} when allocations from one vault specify different penalties.
  * @throws {ReallocationWithdrawalOnTargetMarketError} when a reallocation source is the withdrawal market.
  * @throws {MutuallyExclusiveWithdrawAmountsError} when both withdrawal modes are nonzero.
- * @throws {ReferralFeePctExceededError} when `referralFee.bps` equals 10,000.
  * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no non-zero recipient.
  * @throws {ReallocationLoanTokenMismatchError} when a source market uses another loan token.
  * @throws {MissingAccrualPositionError} when the required position snapshot is missing.
@@ -169,6 +173,7 @@ export async function prepareBlueWithdraw(
   client: Client,
   params: BlueWithdrawPlanParams,
 ): Promise<TransactionPlan> {
+  const { maxPenalty } = params;
   await validateClientChainId(client, params.chainId);
   const { positionData: snapshot } = params;
   if (snapshot == null) {
@@ -193,6 +198,7 @@ export async function prepareBlueWithdraw(
       withdrawAssets: "assets" in params ? (params.assets ?? 0n) : 0n,
       withdrawShares: "shares" in params ? (params.shares ?? 0n) : 0n,
       reallocations: params.reallocations ?? [],
+      ...(maxPenalty !== undefined && { maxPenalty }),
       deadline: intent.deadline,
       referralFeePct: intent.referralFeePct,
       referralFeeRecipient: intent.referralFeeRecipient ?? zeroAddress,
@@ -297,7 +303,13 @@ export function validateBlueWithdrawAuthorizationRequest(
   });
 }
 
-/** @internal Encodes the self-contained withdrawal recipe and its inline authorization, if requested. */
+/**
+ * @internal Encodes the self-contained withdrawal recipe and its inline authorization, if requested.
+ * @param action - Withdrawal recipe with optional WAD-scaled maxPenalty in [0, WAD], defaulting to zero.
+ * @param requests - Available authorization signatures.
+ * @throws {NegativeInputError} when maxPenalty is negative.
+ * @throws {InputExceedsMaxError} when maxPenalty exceeds WAD or a penalty exceeds maxPenalty (zero by default).
+ */
 export function buildBlueWithdraw(
   action: Extract<Action, { type: "blueWithdraw" }>,
   requests: readonly SignatureRequest[] = [],
@@ -340,7 +352,10 @@ export function buildBlueWithdraw(
   }
   const targetMarketParams = new MarketParams(marketParams);
   // Reject malformed entries with typed errors before reading their source fields.
-  validateVaultV2BlueReallocations(args.reallocations, targetMarketParams.id);
+  validateVaultV2BlueReallocations(args.reallocations, {
+    targetMarketId: targetMarketParams.id,
+    maxPenalty: args.maxPenalty,
+  });
   const reallocations = args.reallocations.map((entry) => ({
     ...entry,
     from:
@@ -368,6 +383,12 @@ export function validateBlueWithdrawPlanAction(
   path: string,
 ): void {
   const inputs = getPlanObject(action.inputs, `${path}.inputs`);
+  if (inputs.maxPenalty !== undefined) {
+    validatePlanField(inputs.maxPenalty, {
+      path: `${path}.inputs.maxPenalty`,
+      type: "uint256 bigint",
+    });
+  }
   const roles = getPlanObject(
     action.signatureRequestIds,
     `${path}.signatureRequestIds`,

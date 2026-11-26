@@ -362,6 +362,7 @@ describe("blueWithdraw", () => {
         withdrawAssets: 5n,
         withdrawShares: 0n,
         reallocations: [reallocation],
+        maxPenalty: MathLib.WAD,
         deadline,
       },
     });
@@ -431,6 +432,7 @@ describe("blueWithdraw", () => {
           withdrawAssets: 1n,
           withdrawShares: 0n,
           reallocations: [reallocation],
+          maxPenalty: MathLib.WAD,
           deadline,
         },
       }),
@@ -513,6 +515,7 @@ describe("blueWithdraw — action metadata", () => {
         withdrawAssets: 100n,
         withdrawShares: 0n,
         reallocations: [reallocation],
+        maxPenalty: MathLib.WAD,
         deadline,
         referralFeePct,
         referralFeeRecipient,

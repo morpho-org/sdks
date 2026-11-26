@@ -1702,6 +1702,7 @@ describe("fetchAccrualVaultV2 deployless path", () => {
     mockDeploylessReads(handle, [
       // GetAccrualVaultV2 single-call query fails, forcing the sequential fallback.
       "0x",
+      "0x",
       encodeReadResult(vaultV2QueryAbi, "query", {
         ...vaultV2Result,
         adapters: [],
@@ -1724,7 +1725,8 @@ describe("fetchAccrualVaultV2 deployless path", () => {
       ),
     ).toHaveLength(1);
     const blockTags = getEthCallBlockTags(handle);
-    const sequentialBlockTags = blockTags.slice(1);
+    expect(blockTags.slice(0, 2)).toStrictEqual(["latest", "latest"]);
+    const sequentialBlockTags = blockTags.slice(2);
     expect(sequentialBlockTags.length).toBeGreaterThan(0);
     expect(sequentialBlockTags.every((blockTag) => blockTag === "0x64")).toBe(
       true,
@@ -1739,6 +1741,7 @@ describe("fetchAccrualVaultV2 deployless path", () => {
     mockBlockNumber(handle);
     mockDeploylessReads(handle, [
       // GetAccrualVaultV2 single-call query fails, forcing the sequential fallback.
+      "0x",
       "0x",
       encodeReadResult(vaultV2QueryAbi, "query", {
         ...vaultV2Result,
@@ -2454,6 +2457,7 @@ describe("fetchAccrualVaultV2 deployless path", () => {
         },
       }),
       // The re-query at the pinned block fails, forcing the sequential path.
+      "0x",
       "0x",
       encodeReadResult(vaultV2QueryAbi, "query", {
         ...vaultV2Result,

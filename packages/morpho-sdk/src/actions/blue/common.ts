@@ -194,17 +194,39 @@ export const getBlueBundlesV1SignedAuthorization = (params: {
 /** Parses an ordered reallocation plan and its aggregate penalty once. @internal */
 export const parseBlueAllocations = (
   reallocations: readonly VaultV2BlueReallocation[],
-  targetMarketParams: BlueMarket,
+  {
+    marketParams: targetMarketParams,
+    maxPenalty,
+  }: {
+    readonly marketParams: BlueMarket;
+    readonly maxPenalty?: bigint;
+  },
 ) => {
+  // Snapshot each Vault V2 entry so validation, accounting and encoding read the same values.
+  const snapshots = reallocations.map((reallocation) => {
+    if (
+      reallocation === null ||
+      typeof reallocation !== "object" ||
+      "withdrawals" in reallocation ||
+      "fee" in reallocation
+    ) {
+      return reallocation;
+    }
+    const { vault, from, to, assets, penalty } = reallocation;
+    return { vault, from, to, assets, penalty };
+  });
   // Reject malformed plans before constructing allocation calls.
-  validateVaultV2BlueReallocations(reallocations, targetMarketParams.id);
+  validateVaultV2BlueReallocations(snapshots, {
+    targetMarketId: targetMarketParams.id,
+    maxPenalty,
+  });
   // Hoisted out of the map: idle sources all reference the same synthetic idle market, whose
   // construction eagerly hashes the market id — computing it once per call instead of per entry.
   const idleMarketParams = parseBlueMarket(
     MarketParams.idle(targetMarketParams.loanToken),
   );
-  const publicAllocations: BlueAllocations["publicAllocations"] =
-    reallocations.map((reallocation) => {
+  const publicAllocations: BlueAllocations["publicAllocations"] = snapshots.map(
+    (reallocation) => {
       if (
         reallocation.from.type === "market" &&
         !isAddressEqual(
@@ -233,7 +255,8 @@ export const parseBlueAllocations = (
         assets: reallocation.assets,
         penalty: reallocation.penalty,
       };
-    });
+    },
+  );
   const result = {
     publicAllocations,
     penaltyAssets: getBlueBundlesV1PenaltyAssets(publicAllocations),

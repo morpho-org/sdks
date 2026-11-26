@@ -38,8 +38,10 @@ loan-token and callback relationships inside whole-params maker constructors; th
 values, not independent stage witnesses. Maker bundle parsing owns publication, cancellation and
 funding snapshots without freezing trees; dynamic publication validation remains in the entity layer.
 
+- `VAULT_DEPOSIT_MAX_DEADLINE_SECONDS` = seven days: `validateVaultDepositDeadline(deadline, { now })` rejects a longer forward-accrual window with `InputExceedsMaxError`. Vault V1/V2 deposit entities and plan preparers, and the shared V1-to-V2 migration quote, call this internal non-barrel validator before price math. Clock-free raw actions accept caller-supplied price bounds instead.
+
 - `MAX_SLIPPAGE_TOLERANCE` = 10% (`WAD / 10`) — slippage-tolerance ceiling for surfaces that still
   expose share-price protection, notably vault deposits. It does not apply to high-level Blue
   writes.
-- `MIDNIGHT_MAX_REFERRAL_FEE_PCT` = 10% (`WAD / 10n`): internal SDK cap on Midnight referral fees, thrown as `MidnightReferralFeePctExceededError`. The contract itself only requires `referralFeePct < WAD`.
+- `MIDNIGHT_MAX_REFERRAL_FEE_PCT` = 10% (`WAD / 10n`): SDK referral-fee cap for Vault, Blue, and Midnight, inclusive. WAD-scaled fees above the cap but below WAD throw `MidnightReferralFeePctExceededError`; TransactionPlan intents reject fees above 1,000 basis points with `InputExceedsMaxError`. The periphery contracts only require `referralFeePct < WAD`.
 - `DEFAULT_LLTV_BUFFER` = 0.5% (`WAD / 200`) — hardcoded for Blue borrow, collateral-withdraw, and migration legs and the Midnight flows (`takeBorrow`, `supplyCollateralTakeBorrow`, `takeRepayWithdrawCollateral`, `repayWithdrawCollateral`, `withdrawCollateral`, and `withdrawCollateralBatch`). Midnight `makeBorrow` and `supplyCollateralMakeBorrow` intentionally skip it because debt only appears when someone fills the offer.

@@ -2109,6 +2109,7 @@ describe("toSimulationLimits", () => {
           userAddress: OWNER,
           withdrawAssets: 1_000n,
           withdrawShares: 0n,
+          maxPenalty: PENALTY,
           reallocations: [
             {
               vault: VAULT2,
@@ -2147,6 +2148,7 @@ describe("toSimulationLimits", () => {
           collateralAssets: 1_000n,
           borrowAssets: 800n,
           maxLtv: maxUint256,
+          maxPenalty: PENALTY,
           reallocations: [
             {
               vault: VAULT2,

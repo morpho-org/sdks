@@ -42,6 +42,7 @@ import {
   vaultV2Abi,
   vaultV2FactoryAbi,
 } from "../../abis.js";
+import { readDeploylessContract } from "../../deployless.js";
 import {
   getUnsupportedVaultV2Adapter,
   isUnknownOfFactoryError,
@@ -50,8 +51,9 @@ import {
 import {
   abi as getAccrualVaultV2Abi,
   code as getAccrualVaultV2Code,
+  deployedCode as getAccrualVaultV2DeployedCode,
 } from "../../queries/vault-v2/GetAccrualVaultV2.js";
-import { abi, code } from "../../queries/vault-v2/GetVaultV2.js";
+import { abi, code, deployedCode } from "../../queries/vault-v2/GetVaultV2.js";
 import type {
   DeploylessFetchParameters,
   FetchParameters,
@@ -80,6 +82,9 @@ import { fetchAccrualVaultV2Adapter } from "./VaultV2Adapter.js";
  * reverts or the contract has no code. A `name`/`symbol` that does not decode as `string` is
  * retried as `bytes32`; a malformed `bytes32` retry or `eip712Domain()` result throws
  * `MalformedTokenMetadataError`, and transport errors propagate.
+ * On direct-read fallback, required vault-state errors take precedence over concurrent
+ * non-transport share-token metadata errors, so code-less vaults reject with
+ * `ContractFunctionExecutionError`. Metadata transport errors propagate immediately.
  *
  * @param address - Address of the VaultV2 to fetch.
  * @param client - Viem client used for deployless reads or multicalls.
@@ -93,8 +98,8 @@ import { fetchAccrualVaultV2Adapter } from "./VaultV2Adapter.js";
  * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @throws {UnknownFactory} when the configured chain has no VaultV2 factory.
  * @throws {UnknownOfFactory} when `address` is not a VaultV2 from the configured factory.
- * @throws {UnknownTokenError} when the vault share token's `decimals()` reverts, has no code,
- *   returns undecodable data, or is out of range.
+ * @throws {UnknownTokenError} when vault-state reads succeed but the share token's
+ *   `decimals()` reverts, returns undecodable data, or is out of range.
  * @throws {MalformedTokenMetadataError} when the share token's `eip712Domain()` or
  *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or when the
  *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
@@ -136,10 +141,11 @@ export async function fetchVaultV2(
     try {
       // The RPC is trusted: accounting and adapter data are not cross-checked. See THREAT_MODEL.md, RPC.
       const { token, isLiquidityAdapterKnown, liquidityAllocations, ...vault } =
-        await readContract(client, {
+        await readDeploylessContract(client, {
           ...parameters,
           abi,
           code,
+          deployedCode,
           functionName: "query",
           args: [
             address,
@@ -275,7 +281,7 @@ export async function fetchVaultV2(
   });
 }
 
-function fetchVaultV2State(
+async function fetchVaultV2State(
   client: Client,
   {
     address,
@@ -289,9 +295,16 @@ function fetchVaultV2State(
     readonly parameters: FetchParameters;
   },
 ) {
-  return Promise.all([
-    fetchToken(address, client, { ...parameters, deployless }),
-
+  const token = fetchToken(address, client, { ...parameters, deployless }).then(
+    (value) => ({ status: "fulfilled" as const, value }),
+    (reason: unknown) => {
+      if (isTransportError(reason)) {
+        throw reason;
+      }
+      return { status: "rejected" as const, reason };
+    },
+  );
+  const state = Promise.all([
     readContract(client, {
       ...parameters,
       address: vaultV2Factory,
@@ -385,6 +398,11 @@ function fetchVaultV2State(
       args: [DEAD_ADDRESS],
     }),
   ]);
+  const [metadata, vaultState] = await Promise.all([token, state]);
+  if (metadata.status === "rejected") {
+    throw metadata.reason;
+  }
+  return [metadata.value, ...vaultState] as const;
 }
 
 async function fetchVaultV2Liquidity(
@@ -533,6 +551,9 @@ async function fetchVaultV2Liquidity(
  * reverts or the contract has no code. A `name`/`symbol` that does not decode as `string` is
  * retried as `bytes32`; a malformed `bytes32` retry or `eip712Domain()` result throws
  * `MalformedTokenMetadataError`, and transport errors propagate.
+ * On direct-read fallback, required vault-state errors take precedence over concurrent
+ * non-transport share-token metadata errors, so code-less vaults reject with
+ * `ContractFunctionExecutionError`. Metadata transport errors propagate immediately.
  *
  * @param address - Address of the VaultV2 to fetch.
  * @param client - Viem client used for deployless reads or multicalls.
@@ -547,8 +568,8 @@ async function fetchVaultV2Liquidity(
  * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @throws {UnknownFactory} when the configured chain has no VaultV2 factory.
  * @throws {UnknownOfFactory} when `address` is not a VaultV2 from the configured factory.
- * @throws {UnknownTokenError} when the vault share token's `decimals()` reverts, has no code,
- *   returns undecodable data, or is out of range.
+ * @throws {UnknownTokenError} when vault-state reads succeed but the share token's
+ *   `decimals()` reverts, returns undecodable data, or is out of range.
  * @throws {MalformedTokenMetadataError} when the share token's `eip712Domain()` or
  *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or when the
  *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
@@ -1092,10 +1113,11 @@ async function fetchAccrualVaultV2WithQuery(
 
   let response: AccrualVaultV2QueryResponse;
   try {
-    response = await readContract(client, {
+    response = await readDeploylessContract(client, {
       ...parameters,
       abi: getAccrualVaultV2Abi,
       code: getAccrualVaultV2Code,
+      deployedCode: getAccrualVaultV2DeployedCode,
       functionName: "query",
       args: [
         address,

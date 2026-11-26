@@ -27,16 +27,14 @@ import {
   getBlueBundlesV1PenaltyAssets,
   getBlueBundlesV1ReferralFeeAssets,
 } from "../actions/blue/common.js";
-import {
-  DEFAULT_MAX_REALLOCATION_PENALTY,
-  DEFAULT_SUPPLY_TARGET_UTILIZATION,
-  MAX_REALLOCATION_PENALTY,
-} from "../helpers/constant.js";
+import { DEFAULT_SUPPLY_TARGET_UTILIZATION } from "../helpers/constant.js";
+import { resolveMaxPenalty } from "../helpers/reallocationPenalty.js";
 import {
   resolveAllocatorCapHeadroom,
   resolveCapAccrualBuffer,
   resolveMaxWithdrawalUtilization,
 } from "../helpers/utilization.js";
+import { validateMidnightReferralFeeCap } from "../helpers/validateMidnightBounds.js";
 import type {
   VaultV2BluePublicAllocatorOptions,
   VaultV2BlueReallocation,
@@ -263,21 +261,6 @@ const getAdapterIds = (
   const ids = adapter.ids(market.params);
   cache.set(key, ids);
   return ids;
-};
-
-const resolveMaxPenalty = (value: bigint | undefined) => {
-  const penalty = value ?? DEFAULT_MAX_REALLOCATION_PENALTY;
-  if (penalty < 0n) {
-    throw new NegativeInputError("maxPenalty", penalty);
-  }
-  if (penalty > MAX_REALLOCATION_PENALTY) {
-    throw new InputExceedsMaxError({
-      field: "maxPenalty",
-      value: penalty,
-      max: MAX_REALLOCATION_PENALTY,
-    });
-  }
-  return penalty;
 };
 
 const getCanonicalMarket = (
@@ -942,8 +925,13 @@ export class VaultV2BlueReallocationData
    * destination-market handle (for example,
    * `client.morpho.blue(destination.marketParams, chainId)`), not the source
    * handle. Pass the source position's `borrowAssets` accrued to
-   * `max(now, source.lastUpdate, destination.lastUpdate) + 2h` as
-   * `operation.amount`; the optional `operation.referralFeePct` is WAD-scaled.
+   * the resolved plan expiry (or the required action deadline for entity
+   * `refinance`) as `operation.amount`. With
+   * `minTs = max(now, source.lastUpdate, destination.lastUpdate)`, the horizon is
+   * `max(minTs, resolved expiry)`. For `prepareBlueRefinance`, omitted `expiresAt`
+   * resolves to `now + 2h`, not `minTs + 2h`. Only when the resolved expiry exceeds
+   * `minTs + 365 days`, use `minTs + 2h` for unlimited-deadline sentinel
+   * compatibility. The optional `operation.referralFeePct` is WAD-scaled.
    * The planner includes the referral fee and its allocator-leg penalties in
    * destination debt, so penalized legs also cover their own penalty.
    * Refinance never uses vaults with a 100% penalty.
@@ -1007,8 +995,10 @@ export class VaultV2BlueReallocationData
    * @returns Flat action-ready reallocations and their post-simulation state.
    * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
    * @throws {NegativeInputError} when `capAccrualBuffer`, `allocatorCapHeadroom`, `maxWithdrawalUtilization`, `maxPenalty`, or `referralFeePct` is negative.
+   * @throws {InvalidBigIntInputError} when a supplied maxPenalty is not a bigint.
    * @throws {InputExceedsMaxError} when `allocatorCapHeadroom`, `maxWithdrawalUtilization`, or `maxPenalty` exceeds WAD, or an enabled borrow/withdraw plan otherwise covers its shortfall but its planned penalty exceeds the operation amount.
    * @throws {ReferralFeePctExceededError} when `referralFeePct` is at least WAD.
+   * @throws {MidnightReferralFeePctExceededError} when the fee is above 10% but below WAD.
    * @throws {NonPositiveInputError} when the operation amount is not positive and planning is enabled.
    * @throws {UnknownReallocationMarketError} when a required market is absent.
    * @throws {UnknownReallocationVaultError} when configured vault state is absent.
@@ -1407,6 +1397,7 @@ export class VaultV2BlueReallocationData
    * @returns Reallocatable market and idle assets, or `0n` when none are available; rounding-only shared-cap fits may be conservatively omitted.
    * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
    * @throws {NegativeInputError} when `capAccrualBuffer`, `maxWithdrawalUtilization`, or `maxPenalty` is negative.
+   * @throws {InvalidBigIntInputError} when a supplied maxPenalty is not a bigint.
    * @throws {InputExceedsMaxError} when `maxWithdrawalUtilization` or `maxPenalty` exceeds WAD.
    * @throws {UnknownReallocationMarketError} when a required market is absent.
    * @throws {UnknownReallocationVaultError} when configured vault state is absent.
@@ -1478,6 +1469,7 @@ export class VaultV2BlueReallocationData
    * @returns Borrowable assets while remaining at or below `utilization`; rounding-only shared-cap fits may be conservatively omitted.
    * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
    * @throws {NegativeInputError} when `capAccrualBuffer`, `maxWithdrawalUtilization`, or `maxPenalty` is negative.
+   * @throws {InvalidBigIntInputError} when a supplied maxPenalty is not a bigint.
    * @throws {InputExceedsMaxError} when `maxWithdrawalUtilization` or `maxPenalty` exceeds WAD.
    * @throws {UnknownReallocationMarketError} when a required market is absent.
    * @throws {UnknownReallocationVaultError} when configured vault state is absent.
@@ -2448,8 +2440,7 @@ function resolveVaultCandidateIdleState(params: VaultCandidateParameters) {
   const vault = data.getVault(vaultAddress);
   if (
     !isAddressEqual(publicAllocatorConfig.vault, vaultAddress) ||
-    publicAllocatorConfig.penalty >
-      (options.maxPenalty ?? DEFAULT_MAX_REALLOCATION_PENALTY)
+    publicAllocatorConfig.penalty > resolveMaxPenalty(options.maxPenalty)
   ) {
     return;
   }
@@ -3897,6 +3888,8 @@ function resolveOperationFeeAssets(operation: ReallocationOperation): bigint {
   if (referralFeePct >= MathLib.WAD) {
     throw new ReferralFeePctExceededError(referralFeePct);
   }
+  // Reject fees that the refinance bundle builder would reject.
+  validateMidnightReferralFeeCap(referralFeePct);
   const feeAssets =
     operation.type === "refinance"
       ? getBlueBundlesV1ReferralFeeAssets(amount, referralFeePct)

@@ -101,6 +101,8 @@ export type Action =
         readonly marketParams: MarketParams;
         readonly borrowAssets: bigint;
         readonly maxLtv: bigint;
+        /** Maximum WAD-scaled penalty rate per reallocation, defaulting to zero; it does not bound total proceeds lost. */
+        readonly maxPenalty?: bigint;
         readonly reallocations: readonly VaultV2BlueReallocation[];
         readonly deadline: bigint;
         readonly referralFeePct: bigint;
@@ -152,6 +154,8 @@ export type Action =
         >;
         readonly withdrawAssets: bigint;
         readonly withdrawShares: bigint;
+        /** Maximum WAD-scaled penalty rate per reallocation, defaulting to zero; it does not bound total proceeds lost. */
+        readonly maxPenalty?: bigint;
         readonly reallocations: readonly VaultV2BlueReallocation[];
         readonly deadline: bigint;
         readonly referralFeePct: bigint;
@@ -302,6 +306,8 @@ export type Action =
         readonly sourceMarketParams: Readonly<MarketParams>;
         readonly destinationMarketParams: Readonly<MarketParams>;
         readonly maxLtv: bigint;
+        /** Maximum WAD-scaled penalty rate per reallocation, defaulting to zero; it does not bound the total penalty added to destination debt. */
+        readonly maxPenalty?: bigint;
         readonly deadline: bigint;
         readonly referralFeePct: bigint;
         readonly referralFeeRecipient: Address;

@@ -31,6 +31,7 @@ import {
   ExcessiveSlippageToleranceError,
   InconsistentReallocationPenaltyError,
   InputExceedsMaxError,
+  InvalidBigIntInputError,
   InvalidMidnightNativeAmountTypeError,
   InvalidReallocationAddressError,
   InvalidReallocationSourceTypeError,
@@ -55,10 +56,52 @@ import {
 } from "../types/index.js";
 import {
   DEFAULT_LLTV_BUFFER,
-  MAX_REALLOCATION_PENALTY,
   MAX_SLIPPAGE_TOLERANCE,
+  VAULT_DEPOSIT_MAX_DEADLINE_SECONDS,
 } from "./constant.js";
+import { resolveMaxPenalty } from "./reallocationPenalty.js";
 import { validateMidnightAddress } from "./validateMidnightAccount.js";
+import { validateMidnightReferralFeeCap } from "./validateMidnightBounds.js";
+
+/**
+ * Rejects a reference time that is not a bigint, so a serialized timestamp fails with a typed
+ * error before any deadline arithmetic.
+ * @param now - Handle creation or plan preparation timestamp in Unix seconds.
+ * @returns Nothing when `now` is a bigint.
+ * @throws {InvalidBigIntInputError} when `now` is not a bigint.
+ * @internal
+ */
+export function validateReferenceTime(now: bigint): void {
+  if (typeof now !== "bigint") {
+    throw new InvalidBigIntInputError("now", now);
+  }
+}
+
+/**
+ * Rejects vault deposit accrual beyond seven days after the reference time.
+ * @param deadline - Execution deadline in Unix seconds.
+ * @param params - Reference time and public input field for validation errors.
+ * @param params.now - Handle creation or plan preparation timestamp in Unix seconds.
+ * @param params.field - Public input field to identify in validation errors.
+ * @returns Nothing when the deadline is within the maximum window.
+ * @throws {InvalidBigIntInputError} when `now` is not a bigint.
+ * @throws {InputExceedsMaxError} when the deadline exceeds the seven-day window.
+ * @internal
+ */
+export function validateVaultDepositDeadline(
+  deadline: bigint,
+  {
+    now,
+    field = "deadline",
+  }: { now: bigint; field?: "deadline" | "expiresAt" },
+): void {
+  // Reject a non-bigint clock so the window sum below cannot become string concatenation.
+  validateReferenceTime(now);
+  const max = now + VAULT_DEPOSIT_MAX_DEADLINE_SECONDS;
+  if (deadline > max) {
+    throw new InputExceedsMaxError({ field, value: deadline, max });
+  }
+}
 
 /** @internal */
 const compareMarketIds = (idA: MarketId, idB: MarketId) => {
@@ -133,11 +176,10 @@ export const validateDeadline = (deadline: bigint): void => {
 
 /**
  * Validates an optional referral fee and returns the pair every referral-fee-bearing periphery
- * encodes. Shared by the direct BlueBundlesV1 writes and the VaultExitBundlesV1 force withdrawal,
- * whose contracts apply the same `[0, WAD)` bound and both transfer the fee unconditionally.
+ * encodes. The SDK caps the fee at 10% even though the peripheries accept fees below WAD.
  *
  * @param params - Referral fee inputs.
- * @param params.referralFeePct - Optional WAD-scaled fee share. Defaults to `0n`.
+ * @param params.referralFeePct - Optional WAD-scaled fee share, at most 10%. Defaults to `0n`.
  * @param params.referralFeeRecipient - Optional fee recipient. Defaults to the zero address, which
  *   is only valid alongside a zero `referralFeePct`.
  * @returns The normalized `{ referralFeePct, referralFeeRecipient }` pair.
@@ -145,6 +187,7 @@ export const validateDeadline = (deadline: bigint): void => {
  * @throws {ReferralFeePctExceededError} when `referralFeePct` is not below WAD (the contracts reject
  *   it with `PctExceeded`); it extends `InputExceedsMaxError`, preserving that pattern-match.
  * @throws {ReferralFeeRecipientMissingError} when a positive `referralFeePct` has no recipient.
+ * @throws {MidnightReferralFeePctExceededError} when the fee is above 10% but below WAD.
  * @internal
  */
 export const validateReferralFee = (params: {
@@ -168,6 +211,8 @@ export const validateReferralFee = (params: {
   ) {
     throw new ReferralFeeRecipientMissingError();
   }
+  // Enforce the SDK cap after validating the recipient, as in Midnight.
+  validateMidnightReferralFeeCap(referralFeePct);
   return {
     referralFeePct,
     referralFeeRecipient: params.referralFeeRecipient ?? zeroAddress,
@@ -771,8 +816,15 @@ export const validateRepayShares = (params: {
 /** @internal */
 export const validateVaultV2BlueReallocations = (
   reallocations: Iterable<VaultV2BlueReallocation>,
-  targetMarketId: MarketId,
+  {
+    targetMarketId,
+    maxPenalty,
+  }: {
+    readonly targetMarketId: MarketId;
+    readonly maxPenalty?: bigint;
+  },
 ): void => {
+  const penaltyBound = resolveMaxPenalty(maxPenalty);
   const penaltyByVault = new Map<string, bigint>();
 
   for (const reallocation of reallocations) {
@@ -780,7 +832,7 @@ export const validateVaultV2BlueReallocations = (
     assertReallocationShape(reallocation);
     const sourceMarketId = resolveReallocationSourceMarketId(reallocation);
     // Reject out-of-range amounts before comparing penalties across vault legs.
-    assertReallocationAmounts(reallocation);
+    assertReallocationAmounts(reallocation, penaltyBound);
 
     const penaltyKey = reallocation.vault.toLowerCase();
     const expectedPenalty = penaltyByVault.get(penaltyKey);
@@ -973,18 +1025,19 @@ function resolveReallocationSourceMarketId(
   return sourceMarketId;
 }
 
-/** Checks penalty and asset amounts against the allocator's ABI bounds. @internal */
+/** Checks asset ABI bounds and the caller's penalty bound. @internal */
 function assertReallocationAmounts(
   reallocation: VaultV2BlueReallocation,
+  maxPenalty: bigint,
 ): void {
   if (reallocation.penalty < 0n) {
     throw new NegativeInputError("reallocation.penalty", reallocation.penalty);
   }
-  if (reallocation.penalty > MAX_REALLOCATION_PENALTY) {
+  if (reallocation.penalty > maxPenalty) {
     throw new InputExceedsMaxError({
       field: "reallocation.penalty",
       value: reallocation.penalty,
-      max: MAX_REALLOCATION_PENALTY,
+      max: maxPenalty,
     });
   }
   if (reallocation.assets <= 0n) {

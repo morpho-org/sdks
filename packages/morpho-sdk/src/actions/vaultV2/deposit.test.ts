@@ -8,6 +8,7 @@ import { vaultBundlesV1Abi } from "../../abis.js";
 import {
   type BundlesFundingArgs,
   InputExceedsMaxError,
+  MidnightReferralFeePctExceededError,
   MixedBundlesFundingError,
   NonPositiveInputError,
   ReferralFeeRecipientMissingError,
@@ -25,6 +26,29 @@ const { usdc, wNative } = addressesRegistry[chainId];
 const positiveUint128 = fc.bigInt({ min: 1n, max: (1n << 128n) - 1n });
 
 describe("vaultV2Deposit", () => {
+  test.each([0n, MathLib.WAD / 10n, MathLib.WAD / 10n + 1n])(
+    "checks referral fee %s against the 10% cap",
+    (referralFeePct) => {
+      const build = () =>
+        vaultV2Deposit({
+          vault: { chainId, address: vault, asset: usdc },
+          args: {
+            amount: 100n,
+            maxSharePrice: 3n,
+            userAddress,
+            deadline,
+            referralFeePct,
+            referralFeeRecipient,
+          },
+        });
+      if (referralFeePct > MathLib.WAD / 10n) {
+        expect(build).toThrow(MidnightReferralFeePctExceededError);
+      } else {
+        expect(build().action.args.referralFeePct).toBe(referralFeePct);
+      }
+    },
+  );
+
   test.each(["amount", "nativeAmount", "maxSharePrice"] as const)(
     "error: InputExceedsMaxError for %s above uint256",
     (field) => {
@@ -109,7 +133,7 @@ describe("vaultV2Deposit", () => {
   );
 
   test("default", () => {
-    const referralFeePct = MathLib.WAD / 5n;
+    const referralFeePct = MathLib.WAD / 10n;
     const transaction = vaultV2Deposit({
       vault: { chainId, address: vault, asset: usdc },
       args: {
@@ -131,8 +155,8 @@ describe("vaultV2Deposit", () => {
       nativeAmount: undefined,
       referralFeePct,
       referralFeeRecipient,
-      referralFeeAssets: 20n,
-      netAssets: 80n,
+      referralFeeAssets: 10n,
+      netAssets: 90n,
       deadline,
     });
   });

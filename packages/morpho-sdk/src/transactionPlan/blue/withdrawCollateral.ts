@@ -9,6 +9,7 @@ import type { Client } from "viem";
 import { blueWithdrawCollateral } from "../../actions/blue/withdrawCollateral.js";
 import { normalizeBundlesCommonParams } from "../../actions/bundles/common.js";
 import { DEFAULT_LLTV_BUFFER } from "../../helpers/constant.js";
+import { getBlueBundlesV1QuoteTimestamp } from "../../helpers/getBlueBundlesV1QuoteTimestamp.js";
 import {
   validatePositionHealthAfterWithdraw,
   validateUint256Field,
@@ -64,7 +65,8 @@ export interface BlueWithdrawCollateralPlanParams
 
 /**
  * Prepares a BlueBundlesV1 collateral withdrawal with direct or inline signed Morpho authorization.
- * Health is checked with the same two-hour accrual horizon and LLTV buffer as the entity handle.
+ * Health uses the expiry floored at max(now, lastUpdate), with the entity's LLTV buffer.
+ * Expiries more than 365 days out retain the legacy +2h projection for unlimited sentinels.
  * No token allowance or Permit2 prerequisite is read or produced.
  * @param client - Viem client used for registered contract-code and Morpho authorization reads.
  * @param params - Intent and matching market and account position snapshots.
@@ -74,9 +76,9 @@ export interface BlueWithdrawCollateralPlanParams
  * @param params.marketData.chainId - Chain from which the market snapshot was fetched; must equal `chainId`.
  * @param params.marketData.market - Caller-fetched `Market` providing the market tuple and LLTV.
  * @param params.positionData.chainId - Chain from which the position snapshot was fetched; must equal `chainId`.
- * @param params.positionData.position - Caller-fetched `AccrualPosition` for `account` and `marketId`, used for the two-hour accrued health check.
+ * @param params.positionData.position - Caller-fetched `AccrualPosition` for `account` and `marketId`, used for the deadline-accrued health check.
  * @param params.collateralAssets - Positive collateral withdrawal in token base units, not exceeding the position's collateral.
- * @param params.referralFee.bps - Optional integer referral fee in basis points; defaults to zero and must be below 10,000.
+ * @param params.referralFee.bps - Optional integer referral fee in basis points; defaults to zero and must be at most 1,000.
  * @param params.referralFee.recipient - Non-zero fee recipient required when the optional fee is positive.
  * @param params.supportSignature - Optional Morpho authorization signature preference, defaulting to `false`; otherwise prepares a direct authorization transaction when needed.
  * @param params.now - Optional reference timestamp in Unix seconds, normally the latest block timestamp; defaults to the device clock.
@@ -93,9 +95,8 @@ export interface BlueWithdrawCollateralPlanParams
  * @throws {NonPositiveInputError} when `expiresAt` or `collateralAssets` is not positive.
  * @throws {ExpiredDeadlineError} when `expiresAt` is at or before `now`.
  * @throws {NegativeInputError} when `referralFee.bps` is negative.
- * @throws {InputExceedsMaxError} when `referralFee.bps` exceeds 10,000 or `collateralAssets` exceeds uint256.
+ * @throws {InputExceedsMaxError} when `referralFee.bps` exceeds 1,000 or `collateralAssets` exceeds uint256.
  * @throws {InvalidCalldataOriginError} when `calldataOrigin` is empty, malformed or has an odd number of hex digits.
- * @throws {ReferralFeePctExceededError} when `referralFee.bps` equals 10,000.
  * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no non-zero recipient.
  * @throws {UnsupportedMarketIrmError} when projecting an indebted position requires an unsupported IRM without rate data.
  * @throws {WithdrawExceedsCollateralError} when `collateralAssets` exceeds the position's collateral.
@@ -169,8 +170,11 @@ export async function prepareBlueWithdrawCollateral(
             position.borrowShares === 0n
               ? new AccrualPosition(position, position.market)
               : position.accrueInterest(
-                  MathLib.max(now, position.market.lastUpdate) +
-                    Time.s.from.h(2n),
+                  getBlueBundlesV1QuoteTimestamp({
+                    lastUpdate: position.market.lastUpdate,
+                    now,
+                    deadline: resolvedIntent.deadline,
+                  }),
                 ),
           withdrawAmount: collateralAssets,
           lltv,

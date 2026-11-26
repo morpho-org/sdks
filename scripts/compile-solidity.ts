@@ -26,6 +26,7 @@ const contractsDir = join(packageDir, "contracts");
 
 interface PackageConfig {
   bytecodeExportName: string;
+  deployedBytecodeExportName?: string;
   describeArtifact(contractName: string): string;
   resolveOutputPath(sourceName: string): string | null;
 }
@@ -33,6 +34,7 @@ interface PackageConfig {
 const packageConfigs: Record<string, PackageConfig> = {
   "blue-sdk-viem": {
     bytecodeExportName: "code",
+    deployedBytecodeExportName: "deployedCode",
     describeArtifact(contractName) {
       return `Deployless \`${contractName}\` query`;
     },
@@ -112,7 +114,7 @@ const input = {
     viaIR: true,
     outputSelection: {
       "*": {
-        "*": ["abi", "evm.bytecode.object"],
+        "*": ["abi", "evm.bytecode.object", "evm.deployedBytecode.object"],
       },
     },
   },
@@ -127,6 +129,9 @@ interface SolcContractArtifact {
   abi: unknown;
   evm: {
     bytecode: {
+      object: string;
+    };
+    deployedBytecode: {
       object: string;
     };
   };
@@ -189,7 +194,15 @@ export const abi = ${inspect(artifact.abi, {
 /** @internal ${config.describeArtifact(contractName)} bytecode. */
 export const ${config.bytecodeExportName} =
   ${JSON.stringify(`0x${artifact.evm.bytecode.object}`)};
-`,
+${
+  config.deployedBytecodeExportName
+    ? `
+/** @internal ${config.describeArtifact(contractName)} runtime bytecode. */
+export const ${config.deployedBytecodeExportName} =
+  ${JSON.stringify(`0x${artifact.evm.deployedBytecode.object}`)};
+`
+    : ""
+}`,
   );
   writtenFiles.push(outputPath);
 }

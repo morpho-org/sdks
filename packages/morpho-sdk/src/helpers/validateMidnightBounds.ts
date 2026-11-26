@@ -30,8 +30,7 @@ export const validateMidnightUint128Field = (
 };
 
 /**
- * Enforces the SDK's 10% (`WAD / 10n`) Midnight referral-fee cap. The contract
- * itself only requires `referralFeePct < WAD`.
+ * Enforces the SDK's 10% (`WAD / 10n`) referral-fee cap, originally used by Midnight.
  *
  * @param referralFeePct - Candidate referral fee percentage.
  * @returns Nothing when the fee is within the SDK cap.

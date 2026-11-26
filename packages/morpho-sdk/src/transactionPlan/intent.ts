@@ -1,5 +1,6 @@
 import { MathLib, Time } from "@morpho-org/morpho-ts";
 import { type Address, type Hex, isHex, zeroAddress } from "viem";
+import { MIDNIGHT_MAX_REFERRAL_FEE_PCT } from "../helpers/constant.js";
 import {
   ExpiredDeadlineError,
   InputExceedsMaxError,
@@ -24,7 +25,7 @@ export type Funding = { readonly type: "erc20" } | { readonly type: "native" };
 
 /**
  * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
- * Referral fee in basis points of the gross amount, paid to `recipient`.
+ * Referral fee in basis points of the gross amount, paid to `recipient`. At most 1,000 bps (10%).
  */
 export interface ReferralFee {
   readonly bps: number;
@@ -52,6 +53,8 @@ export interface IntentParams {
 
 const BASIS_POINTS = 10_000n;
 const WAD_PER_BASIS_POINT = MathLib.WAD / BASIS_POINTS;
+const MAX_REFERRAL_FEE_BPS =
+  MIDNIGHT_MAX_REFERRAL_FEE_PCT / WAD_PER_BASIS_POINT;
 
 /** @internal Validated intent in the bigint units the encoders and requirement helpers take. */
 export interface Intent {
@@ -96,11 +99,11 @@ export function resolveIntent(params: IntentParams, now: bigint): Intent {
   if (bps < 0n) {
     throw new NegativeInputError("referralFee.bps", bps);
   }
-  if (bps > BASIS_POINTS) {
+  if (bps > MAX_REFERRAL_FEE_BPS) {
     throw new InputExceedsMaxError({
       field: "referralFee.bps",
       value: bps,
-      max: BASIS_POINTS,
+      max: MAX_REFERRAL_FEE_BPS,
     });
   }
 

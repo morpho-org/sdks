@@ -34,7 +34,7 @@ export interface VaultV2RedeemParams {
     readonly onBehalf?: never;
     /** Optional ERC-2612 vault-share permit for the redeemed shares. */
     readonly requirementSignature?: Erc2612RequirementSignature;
-    /** Optional WAD-scaled fee in [0, 1e18), defaulting to zero. */
+    /** Optional WAD-scaled fee from 0% to 10%, inclusive, defaulting to zero. */
     readonly referralFeePct?: bigint;
     /** Optional fee recipient; a nonzero address is required when `referralFeePct > 0n`. */
     readonly referralFeeRecipient?: Address;
@@ -73,7 +73,7 @@ export type VaultV2RedeemInput = {
  * @param params.args.onBehalf - Unsupported; VaultBundlesV1 always burns the transaction sender's shares.
  * @param params.args.requirementSignature - Optional ERC-2612 vault-share permit for `userAddress`
  *   and the registered VaultBundlesV1 spender. Omit when the share allowance is already set.
- * @param params.args.referralFeePct - Optional WAD-scaled fee in [0, 1e18), defaulting to zero.
+ * @param params.args.referralFeePct - Optional WAD-scaled fee from 0% to 10%, inclusive, defaulting to zero.
  *   The fee is rounded down and deducted from the gross redeemed assets.
  * @param params.args.referralFeeRecipient - Optional fee recipient; a nonzero address is required
  *   when `referralFeePct > 0n`.
@@ -87,6 +87,7 @@ export type VaultV2RedeemInput = {
  * @throws {InputExceedsMaxError} when `shares` or `deadline` exceeds uint256.
  * @throws {NegativeInputError} when `referralFeePct` is negative.
  * @throws {ReferralFeePctExceededError} when `referralFeePct` is at least WAD.
+ * @throws {MidnightReferralFeePctExceededError} when the referral fee is above 10% but below WAD.
  * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no non-zero recipient.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
  * @throws {UnknownAddressError} when VaultBundlesV1 is not registered on the target chain.

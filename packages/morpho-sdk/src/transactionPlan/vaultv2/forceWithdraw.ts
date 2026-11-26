@@ -68,7 +68,7 @@ export interface VaultV2ForceWithdrawPlanParams
  * @param params.assets - Positive penalty-inclusive exit assets in asset base units; received assets exclude penalties and referral fees.
  * @param params.adapter - Optional assertion that this address is the vault's sole supported adapter.
  * @param params.slippageTolerance - Optional WAD-scaled tolerance used to derive the realized share-price floor; defaults to `DEFAULT_SLIPPAGE_TOLERANCE` and must not exceed `MAX_SLIPPAGE_TOLERANCE`.
- * @param params.referralFee.bps - Optional integer fee in basis points of withdrawn assets, after penalties; defaults to zero and must be below 10,000. The fee is deducted after the share-price check.
+ * @param params.referralFee.bps - Optional integer fee in basis points of withdrawn assets, after penalties; defaults to zero and must be at most 1,000. The fee is deducted after the share-price check.
  * @param params.referralFee.recipient - Optional fee recipient; must be non-zero when the fee is positive.
  * @param params.supportSignature - Optional ERC-2612 preference, defaulting to `false`; insufficient allowance produces an unlimited direct share approval, or an unlimited share permit when `true`.
  * @param params.now - Reference timestamp in seconds, normally the latest block's `timestamp`; uses the device clock when omitted.
@@ -81,11 +81,11 @@ export interface VaultV2ForceWithdrawPlanParams
  * @throws {ExpiredDeadlineError} when the expiry has elapsed, including during requirement resolution.
  * @throws {NegativeInputError} when `referralFee.bps` or `slippageTolerance` is negative.
  * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance` exceeds `MAX_SLIPPAGE_TOLERANCE`.
- * @throws {InputExceedsMaxError} when the fee exceeds 10,000 bps, an input exceeds uint256 or the expiry exceeds the fee-projection horizon.
+ * @throws {InputExceedsMaxError} when an input exceeds uint256 or the expiry exceeds the fee-projection horizon.
  * @throws {InvalidCalldataOriginError} when `calldataOrigin` is empty, malformed or has an odd number of hex digits.
  * @throws {InvalidTransactionPlanError} when `account` is malformed or `calldataOrigin` exceeds 1 MiB.
  * @throws {ChainIdMismatchError} when the client declares or serves another chain.
- * @throws {ReferralFeePctExceededError} when `referralFee.bps` equals 10,000.
+ * @throws {InputExceedsMaxError} when `referralFee.bps` exceeds 1,000.
  * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no recipient or a zero recipient.
  * @throws {VaultV2SingleAdapterRequiredError} when the snapshot does not have exactly one adapter.
  * @throws {AdapterNotPartOfVaultError} when the adapter assertion does not match the vault's adapter.

@@ -59,12 +59,11 @@ export interface BlueRepayPlanParams extends IntentParams {
  * @throws {NonPositiveInputError} If expiry, repayment, or derived funding is not positive.
  * @throws {ExpiredDeadlineError} If expiry is at or before `now`.
  * @throws {NegativeInputError} If `referralFee.bps` is negative.
- * @throws {InputExceedsMaxError} If a share-mode expiry exceeds the quote horizon, the referral fee exceeds 10,000 bps, or an encoded amount exceeds uint256.
+ * @throws {InputExceedsMaxError} If a share-mode expiry exceeds the quote horizon, the referral fee exceeds 1,000 bps, or an encoded amount exceeds uint256.
  * @throws {InvalidCalldataOriginError} If attribution bytes are empty, malformed, or have an odd number of hex digits.
  * @throws {BlueSnapshotChainMismatchError} If either snapshot describes another chain.
  * @throws {MarketIdMismatchError} If either snapshot's market ID disagrees with `marketId` or its market tuple.
  * @throws {AccrualPositionUserMismatchError} If the position belongs to another account.
- * @throws {ReferralFeePctExceededError} If the referral fee equals 10,000 bps; the normalized fee must be below WAD.
  * @throws {ReferralFeeRecipientMissingError} If a positive referral fee has no recipient or a zero recipient.
  * @throws {RepayExceedsDebtError} If an asset repayment exceeds the snapshot's borrow assets.
  * @throws {RepaySharesExceedDebtError} If a non-saturated share repayment exceeds the snapshot's borrow shares.

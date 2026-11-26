@@ -54,6 +54,21 @@ interface QuoteSettlement {
   readonly takeableOffers: readonly MidnightApiTake[];
 }
 
+function requirePositiveQuoteTarget(
+  value: NonNullable<FetchBookQuoteParams["units"]>,
+): bigint {
+  let target: bigint;
+  try {
+    target = BigInt(value);
+  } catch (cause) {
+    throw new InvalidMidnightApiQuoteTargetError({ cause });
+  }
+  if (target <= 0n) {
+    throw new InvalidMidnightApiQuoteTargetError();
+  }
+  return target;
+}
+
 function computeQuoteFillByUnits(
   { side, settlementFee, rawGuard, takeableOffers }: QuoteSettlement,
   units: bigint,
@@ -463,7 +478,7 @@ export class MidnightApi {
    *   `MidnightBundlesV2` assets-target buy reverts on such an offer before its per-offer error
    *   handling, so the whole bundle fails. Drop these offers before building an assets-target buy,
    *   or use a `units` target.
-   * @throws {InvalidMidnightApiQuoteTargetError} when the runtime input does not set exactly one of `units` or `assets`.
+   * @throws {InvalidMidnightApiQuoteTargetError} when the runtime input does not set exactly one positive target in `units` or `assets`.
    * @throws {NegativeValueError} when `settlementFee` is negative.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON or its envelope or quote aggregates are malformed, when a returned offer cannot be mapped (malformed numeric or hex fields), when its `market_id` does not match, or cannot be derived from, its embedded market, when it falls outside the requested filters, when an offer's maker matches the requested `taker`, when its `receiverIfMakerIsSeller` is not a well-formed address or is the zero address on a sell offer, when its caps or buy-side receiver are not executable, when its units exceed its offer `maxUnits`, or when the returned offers imply a rounded aggregate price outside the guard on its raw (slippage) or fee-adjusted (absolute) surface.
@@ -488,6 +503,10 @@ export class MidnightApi {
     if ((input.units == null) === (input.assets == null)) {
       throw new InvalidMidnightApiQuoteTargetError();
     }
+    const targetKind = input.units == null ? "assets" : "units";
+    const target = requirePositiveQuoteTarget(
+      input.units ?? input.assets ?? 0n,
+    );
     const settlementFee = BigInt(input.settlementFee ?? 0n);
     assertNonNegative("settlementFee", settlementFee);
     const response = await requestMidnightApi<ApiQuoteResponse>({
@@ -501,8 +520,7 @@ export class MidnightApi {
       query: {
         average_worst_price: input.averageWorstPrice,
         slippage: input.slippage,
-        units: input.units,
-        assets: input.assets,
+        [targetKind]: target,
         taker: input.taker,
         limit: input.limit,
       },
@@ -548,9 +566,9 @@ export class MidnightApi {
         takeableOffers,
       };
       const { filledUnits, filledAssets } =
-        "units" in input && input.units != null
-          ? computeQuoteFillByUnits(settlement, BigInt(input.units))
-          : computeQuoteFillByAssets(settlement, BigInt(input.assets));
+        targetKind === "units"
+          ? computeQuoteFillByUnits(settlement, target)
+          : computeQuoteFillByAssets(settlement, target);
       if (filledUnits > 0n) {
         const averagePrice = MathLib.mulDiv(
           filledAssets,
@@ -909,7 +927,7 @@ export class MidnightApi {
    *   `MidnightBundlesV2` assets-target buy reverts on such an offer before its per-offer error
    *   handling, so the whole bundle fails. Drop these offers before building an assets-target buy,
    *   or use a `units` target.
-   * @throws {InvalidMidnightApiQuoteTargetError} when the runtime input does not set exactly one of `units` or `assets`.
+   * @throws {InvalidMidnightApiQuoteTargetError} when the runtime input does not set exactly one positive target in `units` or `assets`.
    * @throws {NegativeValueError} when `settlementFee` is negative.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON or its envelope or quote aggregates are malformed, when a returned offer cannot be mapped (malformed numeric or hex fields), when its `market_id` does not match, or cannot be derived from, its embedded market, when it falls outside the requested filters, when an offer's maker matches the requested `taker`, when its `receiverIfMakerIsSeller` is not a well-formed address or is the zero address on a sell offer, when its caps or buy-side receiver are not executable, when its units exceed its offer `maxUnits`, or when the returned offers imply a rounded aggregate price outside the guard on its raw (slippage) or fee-adjusted (absolute) surface.

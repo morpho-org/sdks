@@ -448,6 +448,7 @@ function encodeStep(action: Action, requests: readonly SignatureRequest[]) {
  * @param step - Recipe to encode; missing signatures on unrelated supported steps do not block it.
  * @returns A frozen `{ to, data, value, action }`, ready to simulate or submit. `data` ends with the plan's `calldataOrigin` when one was set.
  * @throws {InvalidTransactionPlanError} If the plan header, action context, IDs or deadlines are inconsistent.
+ * @throws {InvalidBigIntInputError} If a supplied Blue maxPenalty is not a bigint; uint256 schema validation is performed by parseTransactionPlan, not this builder.
  * @throws {InvalidSignatureError} If a stored signature has high s, cannot recover a public key or does not match the request owner.
  * @throws {UnsupportedTransactionPlanVersionError} If the plan version is unsupported.
  * @throws {UnsupportedTransactionPlanActionError} If any plan step or the selected step names an unsupported action type.
@@ -461,13 +462,14 @@ function encodeStep(action: Action, requests: readonly SignatureRequest[]) {
  * @throws {EmptyDeallocationsError} If a force-redeem step has no deallocations.
  * @throws {EmptyMarketParamsListError} If a Vault V1 in-kind redemption step has no markets.
  * @throws {ReferralFeePctExceededError} If the action's referral fee is at least WAD.
+ * @throws {MidnightReferralFeePctExceededError} when the referral fee is above 10% but below WAD.
  * @throws {ReferralFeeRecipientMissingError} If a positive referral fee has no nonzero recipient.
  * @throws {IncompleteTransactionPlanError} If a referenced signature request or its signature is missing.
  * @throws {TransactionPlanSignatureMismatchError} If a referenced request disagrees with the step's action or its encoding arguments.
  * @throws {BundlesPermitMismatchError} If a stored signature cannot be parsed or a signed permit's encoding arguments do not match the step.
  * @throws {MarketIdMismatchError} If a Blue market ID differs from its parameter tuple.
- * @throws {NegativeInputError} If a Blue amount, native value, LTV bound or referral fee is negative.
- * @throws {InputExceedsMaxError} If a Blue amount, bound or deadline exceeds uint256, or withdrawal-only funding is nonzero.
+ * @throws {NegativeInputError} If a Blue amount, native value, LTV bound, maxPenalty or referral fee is negative.
+ * @throws {InputExceedsMaxError} If a Blue amount, bound or deadline exceeds uint256, maxPenalty exceeds WAD, a reallocation penalty exceeds maxPenalty (default zero, rejecting any positive penalty), or withdrawal-only funding is nonzero.
  * @throws {MutuallyExclusiveRepayAmountsError} If a Blue repayment specifies both nonzero assets and shares.
  * @throws {MaxRepayAssetsBelowRepayAssetsError} If exact-asset funding cannot cover repayment plus referral fees.
  * @throws {NativeFundingAmountMismatchError} If Blue native funding does not equal the full repayment cap.
@@ -558,6 +560,7 @@ export function buildTransaction(
  * @param plan - Plan whose referenced signature requests all carry a signature.
  * @returns Frozen SDK transactions in step order; discriminate on `action.type` for per-step handling.
  * @throws {InvalidTransactionPlanError} If the plan header, action context, IDs or deadlines are inconsistent.
+ * @throws {InvalidBigIntInputError} If a supplied Blue maxPenalty is not a bigint; uint256 schema validation is performed by parseTransactionPlan, not this builder.
  * @throws {InvalidSignatureError} If a stored signature has high s, cannot recover a public key or does not match the request owner.
  * @throws {UnsupportedTransactionPlanVersionError} If the plan version is unsupported, including empty plans.
  * @throws {UnsupportedTransactionPlanActionError} If any plan step names an unsupported action type, before reading requests.
@@ -571,13 +574,14 @@ export function buildTransaction(
  * @throws {EmptyDeallocationsError} If a force-redeem step has no deallocations.
  * @throws {EmptyMarketParamsListError} If a Vault V1 in-kind redemption step has no markets.
  * @throws {ReferralFeePctExceededError} If an action's referral fee is at least WAD.
+ * @throws {MidnightReferralFeePctExceededError} when the referral fee is above 10% but below WAD.
  * @throws {ReferralFeeRecipientMissingError} If a positive referral fee has no nonzero recipient.
  * @throws {IncompleteTransactionPlanError} If any step references a signature request or signature that is missing.
  * @throws {TransactionPlanSignatureMismatchError} If a referenced request disagrees with its action or encoding arguments.
  * @throws {BundlesPermitMismatchError} If a stored signature cannot be parsed or a signed permit's encoding arguments do not match the step.
  * @throws {MarketIdMismatchError} If a Blue market ID differs from its parameter tuple.
- * @throws {NegativeInputError} If a Blue amount, native value, LTV bound or referral fee is negative.
- * @throws {InputExceedsMaxError} If a Blue amount, bound or deadline exceeds uint256, or withdrawal-only funding is nonzero.
+ * @throws {NegativeInputError} If a Blue amount, native value, LTV bound, maxPenalty or referral fee is negative.
+ * @throws {InputExceedsMaxError} If a Blue amount, bound or deadline exceeds uint256, maxPenalty exceeds WAD, a reallocation penalty exceeds maxPenalty (default zero, rejecting any positive penalty), or withdrawal-only funding is nonzero.
  * @throws {MutuallyExclusiveRepayAmountsError} If a Blue repayment specifies both nonzero assets and shares.
  * @throws {MaxRepayAssetsBelowRepayAssetsError} If exact-asset funding cannot cover repayment plus referral fees.
  * @throws {NativeFundingAmountMismatchError} If Blue native funding does not equal the full repayment cap.

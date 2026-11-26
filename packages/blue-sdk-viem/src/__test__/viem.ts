@@ -13,6 +13,7 @@ import {
   toFunctionSelector,
   toFunctionSignature,
 } from "viem";
+import { QUERY_ADDRESS } from "../deployless.js";
 
 type ReadFunctionName<abi extends Abi> = ContractFunctionName<
   abi,
@@ -34,7 +35,7 @@ export function encodeReadResult<
 }
 
 /**
- * Queue responses for viem deployless reads (`readContract` with `code`).
+ * Queue responses for runtime-override or creation-bytecode query reads.
  * @internal
  */
 export function mockDeploylessReads(
@@ -50,7 +51,10 @@ export function mockDeploylessReads(
   handle.request.mockImplementation(async (call) => {
     if (call.method === "eth_call") {
       const [tx] = (call.params ?? []) as [{ to?: Address }];
-      if (tx?.to == null) {
+      if (
+        tx?.to == null ||
+        tx.to.toLowerCase() === QUERY_ADDRESS.toLowerCase()
+      ) {
         const next = queue.shift();
         if (next instanceof Error) {
           throw next;

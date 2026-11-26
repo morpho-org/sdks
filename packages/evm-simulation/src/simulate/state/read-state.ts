@@ -78,6 +78,7 @@ const BLUE_INPUT_COUNTER_GUARDS: Readonly<
 /** One quoted amount's observation source. @internal */
 type SlippageMeasurement = {
   readonly field: ScalarQuoteField | "positions";
+  readonly collateralPayInToken?: Address;
 } & (
   | {
       readonly type: "native";
@@ -85,6 +86,8 @@ type SlippageMeasurement = {
       readonly readId?: string;
       /** Ignore wrapped credits for quote-only native Blue collateral payments. */
       readonly wrappedDebitOnly?: boolean;
+      /** Preserve evidenced wrap/unwrap round trips in ETH-only collateral caps. */
+      readonly nativeConversionWrapper?: Address;
     }
   /** A scalar read: an ERC-20 balance or a Midnight collateral amount. */
   | {
@@ -836,6 +839,12 @@ function planAssetMeasurement(
   if (token === undefined) {
     return undefined;
   }
+  const collateralPayIn =
+    field === "assetsPaid" &&
+    (limit.type === "blueSupplyCollateral" ||
+      limit.type === "blueSupplyCollateralBorrow")
+      ? { collateralPayInToken: token }
+      : {};
   const fieldIsNative =
     field === "assetsPaid" ? paidIsNative : receivedIsNative;
   const nativeAlias = netWalletAssets
@@ -873,8 +882,12 @@ function planAssetMeasurement(
       field,
       type: "native",
       account: holder,
+      ...collateralPayIn,
       ...(nativeAndWrapped
         ? {
+            ...(collateralPayIn.collateralPayInToken === undefined
+              ? {}
+              : { collateralPayInToken: wrappedToken }),
             readId: planBalanceRead({
               reads,
               token: wrappedToken,
@@ -891,6 +904,7 @@ function planAssetMeasurement(
     field,
     type: "balance",
     readId: planBalanceRead({ reads, token, account: holder }),
+    ...collateralPayIn,
   };
 }
 
@@ -1239,6 +1253,12 @@ function omitRedundantNativeCollateralReads(
                 field: measurement.field,
                 type: "native",
                 account: measurement.account,
+                ...(measurement.collateralPayInToken === undefined
+                  ? {}
+                  : {
+                      collateralPayInToken: ethAddress,
+                      nativeConversionWrapper: measurement.collateralPayInToken,
+                    }),
               }
             : measurement,
       ),
@@ -1358,6 +1378,11 @@ function assertNoWalletBoundOverlap(
  * payment stays ETH-only, so borrow proceeds cannot offset ETH funding; the
  * proceeds minimum covers extra wNative debits. Native quotes' combined payment
  * reads do not cover one another. Typed same-token net measurements are unchanged.
+ * Combined collateral pay-ins cap gross ETH and wNative outflows with matching
+ * conversion offsets; ETH-only fallbacks retain the gross ETH outflow cap.
+ * Fallbacks offset ETH sent to the wrapper only against matching ETH returned
+ * from that wrapper minus external wNative credits (excluding mints and
+ * self-transfers), floored at zero; ordinary refunds and forwarded ETH stay gross.
  * @param params - Resolved caller operations, the transaction sender, and the
  *   Morpho Blue and Midnight addresses.
  * @returns Read calls and their mapping to each quoted amount; empty without limits.

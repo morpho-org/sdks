@@ -5,6 +5,7 @@ import {
   MathLib,
 } from "@morpho-org/blue-sdk";
 import { isAddressEqual, maxUint256, zeroAddress } from "viem";
+import { MIDNIGHT_MAX_REFERRAL_FEE_PCT } from "./constant.js";
 import {
   computeVaultV2ForceWithdrawFeeSharesMinted,
   computeVaultV2ForceWithdrawMinSharesBurnt,
@@ -35,7 +36,7 @@ export interface PreviewVaultV2ForceWithdrawParams {
    * without `userAddress`.
    */
   readonly feeProjectionTimestamp?: bigint;
-  /** Optional WAD-scaled referral fee percentage. Defaults to `0n`. */
+  /** Optional WAD-scaled referral fee percentage from 0% to 10%, inclusive. Defaults to `0n`. */
   readonly referralFeePct?: bigint;
   /** Optional referral fee recipient. Required when `referralFeePct` is positive, as the entity
    * enforces (`ReferralFeeRecipientMissingError`). When it equals `userAddress`, the fee is paid
@@ -95,7 +96,7 @@ export interface VaultV2ForceWithdrawPreview {
  *   `timestamp`. Pass the `forceWithdraw` deadline you will submit; the entity rejects deadlines
  *   more than one year after handle creation (`InputExceedsMaxError`) instead of clamping them, so
  *   keep the deadline itself within that horizon. Ignored without `userAddress`.
- * @param params.referralFeePct - Optional WAD-scaled referral fee percentage. Defaults to `0n`.
+ * @param params.referralFeePct - Optional WAD-scaled referral fee percentage from 0% to 10%, inclusive. Defaults to `0n`.
  * @param params.referralFeeRecipient - Optional referral fee recipient. Required when
  *   `referralFeePct` is positive, as the entity enforces (`ReferralFeeRecipientMissingError`).
  *   When it equals `userAddress`, the fee is paid back to the exiting account and `netAssets`
@@ -103,7 +104,7 @@ export interface VaultV2ForceWithdrawPreview {
  * @returns The preview, or `undefined` when the exit is not previewable: not exactly one adapter, an
  *   `adapter` override that is not the vault's sole adapter, an adapter that is not a
  *   MorphoMarketV1AdapterV2, an unresolvable liquidity adapter, undecodable liquidity data, a
- *   `referralFeePct` outside `[0, WAD)`, a positive `referralFeePct` without a non-zero
+ *   `referralFeePct` outside `[0, WAD / 10n]`, a positive `referralFeePct` without a non-zero
  *   `referralFeeRecipient`, a non-positive request, a request that yields nothing, a fee-recipient
  *   whose positive fee mints projected to `feeProjectionTimestamp` reach the lower burn bound, an
  *   exit whose realized share price rounds down to zero at the default slippage tolerance (which
@@ -141,9 +142,7 @@ export function previewVaultV2ForceWithdraw(
   if (requestedExitAssets <= 0n) {
     return undefined;
   }
-  // Out of the range the action accepts, `netAssets` would quote a payout the contract can never
-  // deliver — above `withdrawnAssets` for a negative fee, non-positive at or beyond WAD.
-  if (referralFeePct < 0n || referralFeePct >= MathLib.WAD) {
+  if (referralFeePct < 0n || referralFeePct > MIDNIGHT_MAX_REFERRAL_FEE_PCT) {
     return undefined;
   }
   if (

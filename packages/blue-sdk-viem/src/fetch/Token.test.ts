@@ -29,6 +29,7 @@ import {
   mockReadFailure,
 } from "../__test__/viem.js";
 import { erc5267Abi } from "../abis.js";
+import { QUERY_ADDRESS } from "../deployless.js";
 import { MalformedTokenMetadataError } from "../error.js";
 import { abi as tokenQueryAbi } from "../queries/GetToken.js";
 import {
@@ -846,7 +847,10 @@ describe.sequential("chaos: S6 token metadata", () => {
       stubJsonRpc((body) => {
         if (body.method === "eth_chainId") return rpcResult(body.id, "0x1");
         const [tx] = (body.params ?? []) as [{ to?: Address }];
-        if (tx.to == null) {
+        if (
+          tx.to == null ||
+          tx.to.toLowerCase() === QUERY_ADDRESS.toLowerCase()
+        ) {
           // Deployless GetToken query.
           return rpcResult(
             body.id,

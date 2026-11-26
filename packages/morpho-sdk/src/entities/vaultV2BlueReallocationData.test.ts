@@ -35,7 +35,7 @@ import {
   getBlueBundlesV1PenaltyAssets,
   getBlueBundlesV1ReferralFeeAssets,
 } from "../actions/blue/common.js";
-import { blueSupplyCollateralBorrow } from "../actions/index.js";
+import { blueBorrow } from "../actions/index.js";
 import {
   DEFAULT_CAP_ACCRUAL_BUFFER,
   DEFAULT_SUPPLY_TARGET_UTILIZATION,
@@ -44,6 +44,8 @@ import {
 import {
   InputExceedsMaxError,
   InsufficientSharedLiquidityError,
+  InvalidBigIntInputError,
+  MidnightReferralFeePctExceededError,
   NegativeInputError,
   NonPositiveInputError,
   ReallocationAdapterSupplySharesUnderflowError,
@@ -1588,6 +1590,20 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       expect(() =>
         data.computeVaultV2BlueReallocations(targetParams.id, { maxPenalty }),
       ).not.toThrow();
+    },
+  );
+
+  test.each([1, "1", null])(
+    "rejects a non-bigint planner maxPenalty %s",
+    (value) => {
+      const { data } = makeFixture();
+      const maxPenalty = value as unknown as bigint;
+      expect(() =>
+        data.computeVaultV2BlueReallocations(targetParams.id, { maxPenalty }),
+      ).toThrow(InvalidBigIntInputError);
+      expect(() =>
+        data.getPublicReallocationLiquidity(targetParams.id, { maxPenalty }),
+      ).toThrow(InvalidBigIntInputError);
     },
   );
 
@@ -4353,17 +4369,17 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations operation"
       },
     );
 
-    const tx = blueSupplyCollateralBorrow({
+    const tx = blueBorrow({
       market: {
         chainId: ChainId.EthMainnet,
         marketParams: targetParams,
       },
       args: {
         userAddress: VAULT,
-        collateralAssets: 0n,
         borrowAssets: 1_100n,
         maxLtv: MathLib.MAX_UINT_256,
         reallocations,
+        maxPenalty: 7n,
         deadline: 1_900_000_000n,
       },
     });
@@ -6406,30 +6422,32 @@ describe("VaultV2BlueReallocationData penalty-aware operation planning", () => {
     expect(result.reallocations).toStrictEqual([]);
   });
 
-  test("matches borrow planning for refinance when liquidity is free", () => {
-    const { data } = makeFixture({
-      sourceSupply: 0n,
-      targetSupply: 100n,
-      targetBorrow: 90n,
-      idle: 100n,
-      canPullFromMarket: false,
-    });
-    const amount = 20n;
-    const referralFeePct = MathLib.WAD / 10n;
+  test.each([0n, MathLib.WAD / 10n])(
+    "matches borrow planning for refinance at fee %s when liquidity is free",
+    (referralFeePct) => {
+      const { data } = makeFixture({
+        sourceSupply: 0n,
+        targetSupply: 100n,
+        targetBorrow: 90n,
+        idle: 100n,
+        canPullFromMarket: false,
+      });
+      const amount = 20n;
 
-    const refinance = data.computeVaultV2BlueReallocations(targetParams.id, {
-      operation: { type: "refinance", amount, referralFeePct },
-    });
-    const borrow = data.computeVaultV2BlueReallocations(targetParams.id, {
-      operation: {
-        type: "borrow",
-        amount:
-          amount + getBlueBundlesV1ReferralFeeAssets(amount, referralFeePct),
-      },
-    });
+      const refinance = data.computeVaultV2BlueReallocations(targetParams.id, {
+        operation: { type: "refinance", amount, referralFeePct },
+      });
+      const borrow = data.computeVaultV2BlueReallocations(targetParams.id, {
+        operation: {
+          type: "borrow",
+          amount:
+            amount + getBlueBundlesV1ReferralFeeAssets(amount, referralFeePct),
+        },
+      });
 
-    expect(refinance.reallocations).toStrictEqual(borrow.reallocations);
-  });
+      expect(refinance.reallocations).toStrictEqual(borrow.reallocations);
+    },
+  );
 
   test("sizes a paid refinance leg to cover its fee and allocator penalty", () => {
     const penalty = MathLib.WAD / 10n;
@@ -6570,7 +6588,7 @@ describe("VaultV2BlueReallocationData penalty-aware operation planning", () => {
     test.each([
       { amount: 53n, referralFeePct: 0n },
       { amount: 52n, referralFeePct: MathLib.WAD / 50n },
-      { amount: 40n, referralFeePct: MathLib.WAD / 4n },
+      { amount: 49n, referralFeePct: MathLib.WAD / 12n },
     ])(
       "behavior: finds the one-unit refinance penalty with $amount principal",
       ({ amount, referralFeePct }) => {
@@ -7218,7 +7236,7 @@ describe("VaultV2BlueReallocationData penalty-aware operation planning", () => {
     ).toThrow(InsufficientSharedLiquidityError);
   });
 
-  test("validates the refinance referral fee percentage with Blue fee errors", () => {
+  test("[INV-10] validates the refinance referral fee percentage with Blue fee errors", () => {
     const { data } = makeFixture();
 
     expect(() =>
@@ -7230,6 +7248,15 @@ describe("VaultV2BlueReallocationData penalty-aware operation planning", () => {
         },
       }),
     ).toThrow(NegativeInputError);
+    expect(() =>
+      data.computeVaultV2BlueReallocations(targetParams.id, {
+        operation: {
+          type: "refinance",
+          amount: 1n,
+          referralFeePct: MathLib.WAD / 10n + 1n,
+        },
+      }),
+    ).toThrow(MidnightReferralFeePctExceededError);
     expect(() =>
       data.computeVaultV2BlueReallocations(targetParams.id, {
         operation: {

@@ -4,7 +4,6 @@ import { type Address, type Hex, maxUint256 } from "viem";
 import { parseDeadline, parseReferralFee } from "../../helpers/parse.js";
 import { validateMidnightAddress } from "../../helpers/validateMidnightAccount.js";
 import {
-  validateMidnightReferralFeeCap,
   validateMidnightTakeableOfferBounds,
   validateMidnightUint128Field,
 } from "../../helpers/validateMidnightBounds.js";
@@ -186,7 +185,6 @@ export const parseMidnightTakeWithdraw = (
     );
   }
   const { referralFeePct, referralFeeRecipient } = parseReferralFee(params);
-  validateMidnightReferralFeeCap(referralFeePct);
   validateMidnightSellTargetBounds({ target, referralFeePct });
   if (referralFeePct > 0n) {
     // Rejects fee recipients that would strand the fee in a contract.

@@ -29,7 +29,7 @@ export interface VaultV2WithdrawPlanParams
  * @param params.chainId - Chain containing the vault and registered VaultBundlesV1 contract.
  * @param params.account - Non-zero account approving or permitting shares and sending the withdrawal.
  * @param params.assets - Positive gross withdrawal in asset base units, before referral fees.
- * @param params.referralFee.bps - Optional integer fee in basis points of the gross assets; defaults to zero and must be below 10,000.
+ * @param params.referralFee.bps - Optional integer fee in basis points of the gross assets; defaults to zero and must be at most 1,000.
  * @param params.referralFee.recipient - Recipient of the optional fee; must be non-zero when the fee is positive.
  * @param params.supportSignature - Optional unlimited share-permit preference, defaulting to `false`; otherwise uses unlimited direct share approval when allowance is insufficient.
  * @param params.now - Reference timestamp in seconds, normally the latest block's `timestamp`; uses the device clock when omitted.
@@ -41,10 +41,9 @@ export interface VaultV2WithdrawPlanParams
  * @throws {NonPositiveInputError} when `expiresAt`, `assets` or the computed required shares are not positive.
  * @throws {ExpiredDeadlineError} when `expiresAt` is at or before `now` (device clock when `now` is omitted).
  * @throws {NegativeInputError} when `referralFee.bps` is negative.
- * @throws {InputExceedsMaxError} when `referralFee.bps` exceeds 10,000 or `assets` exceeds uint256.
+ * @throws {InputExceedsMaxError} when `referralFee.bps` exceeds 1,000 or `assets` exceeds uint256.
  * @throws {InvalidCalldataOriginError} when `calldataOrigin` is empty, malformed or has an odd number of hex digits.
  * @throws {InvalidTransactionPlanError} when `account` is malformed or `calldataOrigin` exceeds 1 MiB.
- * @throws {ReferralFeePctExceededError} when `referralFee.bps` equals 10,000; the normalized fee must be below WAD.
  * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no recipient or a zero recipient.
  * @throws {ChainIdMismatchError} when the client targets another chain.
  * @throws {MissingContractCodeError} when the VaultBundlesV1 contract is absent.

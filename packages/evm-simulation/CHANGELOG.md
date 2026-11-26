@@ -1,5 +1,22 @@
 # @morpho-org/evm-simulation
 
+## 9.2.1
+
+### Patch Changes
+
+- Accrue BlueBundlesV1 position-health checks through realistic finite action deadlines instead of a fixed two-hour horizon, consistently across entity builders and TransactionPlan preparers. Deadlines more than 365 days beyond the current time or market snapshot are treated as unlimited sentinels and retain the legacy two-hour projection, avoiding interest-accrual overflow for maxUint256-style callers. Borrow, collateral withdrawal, and refinance checks retain the LLTV buffer and never accrue backwards. Repay-only calls do not use the withdrawal-health projection, and debt-free withdrawals skip market-interest projection while retaining collateral-amount validation. Share-repay funding keeps its existing two-hour deadline limit. Long finite deadlines can make health quotes for borrows, collateral withdrawals with debt, and refinances throw `TotalOverflow` on markets near the uint128 limit before any transaction is built; a shorter deadline avoids this overflow.
+- Cap Blue collateral pay-ins, including native-ETH quotes, gross of same-token proceeds and refunds when transfer evidence is available, except derived same-token net pay-in quotes. Reject scalar `collateralSupplied` increases above the quote plus tolerance on `blueSupplyCollateral`, `blueSupplyCollateralBorrow`, `midnightSupplyCollateral` and `midnightSupplyCollateralMakeBorrow`, except derived exact or inactive fields. Explicit quotes on inactive legs remain capped. Per-index Midnight `collateralSupplies` remain lower-bound only.
+
+  For native-ETH Blue collateral quotes on registered wrapped-native collateral, measure `assetsPaid` as the larger of the existing net payment and gross owner-originated ETH plus wrapped-native outflows, and check it against the quote plus tolerance, offsetting only matching wrap/unwrap conversion receipts. ETH-only fallbacks retain the gross ETH outflow cap, so refunds cannot hide oversized funding. In those fallbacks, ETH sent to the wrapper is offset only by matching ETH returned on unwrap, after subtracting external wrapped-native credits to the owner (excluding mints and self-transfers) from the eligible unwrap amount.
+
+  For Blue collateral quotes using the combined ETH-plus-wrapped-native payment measurement, helpers that wrap owner ETH and return wrapped native to the owner before pulling it as collateral are unsupported: both the ETH send and the wrapped-native pull count as funding. If a quote already measures the owner's wrapped-native proceeds, payment falls back to ETH-only and the wrapped pull reduces measured net proceeds instead of increasing the native payment cap. Blue SDK flows wrap inside BlueBundlesV1 instead. Midnight native collateral supply retains its net ETH-plus-wrapped-native payment measurement and supports its bundle's routed wrap.
+
+  When a sibling Blue collateral quote measures wrapped native as an ERC-20, exclude matching wrapped-native mints funded by ETH still charged to the native quote's ETH-only fallback from the sibling's gross pulls. Wraps already offset by that fallback cannot count toward this mint credit. Also exclude owner-to-zero wrapped-native burns up to the fallback's matched unwrap offset; unmatched burns and ordinary transfers still count. No such offsets apply without a sibling fallback, and external wrapped-native credits do not count as mints.
+
+- Reject vault deposit and V1-to-V2 migration deadlines more than seven days after the reference time with `InputExceedsMaxError`, including TransactionPlan preparation. A reference time `now` that is not a bigint is rejected with `InvalidBigIntInputError` before the window is computed. Export `VAULT_DEPOSIT_MAX_DEADLINE_SECONDS` from the package root and `/constants` so callers can select a supported expiry. This bounds the forward accrual used for maximum share-price protection; the default two-hour expiry is unchanged.
+- Updated dependencies
+  - @morpho-org/morpho-sdk@10.2.0
+
 ## 9.2.0
 
 ### Minor Changes

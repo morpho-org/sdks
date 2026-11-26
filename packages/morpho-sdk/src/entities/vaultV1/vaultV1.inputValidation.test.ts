@@ -1,4 +1,8 @@
-import { getChainAddress, UnknownAddressError } from "@morpho-org/morpho-ts";
+import {
+  getChainAddress,
+  Time,
+  UnknownAddressError,
+} from "@morpho-org/morpho-ts";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import {
   createPublicClient,
@@ -192,13 +196,14 @@ describe("MorphoVaultV1 asset exit permit validation", () => {
       virtualShares: 1n,
       accrualAdapters: [],
     } as never;
+    const deadline = Time.timestamp() + 7_200n;
     const migration = vault.migrateToV2({
       assets: 100n,
       userAddress: owner,
       sourceVault,
       targetVault: destinationVault,
       slippageTolerance: 0n,
-      deadline: maxUint256,
+      deadline,
     });
     const oversizedPermit = {
       args: {
@@ -215,7 +220,18 @@ describe("MorphoVaultV1 asset exit permit validation", () => {
       },
     } satisfies Erc2612RequirementSignature;
 
-    expect(() => migration.buildTx([oversizedPermit])).not.toThrow();
+    expect(() =>
+      migration.buildTx([
+        {
+          ...oversizedPermit,
+          args: { ...oversizedPermit.args, deadline },
+          action: {
+            ...oversizedPermit.action,
+            args: { ...oversizedPermit.action.args, deadline },
+          },
+        },
+      ]),
+    ).not.toThrow();
   });
 });
 

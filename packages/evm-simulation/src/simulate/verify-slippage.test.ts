@@ -1,4 +1,10 @@
-import { type MarketId, MarketUtils, MathLib } from "@morpho-org/blue-sdk";
+import {
+  type MarketId,
+  MarketParams,
+  MarketUtils,
+  MathLib,
+} from "@morpho-org/blue-sdk";
+import { blueSupplyCollateral } from "@morpho-org/morpho-sdk";
 import { blueAbi, vaultV2Abi } from "@morpho-org/morpho-sdk/abis";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import {
@@ -22,9 +28,11 @@ import {
   type OperationType,
   type SlippageQuote,
 } from "../limits.js";
+import { toSimulationLimits } from "../requirements/limits.js";
 import type { RawLog, Transfer } from "../types.js";
 import { resolveAssets } from "./backends/resolve-assets.js";
 import type { CheckContext } from "./context.js";
+import { deriveQuote } from "./derive-quote.js";
 import { sharePriceMeasurement } from "./measurement-plan.js";
 import type { ParsedOperationLimit } from "./request/parse-request.js";
 import {
@@ -201,6 +209,1408 @@ const verifySlippage = (
   return checked;
 };
 
+describe("Blue collateral caps", () => {
+  const token: Address = "0x0000000000000000000000000000000000000004";
+  const otherToken: Address = "0x0000000000000000000000000000000000000005";
+  const marketId = `0x${"11".repeat(32)}` as MarketId;
+
+  test.each(
+    [false, true].flatMap((reverse) =>
+      [
+        {
+          name: "exact funding",
+          minted: 100n,
+          pull: 10n,
+          roundTrip: 0n,
+          credit: 0n,
+          sibling: true,
+          observed: 10n,
+        },
+        {
+          name: "excess pull",
+          minted: 100n,
+          pull: 110n,
+          roundTrip: 0n,
+          credit: 0n,
+          sibling: true,
+          observed: 110n,
+        },
+        {
+          name: "no sibling",
+          minted: 100n,
+          pull: 10n,
+          roundTrip: 0n,
+          credit: 0n,
+          sibling: false,
+          observed: 110n,
+        },
+        {
+          name: "round trip consumes wraps first",
+          minted: 110n,
+          pull: 10n,
+          roundTrip: 10n,
+          credit: 0n,
+          sibling: true,
+          observed: 10n,
+        },
+        {
+          name: "round trip cannot hide excess pull",
+          minted: 110n,
+          pull: 110n,
+          roundTrip: 10n,
+          credit: 0n,
+          sibling: true,
+          observed: 110n,
+        },
+        {
+          name: "burn without matched unwrap still counts",
+          minted: 100n,
+          pull: 10n,
+          roundTrip: 0n,
+          burn: 10n,
+          credit: 10n,
+          sibling: true,
+          observed: 20n,
+        },
+        {
+          name: "unwrap without burn cannot hide excess pull",
+          minted: 110n,
+          pull: 20n,
+          roundTrip: 10n,
+          burn: 0n,
+          credit: 0n,
+          sibling: true,
+          observed: 20n,
+        },
+        {
+          name: "partially matched burn still counts its remainder",
+          minted: 110n,
+          pull: 10n,
+          roundTrip: 10n,
+          burn: 20n,
+          credit: 5n,
+          sibling: true,
+          observed: 20n,
+        },
+        {
+          name: "external credit cannot hide excess",
+          minted: 110n,
+          pull: 110n,
+          roundTrip: 10n,
+          credit: 100n,
+          sibling: true,
+          observed: 110n,
+        },
+        {
+          name: "external credit is not a mint",
+          minted: 0n,
+          pull: 10n,
+          roundTrip: 0n,
+          credit: 100n,
+          sibling: true,
+          observed: 110n,
+        },
+        {
+          name: "offset cannot exceed mints",
+          minted: 40n,
+          pull: 10n,
+          roundTrip: 0n,
+          credit: 60n,
+          sibling: true,
+          observed: 70n,
+        },
+      ].map((scenario) => ({ burn: scenario.roundTrip, ...scenario, reverse })),
+    ),
+  )(
+    "behavior: sibling native fallback and wrapped collateral: $name (reverse=$reverse)",
+    ({ minted, pull, roundTrip, burn, credit, sibling, observed, reverse }) => {
+      const secondaryMarketId = `0x${"22".repeat(32)}` as MarketId;
+      const operations: Parameters<
+        typeof planStateReads
+      >[0]["operations"][number][] = [
+        ...(sibling
+          ? [
+              {
+                limit: {
+                  type: "blueSupplyCollateral" as const,
+                  marketId,
+                  assetPaid: ethAddress,
+                  quote: {
+                    assetsPaid: credit === 0n ? 100n : 100n + roundTrip,
+                    collateralSupplied: 100n,
+                  },
+                  slippageTolerance: 0n,
+                },
+                assetsPaid: ethAddress,
+                approvalToken: token,
+              },
+            ]
+          : []),
+        {
+          limit: {
+            type: "blueSupplyCollateral" as const,
+            marketId: secondaryMarketId,
+            quote: { assetsPaid: 10n, collateralSupplied: pull },
+            slippageTolerance: 0n,
+          },
+          assetsPaid: token,
+          approvalToken: token,
+        },
+      ];
+      if (reverse) operations.reverse();
+      const plan = planStateReads({
+        owner,
+        morpho: vault,
+        midnight: zeroAddress,
+        wNative: token,
+        nativeValueSent: sibling,
+        operations,
+      });
+      if (sibling)
+        expect(
+          plan.operations.find(
+            ({ limit: plannedLimit }) =>
+              plannedLimit.type === "blueSupplyCollateral" &&
+              plannedLimit.marketId === marketId,
+          )?.measurements,
+        ).toContainEqual({
+          field: "assetsPaid",
+          type: "native",
+          account: owner,
+          collateralPayInToken: ethAddress,
+          nativeConversionWrapper: token,
+        });
+      const before = new Map<string, StateValue>();
+      const after = new Map<string, StateValue>();
+      for (const read of plan.reads) {
+        if (read.kind === "morpho.position") {
+          before.set(read.id, {
+            supplyShares: 0n,
+            borrowShares: 0n,
+            collateral: 0n,
+          });
+          after.set(read.id, {
+            supplyShares: 0n,
+            borrowShares: 0n,
+            collateral: read.marketId === marketId ? 100n : pull,
+          });
+        } else {
+          before.set(read.id, 1000n);
+          after.set(read.id, 1000n + minted + credit - 100n - pull - burn);
+        }
+      }
+      const transfers: Transfer[] = [
+        {
+          token: ethAddress,
+          from: owner,
+          to: token,
+          amount: 100n + roundTrip,
+          txIdx: 0,
+        },
+        {
+          token,
+          from: zeroAddress,
+          to: owner,
+          amount: minted,
+          txIdx: 0,
+        },
+        { token, from: owner, to: vault, amount: 100n, txIdx: 1 },
+        { token, from: owner, to: vault, amount: pull, txIdx: 2 },
+      ];
+      if (credit > 0n)
+        transfers.push({
+          token,
+          from: receiver,
+          to: owner,
+          amount: credit,
+          txIdx: 2,
+        });
+      if (burn > 0n)
+        transfers.push({
+          token,
+          from: owner,
+          to: zeroAddress,
+          amount: burn,
+          txIdx: 2,
+        });
+      if (roundTrip > 0n)
+        transfers.push({
+          token: ethAddress,
+          from: token,
+          to: owner,
+          amount: roundTrip,
+          txIdx: 2,
+        });
+      const result = findOperationSlippageFailures({
+        ctx,
+        operations: plan.operations,
+        before,
+        after,
+        transfers,
+        logs: [],
+        morpho: vault,
+        requestTransactions: [
+          { from: owner, value: 100n + roundTrip },
+          { from: owner },
+          { from: owner },
+        ],
+      });
+      expect(result.failures).toEqual(
+        observed === 10n
+          ? []
+          : [
+              expect.objectContaining({
+                operationIndex: sibling && !reverse ? 1 : 0,
+                field: "assetsPaid",
+                observed,
+                bound: 10n,
+              }),
+            ],
+      );
+    },
+  );
+
+  test.each([50n, 100n])(
+    "error: fallback cannot offset collateral wraps with borrowed wNative (%s)",
+    (borrowed) => {
+      const plan = planStateReads({
+        owner,
+        morpho: vault,
+        midnight: zeroAddress,
+        wNative: token,
+        nativeValueSent: true,
+        operations: [
+          {
+            limit: {
+              type: "blueSupplyCollateralBorrow",
+              marketId,
+              assetPaid: ethAddress,
+              quote: {
+                assetsPaid: 100n,
+                collateralSupplied: 150n,
+                assetsReceived: 50n,
+                sharesMinted: borrowed,
+              },
+              slippageTolerance: 0n,
+            },
+            assetsPaid: ethAddress,
+            assetsReceived: token,
+            approvalToken: token,
+          },
+        ],
+      });
+      const before = new Map<string, StateValue>();
+      const after = new Map<string, StateValue>();
+      for (const read of plan.reads) {
+        before.set(
+          read.id,
+          read.kind === "morpho.position"
+            ? { supplyShares: 0n, borrowShares: 0n, collateral: 0n }
+            : 1000n,
+        );
+        after.set(
+          read.id,
+          read.kind === "morpho.position"
+            ? { supplyShares: 0n, borrowShares: borrowed, collateral: 150n }
+            : 1000n + borrowed - 50n,
+        );
+      }
+      const result = findOperationSlippageFailures({
+        ctx,
+        operations: plan.operations,
+        before,
+        after,
+        logs: [],
+        morpho: vault,
+        requestTransactions: [
+          { from: owner, value: 150n },
+          { from: owner, value: 0n },
+          { from: owner, value: 0n },
+          { from: owner, value: 0n },
+        ],
+        transfers: [
+          { token: ethAddress, from: owner, to: token, amount: 150n, txIdx: 0 },
+          { token, from: zeroAddress, to: owner, amount: 150n, txIdx: 0 },
+          { token, from: owner, to: vault, amount: 150n, txIdx: 1 },
+          { token, from: vault, to: owner, amount: borrowed, txIdx: 2 },
+          { token, from: owner, to: zeroAddress, amount: 50n, txIdx: 3 },
+          { token: ethAddress, from: token, to: owner, amount: 50n, txIdx: 3 },
+        ],
+      });
+      expect(result.failures).toContainEqual(
+        expect.objectContaining({
+          field: "assetsPaid",
+          observed: 150n,
+          bound: 100n,
+        }),
+      );
+      if (borrowed === 100n) expect(result.failures).toHaveLength(1);
+    },
+  );
+
+  test.each(
+    (["funding", "proceeds"] as const).flatMap((coverage) =>
+      (
+        [
+          "round trip",
+          "unmatched wrap",
+          "plain refund",
+          "forwarded unwrap",
+          ...(coverage === "funding"
+            ? ([
+                "partial external credit",
+                "partial credit within tolerance",
+              ] as const)
+            : []),
+        ] as const
+      ).map((conversion) => ({ coverage, conversion })),
+    ),
+  )(
+    "behavior: ETH-only fallback with $coverage coverage: $conversion",
+    ({ coverage, conversion }) => {
+      const wrapped = token;
+      const partialCredit =
+        conversion === "partial external credit" ||
+        conversion === "partial credit within tolerance";
+      const withinTolerance = conversion === "partial credit within tolerance";
+      const wrapAmount = partialCredit ? 10n : 1n;
+      const secondaryMarketId = `0x${"22".repeat(32)}` as MarketId;
+      const paid: ParsedOperationLimit = {
+        type: "blueSupplyCollateral",
+        marketId,
+        assetPaid: ethAddress,
+        quote: { assetsPaid: 100n, collateralSupplied: 100n },
+        slippageTolerance: withinTolerance ? MathLib.WAD / 25n : 0n,
+      };
+      const secondary: ParsedOperationLimit =
+        coverage === "funding"
+          ? {
+              type: "blueSupply",
+              marketId: secondaryMarketId,
+              quote: { assetsPaid: 10n, sharesMinted: 10n },
+              slippageTolerance: 0n,
+            }
+          : {
+              type: "blueBorrow",
+              marketId: secondaryMarketId,
+              quote: { assetsReceived: 10n, sharesMinted: 10n },
+              slippageTolerance: 0n,
+            };
+      const plan = planStateReads({
+        owner,
+        morpho: vault,
+        midnight: zeroAddress,
+        wNative: wrapped,
+        nativeValueSent: true,
+        operations: [
+          { limit: paid, assetsPaid: ethAddress, approvalToken: wrapped },
+          {
+            limit: secondary,
+            ...(coverage === "funding"
+              ? { assetsPaid: wrapped }
+              : { assetsReceived: wrapped }),
+          },
+        ],
+      });
+      expect(
+        plan.operations[0]?.measurements.find(
+          ({ field }) => field === "assetsPaid",
+        ),
+      ).not.toHaveProperty("readId");
+      const before = new Map<string, StateValue>();
+      const after = new Map<string, StateValue>();
+      const unwrap =
+        conversion === "round trip" ||
+        conversion === "forwarded unwrap" ||
+        partialCredit;
+      for (const read of plan.reads) {
+        if (read.kind === "morpho.position") {
+          before.set(read.id, {
+            supplyShares: 0n,
+            borrowShares: 0n,
+            collateral: 0n,
+          });
+          after.set(read.id, {
+            supplyShares:
+              read.marketId === secondaryMarketId && coverage === "funding"
+                ? 10n
+                : 0n,
+            borrowShares:
+              read.marketId === secondaryMarketId && coverage === "proceeds"
+                ? 10n
+                : 0n,
+            collateral: read.marketId === marketId ? 100n : 0n,
+          });
+        } else {
+          before.set(read.id, 1000n);
+          after.set(
+            read.id,
+            1000n +
+              (coverage === "funding" ? -10n : 10n) +
+              (unwrap ? 0n : 1n) +
+              (partialCredit ? 4n : 0n),
+          );
+        }
+      }
+      const transfers: Transfer[] = [
+        { token: ethAddress, from: owner, to: vault, amount: 100n, txIdx: 0 },
+        {
+          token: ethAddress,
+          from: owner,
+          to: wrapped,
+          amount: wrapAmount,
+          txIdx: 1,
+        },
+        {
+          token: wrapped,
+          from: zeroAddress,
+          to: owner,
+          amount: wrapAmount,
+          txIdx: 1,
+        },
+        { token: wrapped, from: owner, to: owner, amount: 100n, txIdx: 1 },
+        {
+          token: wrapped,
+          from: coverage === "proceeds" ? vault : owner,
+          to: coverage === "proceeds" ? owner : vault,
+          amount: 10n,
+          txIdx: 0,
+        },
+      ];
+      if (partialCredit)
+        transfers.push({
+          token: wrapped,
+          from: receiver,
+          to: owner,
+          amount: 4n,
+          txIdx: 1,
+        });
+      if (unwrap)
+        transfers.push(
+          {
+            token: wrapped,
+            from: owner,
+            to: zeroAddress,
+            amount: wrapAmount,
+            txIdx: 2,
+          },
+          {
+            token: ethAddress,
+            from: wrapped,
+            to: owner,
+            amount: wrapAmount,
+            txIdx: 2,
+          },
+        );
+      if (conversion === "plain refund")
+        transfers.push({
+          token: ethAddress,
+          from: vault,
+          to: owner,
+          amount: 1n,
+          txIdx: 2,
+        });
+      if (conversion === "forwarded unwrap")
+        transfers.push({
+          token: ethAddress,
+          from: owner,
+          to: receiver,
+          amount: 1n,
+          txIdx: 3,
+        });
+      const result = findOperationSlippageFailures({
+        ctx,
+        operations: plan.operations,
+        before,
+        after,
+        transfers,
+        logs: [],
+        morpho: vault,
+        requestTransactions: [
+          { from: owner, value: 100n },
+          { from: owner, value: wrapAmount },
+          ...(unwrap || conversion === "plain refund"
+            ? [{ from: owner, value: 0n }]
+            : []),
+          ...(conversion === "forwarded unwrap"
+            ? [{ from: owner, value: 1n }]
+            : []),
+        ],
+      });
+      if (
+        (conversion === "round trip" && coverage === "funding") ||
+        withinTolerance
+      )
+        expect(result.failures).toEqual([]);
+      else
+        expect(result.failures).toEqual([
+          expect.objectContaining({
+            field: "assetsPaid",
+            observed: partialCredit
+              ? 104n
+              : conversion === "forwarded unwrap" && coverage === "proceeds"
+                ? 102n
+                : 101n,
+            bound: 100n,
+          }),
+        ]);
+    },
+  );
+
+  test("error: native refund does not hide an oversized collateral pull", () => {
+    const operation: ParsedOperationLimit = {
+      type: "blueSupplyCollateral",
+      marketId,
+      assetPaid: ethAddress,
+      quote: { assetsPaid: 100n, collateralSupplied: 100n },
+      slippageTolerance: 0n,
+    };
+    const plan = planStateReads({
+      owner,
+      morpho: vault,
+      midnight: zeroAddress,
+      operations: [{ limit: operation, assetsPaid: ethAddress }],
+    });
+    const before = new Map<string, StateValue>();
+    const after = new Map<string, StateValue>();
+    for (const read of plan.reads) {
+      if (read.kind === "morpho.position") {
+        before.set(read.id, {
+          supplyShares: 0n,
+          borrowShares: 0n,
+          collateral: 0n,
+        });
+        after.set(read.id, {
+          supplyShares: 0n,
+          borrowShares: 0n,
+          collateral: 100n,
+        });
+      }
+    }
+    const params: Parameters<typeof findOperationSlippageFailures>[0] = {
+      ctx,
+      operations: plan.operations,
+      before,
+      after,
+      transfers: [
+        { token: ethAddress, from: owner, to: vault, amount: 120n, txIdx: 0 },
+        { token: ethAddress, from: vault, to: owner, amount: 20n, txIdx: 0 },
+      ],
+      logs: [],
+      morpho: vault,
+      requestTransactions: [{ from: owner, value: 120n }],
+    };
+    const result = findOperationSlippageFailures(params);
+    expect(result.failures).toContainEqual(
+      expect.objectContaining({
+        field: "assetsPaid",
+        observed: 120n,
+        bound: 100n,
+      }),
+    );
+    expect(
+      findOperationSlippageFailures({ ...params, transfers: [] }).failures,
+    ).toContainEqual(expect.any(SlippageCheckUnavailableError));
+  });
+
+  test.each([
+    { generated: false, sent: 110n, refund: 10n },
+    { generated: true, sent: 100n, refund: 0n },
+  ])(
+    "behavior: native funding within tolerance (generated=$generated)",
+    (scenario) => {
+      const wrapped: Address = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
+      const bundler: Address = "0x000000000000000000000000000000000000000b";
+      const action = blueSupplyCollateral({
+        market: {
+          chainId: 1,
+          marketParams: new MarketParams({
+            loanToken: otherToken,
+            collateralToken: wrapped,
+            oracle: zeroAddress,
+            irm: zeroAddress,
+            lltv: 0n,
+          }),
+        },
+        args: {
+          userAddress: owner,
+          collateralAssets: 100n,
+          nativeAmount: 100n,
+          deadline: 1n,
+        },
+      }).action;
+      const quoted = scenario.generated
+        ? toSimulationLimits(action, {
+            owner,
+            slippageTolerance: MathLib.WAD / 10n,
+          }).operations[0]!
+        : {
+            type: "blueSupplyCollateral" as const,
+            marketId,
+            assetPaid: ethAddress,
+            quote: { assetsPaid: 100n, collateralSupplied: 100n },
+          };
+      expect(quoted.assetPaid).toBe(ethAddress);
+      if (quoted.type !== "blueSupplyCollateral") {
+        throw new Error("Expected a collateral supply limit");
+      }
+      const operation: ParsedOperationLimit = {
+        ...quoted,
+        type: "blueSupplyCollateral",
+        slippageTolerance: MathLib.WAD / 10n,
+      };
+      const plan = planStateReads({
+        owner,
+        morpho: vault,
+        midnight: zeroAddress,
+        wNative: wrapped,
+        operations: [{ limit: operation, assetsPaid: ethAddress }],
+      });
+      const before = new Map<string, StateValue>();
+      const after = new Map<string, StateValue>();
+      for (const read of plan.reads) {
+        if (read.kind === "morpho.position") {
+          before.set(read.id, {
+            supplyShares: 0n,
+            borrowShares: 0n,
+            collateral: 0n,
+          });
+          after.set(read.id, {
+            supplyShares: 0n,
+            borrowShares: 0n,
+            collateral: 100n,
+          });
+        }
+      }
+      const result = findOperationSlippageFailures({
+        ctx,
+        operations: plan.operations,
+        before,
+        after,
+        transfers: scenario.generated
+          ? [
+              {
+                token: ethAddress,
+                from: owner,
+                to: bundler,
+                amount: 100n,
+                txIdx: 0,
+              },
+              {
+                token: ethAddress,
+                from: bundler,
+                to: wrapped,
+                amount: 100n,
+                txIdx: 0,
+              },
+              {
+                token: wrapped,
+                from: zeroAddress,
+                to: bundler,
+                amount: 100n,
+                txIdx: 0,
+              },
+              {
+                token: wrapped,
+                from: bundler,
+                to: vault,
+                amount: 100n,
+                txIdx: 0,
+              },
+            ]
+          : [
+              {
+                token: ethAddress,
+                from: owner,
+                to: vault,
+                amount: scenario.sent,
+                txIdx: 0,
+              },
+              {
+                token: ethAddress,
+                from: vault,
+                to: owner,
+                amount: scenario.refund,
+                txIdx: 0,
+              },
+            ],
+        logs: [],
+        morpho: vault,
+        requestTransactions: [{ from: owner, value: scenario.sent }],
+      });
+      expect(result.failures).toEqual([]);
+    },
+  );
+
+  test.each([
+    { name: "unwrap-to-self passes", pull: 100n, nativeAlias: true },
+    { name: "oversized pull fails", pull: 101n, nativeAlias: true },
+    { name: "non-native burn remains capped", pull: 100n, nativeAlias: false },
+  ])("behavior: Blue collateral native alias: $name", (scenario) => {
+    const operation = deriveQuote(
+      {
+        type: "blueSupplyCollateral",
+        marketId,
+        inputs: { assets: 100n },
+        ...(scenario.nativeAlias ? { assetPaid: ethAddress } : {}),
+        quote: {},
+        derivedFields: ["assetsPaid", "collateralSupplied"],
+        slippageTolerance: 0n,
+      },
+      {},
+    );
+    const plan = planStateReads({
+      owner,
+      morpho: vault,
+      midnight: zeroAddress,
+      wNative: token,
+      operations: [{ limit: operation, assetsPaid: token }],
+    });
+    const measurement = plan.operations[0]!.measurements.find(
+      (entry) => entry.field === "assetsPaid",
+    );
+    expect(measurement).toMatchObject({
+      type: scenario.nativeAlias ? "native" : "balance",
+      collateralPayInToken: token,
+      readId: expect.any(String),
+    });
+    const before = new Map<string, StateValue>();
+    const after = new Map<string, StateValue>();
+    for (const read of plan.reads) {
+      before.set(
+        read.id,
+        read.kind === "morpho.position"
+          ? { supplyShares: 0n, borrowShares: 0n, collateral: 0n }
+          : 1000n,
+      );
+      after.set(
+        read.id,
+        read.kind === "morpho.position"
+          ? { supplyShares: 0n, borrowShares: 0n, collateral: 100n }
+          : scenario.nativeAlias
+            ? 899n
+            : 900n,
+      );
+    }
+    const transfer = { token, from: owner, txIdx: 0 };
+    const result = findOperationSlippageFailures({
+      ctx,
+      operations: plan.operations,
+      before,
+      after,
+      logs: [],
+      morpho: vault,
+      requestTransactions: [],
+      transfers: [
+        { ...transfer, to: vault, amount: scenario.pull },
+        { ...transfer, to: zeroAddress, amount: 1n },
+        ...(scenario.nativeAlias
+          ? [
+              {
+                token: ethAddress,
+                from: token,
+                to: owner,
+                amount: 1n,
+                txIdx: 0,
+              },
+            ]
+          : []),
+        ...(scenario.pull > 100n || !scenario.nativeAlias
+          ? [{ token, from: vault, to: owner, amount: 1n, txIdx: 0 }]
+          : []),
+      ],
+    });
+    if (scenario.nativeAlias && scenario.pull === 100n) {
+      expect(result.failures).toEqual([]);
+    } else {
+      expect(result.failures).toContainEqual(
+        expect.objectContaining({
+          field: "assetsPaid",
+          check: "derivedBound",
+          observed: 101n,
+          bound: 100n,
+        }),
+      );
+    }
+  });
+
+  test.each([
+    {
+      name: "unwrapped ETH outflows masked by same-token proceeds",
+      burn: 200n,
+      nativeIn: 200n,
+      nativeOut: 200n,
+      mint: 0n,
+      pull: 0n,
+      balance: 1050n,
+      maximum: 200n,
+    },
+    {
+      name: "unmatched burns masked by same-token proceeds",
+      burn: 200n,
+      nativeIn: 0n,
+      nativeOut: 0n,
+      mint: 0n,
+      pull: 0n,
+      balance: 1050n,
+      maximum: 200n,
+    },
+    {
+      name: "burn offset is limited to wrapper ETH receipts",
+      burn: 300n,
+      nativeIn: 100n,
+      nativeOut: 0n,
+      mint: 0n,
+      pull: 0n,
+      balance: 950n,
+      maximum: 200n,
+    },
+    {
+      name: "owner wrap before supply is not counted twice",
+      burn: 0n,
+      nativeIn: 0n,
+      nativeOut: 100n,
+      mint: 100n,
+      pull: 100n,
+      balance: 1250n,
+    },
+  ])("behavior: native-alias collateral: $name", (scenario) => {
+    const operation: ParsedOperationLimit = {
+      type: "blueSupplyCollateralBorrow",
+      marketId,
+      inputs: { collateralAssets: 100n, borrowAssets: 250n },
+      assetPaid: ethAddress,
+      quote: {
+        assetsPaid: 100n,
+        assetsReceived: 50n,
+        collateralSupplied: 100n,
+        sharesMinted: 250n,
+      },
+      slippageTolerance: 0n,
+    };
+    const plan = planStateReads({
+      owner,
+      morpho: vault,
+      midnight: zeroAddress,
+      wNative: token,
+      operations: [
+        { limit: operation, assetsPaid: token, assetsReceived: token },
+      ],
+    });
+    expect(
+      plan.operations[0]!.measurements.find(
+        (entry) => entry.field === "assetsPaid",
+      ),
+    ).toMatchObject({
+      type: "native",
+      collateralPayInToken: token,
+      readId: expect.any(String),
+    });
+    const before = new Map<string, StateValue>();
+    const after = new Map<string, StateValue>();
+    for (const read of plan.reads) {
+      before.set(
+        read.id,
+        read.kind === "morpho.position"
+          ? { supplyShares: 0n, borrowShares: 0n, collateral: 0n }
+          : 1000n,
+      );
+      after.set(
+        read.id,
+        read.kind === "morpho.position"
+          ? { supplyShares: 0n, borrowShares: 250n, collateral: 100n }
+          : scenario.balance,
+      );
+    }
+    const result = findOperationSlippageFailures({
+      ctx,
+      operations: plan.operations,
+      before,
+      after,
+      logs: [],
+      morpho: vault,
+      requestTransactions: [
+        {
+          from: owner,
+          value: scenario.nativeOut,
+        },
+      ],
+      transfers: [
+        {
+          token,
+          from: owner,
+          to: zeroAddress,
+          amount: scenario.burn,
+          txIdx: 0,
+        },
+        {
+          token: ethAddress,
+          from: token,
+          to: owner,
+          amount: scenario.nativeIn,
+          txIdx: 0,
+        },
+        {
+          token: ethAddress,
+          from: owner,
+          to: scenario.mint > 0n ? token : vault,
+          amount: scenario.nativeOut,
+          txIdx: 0,
+        },
+        {
+          token,
+          from: zeroAddress,
+          to: owner,
+          amount: scenario.mint,
+          txIdx: 0,
+        },
+        { token, from: owner, to: vault, amount: scenario.pull, txIdx: 0 },
+        { token, from: vault, to: owner, amount: 250n, txIdx: 0 },
+      ].filter(({ amount }) => amount > 0n),
+    });
+    if (scenario.maximum === undefined) {
+      expect(result.failures).toEqual([]);
+    } else {
+      expect(result.failures).toEqual([
+        expect.objectContaining({
+          field: "assetsPaid",
+          observed: scenario.maximum,
+          bound: 100n,
+        }),
+      ]);
+    }
+  });
+
+  test.each([
+    { collateral: 100n, pull: 0n },
+    {
+      collateral: 111n,
+      pull: 0n,
+      explicitCollateral: true,
+      field: "collateralSupplied",
+    },
+    { collateral: -1n, pull: 0n, field: "collateralSupplied" },
+    { collateral: 100n, pull: 2n, field: "assetsPaid" },
+  ])(
+    "behavior: borrow-only collateral movement $collateral with owner pull $pull",
+    (scenario) => {
+      const operation = deriveQuote(
+        {
+          type: "blueSupplyCollateralBorrow",
+          marketId,
+          inputs: { borrowAssets: 50n },
+          quote: scenario.explicitCollateral
+            ? { collateralSupplied: 100n }
+            : {},
+          derivedFields: [
+            "assetsPaid",
+            ...(scenario.explicitCollateral
+              ? []
+              : ["collateralSupplied" as const]),
+            "assetsReceived",
+            "sharesMinted",
+          ],
+          slippageTolerance: MathLib.WAD / 10n,
+        },
+        {
+          market: {
+            totalSupplyAssets: 1000n,
+            totalSupplyShares: 1000n,
+            totalBorrowAssets: 1000n,
+            totalBorrowShares: 1000n,
+          },
+        },
+      );
+      expect(operation.inactiveFields).toContain("collateralSupplied");
+      expect(operation.quote.assetsPaid).toBe(1n);
+      const plan = planStateReads({
+        owner,
+        morpho: vault,
+        midnight: zeroAddress,
+        operations: [
+          { limit: operation, assetsPaid: token, assetsReceived: token },
+        ],
+      });
+      const before = new Map<string, StateValue>();
+      const after = new Map<string, StateValue>();
+      for (const read of plan.reads) {
+        before.set(
+          read.id,
+          read.kind === "morpho.position"
+            ? { supplyShares: 0n, borrowShares: 0n, collateral: 100n }
+            : 1000n,
+        );
+        after.set(
+          read.id,
+          read.kind === "morpho.position"
+            ? {
+                supplyShares: 0n,
+                borrowShares: operation.quote.sharesMinted!,
+                collateral: 100n + scenario.collateral,
+              }
+            : 1050n,
+        );
+      }
+      const result = findOperationSlippageFailures({
+        ctx,
+        operations: plan.operations,
+        before,
+        after,
+        logs: [],
+        morpho: vault,
+        requestTransactions: [],
+        transfers: [
+          { token, from: otherToken, to: vault, amount: 100n, txIdx: 0 },
+          { token, from: owner, to: vault, amount: scenario.pull, txIdx: 0 },
+        ],
+      });
+      if (scenario.field === undefined) expect(result.failures).toEqual([]);
+      else
+        expect(result.failures).toContainEqual(
+          expect.objectContaining({ field: scenario.field }),
+        );
+    },
+  );
+
+  test.each([false, true])(
+    "behavior: typed same-token collateral borrow preserves net derivation, explicit pay-in override: %s",
+    (explicitPayIn) => {
+      const operation = deriveQuote(
+        {
+          type: "blueSupplyCollateralBorrow",
+          marketId,
+          inputs: { collateralAssets: 100n, borrowAssets: 50n },
+          quote: explicitPayIn ? { assetsPaid: 50n } : {},
+          derivedFields: [
+            "collateralSupplied",
+            "sharesMinted",
+            "assetsReceived",
+            ...(explicitPayIn ? [] : ["assetsPaid" as const]),
+          ],
+          slippageTolerance: 0n,
+        },
+        {
+          netWalletAssets: true,
+          market: {
+            totalSupplyAssets: 1000n,
+            totalSupplyShares: 1000n,
+            totalBorrowAssets: 1000n,
+            totalBorrowShares: 1000n,
+          },
+        },
+      );
+      expect(operation.quote.assetsPaid).toBe(50n);
+      expect(operation.quote.assetsReceived).toBe(-50n);
+      const plan = planStateReads({
+        owner,
+        morpho: vault,
+        midnight: zeroAddress,
+        operations: [
+          { limit: operation, assetsPaid: token, assetsReceived: token },
+        ],
+      });
+      expect(plan.operations[0]?.netWalletAssets).toBe(true);
+      const before = new Map<string, StateValue>();
+      const after = new Map<string, StateValue>();
+      for (const read of plan.reads) {
+        before.set(
+          read.id,
+          read.kind === "morpho.position"
+            ? { supplyShares: 0n, borrowShares: 0n, collateral: 0n }
+            : 1000n,
+        );
+        after.set(
+          read.id,
+          read.kind === "morpho.position"
+            ? {
+                supplyShares: 0n,
+                borrowShares: operation.quote.sharesMinted!,
+                collateral: 100n,
+              }
+            : 950n,
+        );
+      }
+      const result = findOperationSlippageFailures({
+        ctx,
+        operations: plan.operations,
+        before,
+        after,
+        logs: [],
+        morpho: vault,
+        requestTransactions: [],
+        transfers: [
+          { token, from: owner, to: vault, amount: 100n, txIdx: 0 },
+          { token, from: vault, to: owner, amount: 50n, txIdx: 0 },
+        ],
+      });
+      if (explicitPayIn) {
+        expect(result.failures).toContainEqual(
+          expect.objectContaining({ field: "assetsPaid" }),
+        );
+      } else {
+        expect(result.failures).toEqual([]);
+      }
+    },
+  );
+
+  test.each([
+    { name: "exact quote", pull: 100n, collateral: 100n },
+    {
+      name: "gross pull masked by proceeds",
+      pull: 200n,
+      collateral: 100n,
+      field: "assetsPaid",
+    },
+    {
+      name: "position increase above quote",
+      pull: 100n,
+      collateral: 200n,
+      field: "collateralSupplied",
+    },
+    {
+      name: "both caps exceeded",
+      pull: 200n,
+      collateral: 200n,
+      field: "assetsPaid",
+      positionFailure: true,
+    },
+    {
+      name: "at tolerance",
+      pull: 110n,
+      collateral: 110n,
+      tolerance: MathLib.WAD / 10n,
+    },
+    {
+      name: "gross pull one wei over tolerance",
+      pull: 111n,
+      collateral: 100n,
+      tolerance: MathLib.WAD / 10n,
+      field: "assetsPaid",
+    },
+    {
+      name: "position one wei over tolerance",
+      pull: 100n,
+      collateral: 111n,
+      tolerance: MathLib.WAD / 10n,
+      field: "collateralSupplied",
+    },
+    {
+      name: "missing transfers retains net observation",
+      pull: 200n,
+      collateral: 100n,
+      noTransfers: true,
+    },
+    {
+      name: "missing transfers still enforces net cap",
+      pull: 200n,
+      collateral: 100n,
+      noTransfers: true,
+      proceeds: 0n,
+      field: "assetsPaid",
+    },
+    {
+      name: "different-token borrow",
+      pull: 100n,
+      collateral: 100n,
+      differentToken: true,
+    },
+    {
+      name: "different-token excessive pull",
+      pull: 200n,
+      collateral: 100n,
+      differentToken: true,
+      field: "assetsPaid",
+    },
+    {
+      name: "refund does not erase gross pull",
+      pull: 120n,
+      collateral: 100n,
+      refund: 20n,
+      field: "assetsPaid",
+    },
+    {
+      name: "refund within gross cap",
+      pull: 100n,
+      collateral: 90n,
+      refund: 10n,
+      tolerance: MathLib.WAD / 10n,
+    },
+    {
+      name: "typed exact collateral retains exact failure",
+      pull: 100n,
+      collateral: 101n,
+      typed: true,
+      field: "collateralSupplied",
+      check: "exactQuote",
+    },
+  ])("behavior: $name", (scenario) => {
+    const loanToken = scenario.differentToken ? otherToken : token;
+    const operation: ParsedOperationLimit = {
+      type: "blueSupplyCollateralBorrow",
+      marketId,
+      quote: {
+        assetsPaid: 100n,
+        collateralSupplied: 100n,
+        assetsReceived: 50n,
+        sharesMinted: 400n,
+      },
+      slippageTolerance: scenario.tolerance ?? 0n,
+      ...(scenario.typed
+        ? {
+            inputs: { collateralAssets: 100n, borrowAssets: 150n },
+            derivedFields: ["collateralSupplied"],
+            exactFields: ["collateralSupplied"],
+          }
+        : {}),
+    };
+    const plan = planStateReads({
+      owner,
+      morpho: vault,
+      midnight: zeroAddress,
+      operations: [
+        { limit: operation, assetsPaid: token, assetsReceived: loanToken },
+      ],
+    });
+    const proceeds = scenario.proceeds ?? 400n;
+    const before = new Map<string, StateValue>();
+    const after = new Map<string, StateValue>();
+    for (const read of plan.reads) {
+      if (read.kind === "morpho.position") {
+        before.set(read.id, {
+          supplyShares: 0n,
+          borrowShares: 0n,
+          collateral: 0n,
+        });
+        after.set(read.id, {
+          supplyShares: 0n,
+          borrowShares: 400n,
+          collateral: scenario.collateral,
+        });
+      } else if (read.kind === "erc20.balance") {
+        before.set(read.id, 1000n);
+        after.set(
+          read.id,
+          1000n -
+            (read.token === token
+              ? scenario.pull - (scenario.refund ?? 0n)
+              : 0n) +
+            (read.token === loanToken ? proceeds : 0n),
+        );
+      }
+    }
+    const transfers: Transfer[] = scenario.noTransfers
+      ? []
+      : [
+          { token, from: owner, to: receiver, amount: scenario.pull, txIdx: 0 },
+          { token, from: receiver, to: vault, amount: scenario.pull, txIdx: 0 },
+          { token, from: owner, to: owner, amount: 1000n, txIdx: 0 },
+          {
+            token: loanToken,
+            from: vault,
+            to: owner,
+            amount: proceeds,
+            txIdx: 0,
+          },
+          {
+            token,
+            from: receiver,
+            to: owner,
+            amount: scenario.refund ?? 0n,
+            txIdx: 0,
+          },
+        ];
+    const result = findOperationSlippageFailures({
+      ctx,
+      operations: plan.operations,
+      before,
+      after,
+      transfers,
+      logs: [],
+      morpho: vault,
+      requestTransactions: [],
+    });
+    if (scenario.field === undefined) {
+      expect(result.failures).toEqual([]);
+    } else {
+      expect(result.failures).toContainEqual(
+        expect.objectContaining({
+          field: scenario.field,
+          check: scenario.check ?? "slippageTolerance",
+        }),
+      );
+      expect(
+        result.failures.every(
+          (failure) => failure instanceof ConsumerLimitViolationError,
+        ),
+      ).toBe(true);
+      if (scenario.positionFailure) {
+        expect(result.failures).toContainEqual(
+          expect.objectContaining({ field: "collateralSupplied" }),
+        );
+      }
+    }
+  });
+
+  test("behavior: direct Blue collateral supply counts owner pulls without double-counting forwarding", () => {
+    const operation: ParsedOperationLimit = {
+      type: "blueSupplyCollateral",
+      marketId,
+      quote: { assetsPaid: 100n, collateralSupplied: 100n },
+      slippageTolerance: 0n,
+    };
+    const plan = planStateReads({
+      owner,
+      morpho: vault,
+      midnight: zeroAddress,
+      operations: [{ limit: operation, assetsPaid: token }],
+    });
+    const before = new Map<string, StateValue>();
+    const after = new Map<string, StateValue>();
+    for (const read of plan.reads) {
+      before.set(
+        read.id,
+        read.kind === "morpho.position"
+          ? { supplyShares: 0n, borrowShares: 0n, collateral: 0n }
+          : 1000n,
+      );
+      after.set(
+        read.id,
+        read.kind === "morpho.position"
+          ? { supplyShares: 0n, borrowShares: 0n, collateral: 100n }
+          : 900n,
+      );
+    }
+    const input = {
+      ctx,
+      operations: plan.operations,
+      before,
+      after,
+      logs: [],
+      morpho: vault,
+      requestTransactions: [],
+    };
+    const transfer = {
+      token,
+      from: owner,
+      to: receiver,
+      amount: 100n,
+      txIdx: 0,
+    };
+    expect(
+      findOperationSlippageFailures({
+        ...input,
+        transfers: [transfer, { ...transfer, from: receiver, to: vault }],
+      }).failures,
+    ).toEqual([]);
+    expect(
+      findOperationSlippageFailures({
+        ...input,
+        transfers: [{ ...transfer, amount: 101n }],
+      }).failures,
+    ).toContainEqual(expect.objectContaining({ field: "assetsPaid" }));
+  });
+});
+
 describe("verifySlippage", () => {
   test.each(
     (["blueSupplyCollateral", "blueSupplyCollateralBorrow"] as const).flatMap(
@@ -209,6 +1619,28 @@ describe("verifySlippage", () => {
           { name: "separate wNative pull fails", wrappedDebit: 1n, fail: true },
           { name: "ETH-only exact funding" },
           { name: "wrap then supply", wrap: true },
+          {
+            name: "wrapped refund cannot hide a separate wrapped pull",
+            wrappedDebit: 1n,
+            wrappedCredit: 1n,
+            fail: true,
+          },
+          ...[false, true].map((wrap) => ({
+            name: `native refund cannot hide gross funding (wrap=${wrap})`,
+            native: 110n,
+            nativeRefund: 10n,
+            wrap,
+            fail: true,
+          })),
+          {
+            name: "delegated wrapped funding retains gross native cap",
+            mixed: true,
+            typed: false,
+            native: 110n,
+            nativeRefund: 10n,
+            wrappedDebit: 10n,
+            fail: true,
+          },
           { name: "wNative-only funding", native: 0n, wrappedDebit: 100n },
           {
             name: "unmeasured wNative credit cannot mask excess ETH",
@@ -231,6 +1663,13 @@ describe("verifySlippage", () => {
                 {
                   name: "same-token wNative exact native funding",
                   sameToken: true,
+                },
+                {
+                  name: "same-token proceeds fallback retains gross native cap",
+                  sameToken: true,
+                  native: 110n,
+                  nativeRefund: 10n,
+                  fail: true,
                 },
                 {
                   name: "same-token wNative extra pull reduces proceeds",
@@ -358,6 +1797,7 @@ describe("verifySlippage", () => {
         ].map((scenario) => ({
           type,
           native: 100n,
+          nativeRefund: 0n,
           wrappedDebit: 0n,
           wrappedCredit: 0n,
           tolerance: 0n,
@@ -381,6 +1821,7 @@ describe("verifySlippage", () => {
     async ({
       type,
       native,
+      nativeRefund,
       wrappedDebit,
       wrappedCredit,
       tolerance,
@@ -517,6 +1958,10 @@ describe("verifySlippage", () => {
           field: "assetsPaid",
           type: "native",
           account: owner,
+          collateralPayInToken: ethAddress,
+          ...(registered && (mixed || sameTokenBorrow)
+            ? { nativeConversionWrapper: wrapped }
+            : {}),
         });
       }
       const before = new Map<string, StateValue>();
@@ -562,6 +2007,13 @@ describe("verifySlippage", () => {
         before,
         after,
         transfers: [
+          {
+            token: ethAddress,
+            from: vault,
+            to: owner,
+            amount: nativeRefund,
+            txIdx: 0,
+          },
           {
             token: ethAddress,
             from: owner,
@@ -2466,6 +3918,34 @@ describe("verifySlippage — Midnight collateral", () => {
       verify(midnightLimit, { spent: 1_001n, credited: 1_000n }),
     ).toThrow(/slippage for "assetsPaid"/);
   });
+  test.each([
+    "midnightSupplyCollateral",
+    "midnightSupplyCollateralMakeBorrow",
+  ] as const)(
+    "behavior: %s caps collateral credit at quote plus tolerance",
+    (type) => {
+      const operation: ParsedOperationLimit = {
+        type,
+        marketId,
+        collateralIndex: 0n,
+        account: owner,
+        quote: midnightLimit.quote,
+        slippageTolerance: MathLib.WAD / 10n,
+      };
+      expect(() =>
+        verify(operation, { spent: 1000n, credited: 1100n }),
+      ).not.toThrow();
+      expect(() =>
+        verify(operation, { spent: 1000n, credited: 1101n }),
+      ).toThrow(
+        expect.objectContaining({
+          field: "collateralSupplied",
+          check: "slippageTolerance",
+          bound: 1100n,
+        }),
+      );
+    },
+  );
   test("error: a missing collateral observation fails closed", () => {
     const plan = planStateReads({
       operations: [

@@ -344,12 +344,15 @@ function mapTakeableOffer(
   takeableOffer: ApiTakeableOfferResponse,
 ): MidnightApiTake {
   const offer = takeableOffer.offer;
+  const expiry = BigInt(
+    requireNonNegativeSafeInteger(offer.expiry, "offer expiry"),
+  );
   const validUntil = takeableOffer.valid_until;
   if (
     typeof validUntil !== "number" ||
     !Number.isSafeInteger(validUntil) ||
     validUntil < 0 ||
-    BigInt(validUntil) > BigInt(offer.expiry)
+    BigInt(validUntil) > expiry
   ) {
     throw new InvalidMidnightApiResponseError(
       "Midnight API takeable offer valid_until must be a non-negative safe integer no greater than offer.expiry.",
@@ -389,26 +392,48 @@ function mapTakeableOffer(
     ),
     offer: {
       market: {
-        chainId: BigInt(offer.market.chain_id),
+        chainId: BigInt(
+          requireNonNegativeSafeInteger(
+            offer.market.chain_id,
+            "offer market chain_id",
+          ),
+        ),
         midnight: offer.market.midnight,
         loanToken: offer.market.loan_token,
         collateralParams: [...offer.market.collaterals]
           .sort(MarketUtils.compareCollateralTokens)
           .map((collateral) => ({
             token: collateral.token,
-            lltv: BigInt(collateral.lltv),
-            liquidationCursor: BigInt(collateral.liquidation_cursor),
+            lltv: BigInt(
+              requireBigIntString(collateral.lltv, "offer collateral lltv"),
+            ),
+            liquidationCursor: BigInt(
+              requireBigIntString(
+                collateral.liquidation_cursor,
+                "offer collateral liquidation_cursor",
+              ),
+            ),
             oracle: collateral.oracle,
           })),
-        maturity: BigInt(offer.market.maturity),
-        rcfThreshold: BigInt(offer.market.rcf_threshold),
+        maturity: BigInt(
+          requireNonNegativeSafeInteger(
+            offer.market.maturity,
+            "offer market maturity",
+          ),
+        ),
+        rcfThreshold: BigInt(
+          requireBigIntString(
+            offer.market.rcf_threshold,
+            "offer market rcf_threshold",
+          ),
+        ),
         enterGate: offer.market.enter_gate,
         liquidatorGate: offer.market.liquidator_gate,
       },
       buy: offer.buy,
       maker: offer.maker,
-      start: BigInt(offer.start),
-      expiry: BigInt(offer.expiry),
+      start: BigInt(requireNonNegativeSafeInteger(offer.start, "offer start")),
+      expiry,
       tick: TickLib.assertTickInRange(BigInt(offer.tick)),
       group: offer.group,
       callback: offer.callback,
@@ -416,9 +441,16 @@ function mapTakeableOffer(
       receiverIfMakerIsSeller: offer.receiver_if_maker_is_seller,
       ratifier: offer.ratifier,
       reduceOnly: offer.reduce_only,
-      maxUnits: BigInt(offer.max_units),
-      maxAssets: BigInt(offer.max_assets),
-      continuousFeeCap: BigInt(offer.continuous_fee_cap),
+      maxUnits: BigInt(requireBigIntString(offer.max_units, "offer max_units")),
+      maxAssets: BigInt(
+        requireBigIntString(offer.max_assets, "offer max_assets"),
+      ),
+      continuousFeeCap: BigInt(
+        requireBigIntString(
+          offer.continuous_fee_cap,
+          "offer continuous_fee_cap",
+        ),
+      ),
     },
     ratifierData: takeableOffer.ratifier_data,
     validUntil: BigInt(validUntil),
@@ -695,6 +727,18 @@ export function requireBigIntString(value: string, context: string): string {
   }
   throw new InvalidMidnightApiResponseError(
     `Midnight API ${context} (${typeof value}) is not a decimal uint256 string.`,
+  );
+}
+
+function requireNonNegativeSafeInteger(
+  value: unknown,
+  context: string,
+): number {
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) {
+    return value;
+  }
+  throw new InvalidMidnightApiResponseError(
+    `Midnight API ${context} (${typeof value}) is not a non-negative safe integer.`,
   );
 }
 

@@ -248,7 +248,7 @@ describe.sequential("simulate approval allowlist", () => {
             quote: {
               assetsReceived: borrowAssets,
               assetsPaid: collateralAssets,
-              collateralSupplied: 1n,
+              collateralSupplied: collateralAssets,
               sharesMinted:
                 (await morpho.getMarketData()).toBorrowShares(
                   borrowAssets,

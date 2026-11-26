@@ -51,6 +51,7 @@ export const parseBlueSupplyCollateralBorrow = (
   const mode = parseBlueSupplyCollateralBorrowMode({
     ...amounts,
     reallocations: [...(params.args.reallocations ?? [])],
+    maxPenalty: params.args.maxPenalty,
   });
   // Reject signatures for inactive legs before continuing.
   validateBlueSupplyCollateralBorrowSignatureLegs(amounts, params.args);
@@ -102,6 +103,7 @@ export const parseBlueSupplyCollateralBorrowMode = (params: {
   readonly collateralAssets: bigint;
   readonly borrowAssets: bigint;
   readonly reallocations: readonly VaultV2BlueReallocation[];
+  readonly maxPenalty?: bigint;
 }) => {
   const { borrowAssets, reallocations } = params;
   if (borrowAssets === 0n && reallocations.length > 0) {
@@ -115,10 +117,10 @@ export const parseBlueSupplyCollateralBorrowAllocations = (
   marketParams: ReturnType<typeof parseBlueMarket>,
   mode: ReturnType<typeof parseBlueSupplyCollateralBorrowMode>,
 ) => {
-  const allocations = parseBlueAllocations(
-    [...mode.reallocations],
+  const allocations = parseBlueAllocations([...mode.reallocations], {
     marketParams,
-  );
+    maxPenalty: mode.maxPenalty,
+  });
   if (allocations.penaltyAssets > mode.borrowAssets) {
     throw new InputExceedsMaxError({
       field: "reallocationPenaltyAssets",

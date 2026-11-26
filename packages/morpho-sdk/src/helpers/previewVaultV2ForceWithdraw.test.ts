@@ -191,7 +191,7 @@ describe("previewVaultV2ForceWithdraw", () => {
     );
   });
 
-  test("behavior: third-party referral fee is subtracted", () => {
+  test("behavior: third-party referral fee is subtracted at exactly 10%", () => {
     const preview = previewVaultV2ForceWithdraw(
       vaultV2ExitData({ assetBalance: 100n, penalty: 0n }),
       {
@@ -616,9 +616,7 @@ describe("previewVaultV2ForceWithdraw", () => {
     ).toEqual(previewVaultV2ForceWithdraw(vaultData, params));
   });
 
-  // Out of range the transaction path rejects, so quoting a payout here would overstate what the
-  // user receives (negative fee) or promise a non-positive one (at or above WAD).
-  test.each([-1n, MathLib.WAD, MathLib.WAD + 1n])(
+  test.each([-1n, TEN_PERCENT + 1n, MathLib.WAD, MathLib.WAD + 1n])(
     "behavior: returns undefined for a referralFeePct of %s",
     (referralFeePct) => {
       expect(
@@ -626,6 +624,7 @@ describe("previewVaultV2ForceWithdraw", () => {
           requestedExitAssets: 51n,
           timestamp: 0n,
           referralFeePct,
+          referralFeeRecipient: IN_KIND_FOREIGN_ADAPTER,
         }),
       ).toBeUndefined();
     },

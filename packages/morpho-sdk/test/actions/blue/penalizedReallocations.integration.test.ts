@@ -153,6 +153,7 @@ test.for([
             borrowAssets: operation.amount,
             positionData: scenario.destinationPosition,
             reallocations: plan.reallocations,
+            maxPenalty: penalty,
             deadline: maxUint256,
           })
         : scenario.destination.withdraw({
@@ -160,6 +161,7 @@ test.for([
             assets: operation.amount,
             positionData: scenario.destinationPosition,
             reallocations: plan.reallocations,
+            maxPenalty: penalty,
             deadline: maxUint256,
           });
     const signatures = await satisfyBlueBundlesV1Requirements(scenario.client, {

@@ -86,7 +86,7 @@ export type VaultV2ForceWithdrawInput = {
  *   submitting account must equal this address.
  * @param params.args.deadline - Permit and bundle deadline.
  * @param params.args.referralFeePct - Optional WAD-scaled share of the withdrawn assets routed to
- *   `referralFeeRecipient`. Defaults to `0n`. Deducted *after* the `minSharePriceE27` check, so it
+ *   `referralFeeRecipient`, at most 10%. Defaults to `0n`. Deducted *after* the `minSharePriceE27` check, so it
  *   is outside that bound's protection.
  * @param params.args.referralFeeRecipient - Optional referral fee recipient. Defaults to the zero
  *   address, which is only valid alongside a zero `referralFeePct`.
@@ -98,6 +98,7 @@ export type VaultV2ForceWithdrawInput = {
  * @throws {NegativeInputError} when `referralFeePct` or `minSharePriceE27` is negative.
  * @throws {ReferralFeePctExceededError} when `referralFeePct` is not below WAD (the contract
  *   rejects it with `PctExceeded`); it extends {@link InputExceedsMaxError}.
+ * @throws {MidnightReferralFeePctExceededError} when the referral fee is above 10% but below WAD.
  * @throws {InputExceedsMaxError} when `exitAssets`, `deadline`, or `minSharePriceE27` exceeds `uint256`.
  * @throws {ReferralFeeRecipientMissingError} when a positive `referralFeePct` has no recipient.
  * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.

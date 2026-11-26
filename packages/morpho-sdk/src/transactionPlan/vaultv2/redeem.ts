@@ -40,7 +40,7 @@ export interface VaultV2RedeemPlanParams extends RedeemPlanParams {}
  * @param params.chainId - Chain containing the vault and registered VaultBundlesV1 contract.
  * @param params.account - Non-zero share owner, permit signer and transaction sender; receives the net assets.
  * @param params.shares - Positive exact shares to burn, in share base units; use the account's balance for full redemption.
- * @param params.referralFee.bps - Optional integer fee in basis points of gross redeemed assets; defaults to zero and must be below 10,000.
+ * @param params.referralFee.bps - Optional integer fee in basis points of gross redeemed assets; defaults to zero and must be at most 1,000.
  * @param params.referralFee.recipient - Optional fee recipient; must be non-zero when the fee is positive.
  * @param params.supportSignature - Optional ERC-2612 share-permit preference; defaults to `false` for direct approval.
  * @param params.now - Reference timestamp in seconds, normally the latest block's `timestamp`; uses the device clock when omitted.
@@ -53,10 +53,9 @@ export interface VaultV2RedeemPlanParams extends RedeemPlanParams {}
  * @throws {NonPositiveInputError} when `expiresAt` or `shares` is not positive.
  * @throws {ExpiredDeadlineError} when `expiresAt` is not in the future.
  * @throws {NegativeInputError} when `referralFee.bps` is negative.
- * @throws {InputExceedsMaxError} when `referralFee.bps` exceeds 10,000 or `shares` exceeds uint256.
+ * @throws {InputExceedsMaxError} when `referralFee.bps` exceeds 1,000 or `shares` exceeds uint256.
  * @throws {InvalidCalldataOriginError} when `calldataOrigin` is empty, malformed or has an odd number of hex digits.
  * @throws {InvalidTransactionPlanError} when `account` is malformed or `calldataOrigin` exceeds 1 MiB.
- * @throws {ReferralFeePctExceededError} when `referralFee.bps` equals 10,000; the normalized fee must be below WAD.
  * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no non-zero recipient.
  * @throws {ChainIdMismatchError} when the declared or RPC chain differs from `chainId`.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.

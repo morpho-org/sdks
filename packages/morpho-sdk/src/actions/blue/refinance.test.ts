@@ -225,6 +225,7 @@ describe("blueRefinance", () => {
         userAddress,
         maxLtv,
         reallocations: [reallocation],
+        maxPenalty: MathLib.WAD,
         deadline,
       },
     });

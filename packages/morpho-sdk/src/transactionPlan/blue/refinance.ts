@@ -72,19 +72,25 @@ export interface BlueRefinancePlanParams
   readonly destination: RefinanceMarket;
   /** Optional ordered Vault V2 reallocations into the destination market. */
   readonly reallocations?: readonly VaultV2BlueReallocation[];
+  /** Maximum WAD-scaled penalty rate per reallocation in [0, WAD], defaulting to zero. Each rate applies to that reallocation's assets, so it does not bound the total penalty added to destination debt. */
+  readonly maxPenalty?: bigint;
 }
 
 /**
  * Prepares a full Blue borrow-position migration. Fetch both market and position snapshots at the
  * same block and pass that block's timestamp as `now`. Penalties and fees increase destination debt;
  * the quote checks the buffered destination LLTV and the transaction enforces it again onchain.
+ * Health uses the expiry floored at now and both market snapshots. Expiries more than
+ * 365 days out retain the legacy +2h projection for unlimited sentinels.
  *
  * BlueBundlesV1 moves the full live debt and collateral without pulling tokens from the account.
  * When Morpho authorization is missing, the plan requests a signature inline if supported,
  * otherwise it puts a direct authorization step before the migration.
  * @param client - Viem client used to check deployed contracts and resolve Morpho authorization.
  * @param params - Chain, sending account, market and position snapshots, and optional reallocations.
+ * @param params.maxPenalty - Maximum WAD-scaled penalty rate per reallocation in [0, WAD], defaulting to zero. Each rate applies to that reallocation's assets, so it does not bound the total penalty added to destination debt.
  * @returns A frozen plan with only the steps and signature requests required for the migration.
+ * @throws {InvalidBigIntInputError} when a supplied maxPenalty is not a bigint.
  * @throws {BlueSnapshotChainMismatchError} when either snapshot comes from another chain.
  * @throws {MarketIdMismatchError} when a snapshot or embedded market tuple does not match its market ID.
  * @throws {AccrualPositionUserMismatchError} when a position belongs to another account.
@@ -97,9 +103,10 @@ export interface BlueRefinancePlanParams
  * @throws {NonIntegerInputError} when `expiresAt` or `referralFee.bps` is not a safe integer.
  * @throws {NonPositiveInputError} when the source has no debt shares, or expiry or reallocation assets are not positive.
  * @throws {ExpiredDeadlineError} when expiry is at or before `now`.
- * @throws {NegativeInputError} when a referral fee or reallocation penalty is negative.
+ * @throws {NegativeInputError} when a referral fee, maxPenalty or reallocation penalty is negative.
  * @throws {InputExceedsMaxError} when the fee or a reallocation value exceeds its bound.
- * @throws {ReferralFeePctExceededError} when `referralFee.bps` is 10,000.
+ * Also thrown when maxPenalty exceeds WAD or a penalty exceeds maxPenalty (zero by default).
+ * @throws {InputExceedsMaxError} when `referralFee.bps` exceeds 1,000.
  * @throws {ReferralFeeRecipientMissingError} when a positive fee has no nonzero recipient.
  * @throws {InvalidTransactionPlanError} when the account, referral fee recipient, market tuples, or stored reallocation fields are malformed.
  * @throws {InvalidCalldataOriginError} when calldata origin is not nonempty, whole-byte hex.
@@ -130,6 +137,7 @@ export async function prepareBlueRefinance(
   params: BlueRefinancePlanParams,
 ): Promise<TransactionPlan> {
   const { account, chainId, source, destination } = params;
+  const { maxPenalty } = params;
   const now = params.now ?? Time.timestamp();
   const sourceMarketParams = structuredClone(source.marketData.market.params);
   const destinationMarketParams = structuredClone(
@@ -187,10 +195,10 @@ export async function prepareBlueRefinance(
           borrowShares: source.positionData.position.borrowShares,
         });
         // The quote only gates preparation; the contract migrates the actual live position.
-        const { penaltyAssets } = parseBlueAllocations(
-          reallocations,
-          parseBlueMarket(destinationMarketParams),
-        );
+        const { penaltyAssets } = parseBlueAllocations(reallocations, {
+          marketParams: parseBlueMarket(destinationMarketParams),
+          maxPenalty,
+        });
         for (const [index, reallocation] of reallocations.entries()) {
           validatePlanReallocationShape(
             reallocation,
@@ -204,6 +212,7 @@ export async function prepareBlueRefinance(
           penaltyAssets,
           referralFeePct,
           now,
+          deadline,
         });
         return { id, needsAuthorization: true };
       },
@@ -232,6 +241,7 @@ export async function prepareBlueRefinance(
       ),
       ...common,
       reallocations,
+      ...(maxPenalty !== undefined && { maxPenalty }),
       ...(request && { authorizationNonce: request.args.nonce }),
     },
     signatureRequestIds:
@@ -329,6 +339,12 @@ export function validateRefinancePlanAction(
   path: string,
 ): void {
   const inputs = getPlanObject(action.inputs, `${path}.inputs`);
+  if (inputs.maxPenalty !== undefined) {
+    validatePlanField(inputs.maxPenalty, {
+      path: `${path}.inputs.maxPenalty`,
+      type: "uint256 bigint",
+    });
+  }
   validatePlanFields(inputs, {
     path: `${path}.inputs`,
     fields: {

@@ -10,10 +10,10 @@ import {
   VaultConfig,
 } from "@morpho-org/blue-sdk";
 import type { Address, Client } from "viem";
-
 import { getChainId, readContract } from "viem/actions";
 import { metaMorphoAbi, metaMorphoFactoryAbi } from "../abis.js";
-import { abi, code } from "../queries/GetVault.js";
+import { readDeploylessContract } from "../deployless.js";
+import { abi, code, deployedCode } from "../queries/GetVault.js";
 import type { DeploylessFetchParameters, FetchParameters } from "../types.js";
 import { catchRevertOnly, isTransportError } from "../utils.js";
 import { fetchVaultConfig } from "./VaultConfig.js";
@@ -219,10 +219,11 @@ async function fetchVaultWithQuery(
     supplyQueue,
     withdrawQueue,
     deadShares,
-  } = await readContract(client, {
+  } = await readDeploylessContract(client, {
     ...parameters,
     abi,
     code,
+    deployedCode,
     functionName: "query",
     args: [address, metaMorphoFactory],
   });

@@ -35,7 +35,6 @@ import {
   NativeAmountOnNonWNativeVaultError,
   NegativeInputError,
   NonPositiveInputError,
-  ReferralFeePctExceededError,
 } from "../../types/index.js";
 import { ZeroAccountError } from "../error.js";
 import { buildTransactions } from "../plan.js";
@@ -189,7 +188,7 @@ test("deposit calldata encodes the quoted slippage bound and referral fee", asyn
 });
 
 test.each([prepareVaultV2Deposit, prepareVaultV2Withdraw])(
-  "%s prepares and builds fees of zero and 9999 basis points",
+  "%s prepares and builds fees of zero and 1,000 basis points",
   async (prepare) => {
     const handle = createMockClient(mainnet);
     for (const address of [vaultData.asset, vaultData.address]) {
@@ -200,7 +199,7 @@ test.each([prepareVaultV2Deposit, prepareVaultV2Withdraw])(
         result: 0n,
       });
     }
-    for (const bps of [0, 9999]) {
+    for (const bps of [0, 1_000]) {
       const plan = await prepare(handle.client, {
         ...params,
         assets: 10_000n,
@@ -216,15 +215,23 @@ test.each([prepareVaultV2Deposit, prepareVaultV2Withdraw])(
 );
 
 test.each([prepareVaultV2Deposit, prepareVaultV2Withdraw])(
-  "%s rejects 10000 basis points with the builder's typed error before RPC reads",
+  "[INV-10] %s rejects 1,001 basis points at intent resolution before RPC reads",
   async (prepare) => {
     const handle = createMockClient(mainnet);
-    await expect(
-      prepare(handle.client, {
-        ...params,
-        referralFee: { bps: 10_000, recipient: IN_KIND_USER },
-      }),
-    ).rejects.toThrow(new ReferralFeePctExceededError(10n ** 18n));
+    for (const bps of [1_001, 10_000]) {
+      await expect(
+        prepare(handle.client, {
+          ...params,
+          referralFee: { bps, recipient: IN_KIND_USER },
+        }),
+      ).rejects.toThrow(
+        new InputExceedsMaxError({
+          field: "referralFee.bps",
+          value: BigInt(bps),
+          max: 1_000n,
+        }),
+      );
+    }
     expect(handle.request).not.toHaveBeenCalled();
   },
 );

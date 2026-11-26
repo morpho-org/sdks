@@ -1579,6 +1579,7 @@ test("allocator penalties precede referral fees; undeclared charges fail", async
       positionData: await market.getPositionData(userAddress),
       borrowAssets,
       reallocations: [reallocation],
+      maxPenalty: penalty,
       referralFeePct: referralFee,
       referralFeeRecipient,
     });

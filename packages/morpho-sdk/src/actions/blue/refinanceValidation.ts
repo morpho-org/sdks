@@ -3,8 +3,8 @@ import {
   type MarketParams,
   MathLib,
 } from "@morpho-org/blue-sdk";
-import { Time } from "@morpho-org/morpho-ts";
 import { isAddressEqual } from "viem";
+import { getBlueBundlesV1QuoteTimestamp } from "../../helpers/getBlueBundlesV1QuoteTimestamp.js";
 import { validatePositionHealth } from "../../helpers/validate.js";
 import {
   NonPositiveInputError,
@@ -61,7 +61,7 @@ export function validateBlueRefinanceMarkets(
   }
 }
 
-/** @internal Checks the migration quote, including destination debt from allocator penalties and fees. */
+/** @internal Checks deadline-projected migration health, including destination debt from allocator penalties and fees. */
 export function validateBlueRefinanceQuote({
   destinationMarketParams,
   sourcePosition,
@@ -69,6 +69,7 @@ export function validateBlueRefinanceQuote({
   penaltyAssets,
   referralFeePct,
   now,
+  deadline,
 }: {
   readonly destinationMarketParams: Pick<MarketParams, "id" | "lltv">;
   readonly sourcePosition: Readonly<AccrualPosition>;
@@ -76,15 +77,18 @@ export function validateBlueRefinanceQuote({
   readonly penaltyAssets: bigint;
   readonly referralFeePct: bigint;
   readonly now: bigint;
+  readonly deadline?: bigint;
 }): void {
-  const accrualTimestamp =
-    MathLib.max(
-      now,
+  const quoteTimestamp = getBlueBundlesV1QuoteTimestamp({
+    lastUpdate: MathLib.max(
       sourcePosition.market.lastUpdate,
       destinationPosition.market.lastUpdate,
-    ) + Time.s.from.h(2n);
-  const source = sourcePosition.accrueInterest(accrualTimestamp);
-  const destination = destinationPosition.accrueInterest(accrualTimestamp);
+    ),
+    now,
+    deadline,
+  });
+  const source = sourcePosition.accrueInterest(quoteTimestamp);
+  const destination = destinationPosition.accrueInterest(quoteTimestamp);
   const feeAssets = getBlueBundlesV1ReferralFeeAssets(
     source.borrowAssets,
     referralFeePct,

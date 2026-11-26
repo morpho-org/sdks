@@ -3,16 +3,18 @@ import {
   NegativeInputError,
   ReferralFeePctExceededError,
 } from "../types/index.js";
+import { validateMidnightReferralFeeCap } from "./validateMidnightBounds.js";
 
 /**
  * Computes the gross amount whose post-referral-fee proceeds equal `netAssets` exactly.
  *
  * @param params - Net target and WAD-scaled referral fee.
  * @param params.netAssets - Required proceeds after the fee, in the asset's smallest unit.
- * @param params.referralFeePct - Referral fee fraction scaled by WAD (`1e18`); must be below WAD.
+ * @param params.referralFeePct - Referral fee fraction scaled by WAD (`1e18`); at most 10%.
  * @returns The gross asset amount to pass to a bundles entrypoint.
  * @throws {NegativeInputError} when `netAssets` or `referralFeePct` is negative.
  * @throws {ReferralFeePctExceededError} when `referralFeePct >= WAD`.
+ * @throws {MidnightReferralFeePctExceededError} when the fee is above 10% but below WAD.
  * @example
  * ```ts
  * import { grossFromNetAssets } from "@morpho-org/morpho-sdk";
@@ -34,6 +36,8 @@ export const grossFromNetAssets = (params: {
   if (params.referralFeePct >= MathLib.WAD) {
     throw new ReferralFeePctExceededError(params.referralFeePct);
   }
+  // Reject fees that the SDK's bundle builders would reject.
+  validateMidnightReferralFeeCap(params.referralFeePct);
   return MathLib.mulDivDown(
     params.netAssets,
     MathLib.WAD,

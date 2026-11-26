@@ -235,7 +235,19 @@ export interface SlippageQuote {
    */
   readonly sharesMinted?: bigint;
   /**
-   * Expected net assets debited from the sender. `assetPaid` is rejected for
+   * Expected net assets debited from the sender. Blue collateral supplies also
+   * count gross owner-originated token transfers (including native ETH), without
+   * netting proceeds or refunds; the larger of net debit and observed gross pulls is capped.
+   * Derived same-token collateral/borrow pay-in quotes remain net; explicit
+   * pay-in quotes still use the gross cap.
+   * Combined ETH/wNative collateral measurements cap the larger of net payment
+   * and gross ETH plus wNative outflows, offsetting only matching conversion
+   * receipts. Native-sentinel quote payment adds only net wNative debits;
+   * credits never reduce payment. ETH-only fallbacks retain the gross ETH cap.
+   * In those fallbacks, ETH sent to the wrapper is offset only up to ETH returned
+   * from it on unwrap minus external wNative credits (excluding mints and
+   * self-transfers), floored at zero. Ordinary refunds do not offset gross sends.
+   * Missing transfer evidence retains the net measurement. `assetPaid` is rejected for
    * every `midnightTakeLend`, `midnightRepayWithdrawCollateral`,
    * `midnightTakeRepayWithdrawCollateral` and `midnightSupplyBlueMakeLend`
    * limit because the paid token is always the market's loan token. On wNative
@@ -251,8 +263,10 @@ export interface SlippageQuote {
    */
   readonly sharesBurned?: bigint;
   /**
-   * Expected net collateral added to the position. This is a minimum:
-   * supplying less collateral than quoted is adverse. Measurable only on
+   * Expected net collateral added to the position, bounded below and above
+   * by the quote minus/plus slippage tolerance. Typed-input exact amounts
+   * remain exact; derived inactive placeholders only forbid collateral loss.
+   * Explicit quotes on inactive legs retain both bounds. Measurable only on
    * `blueSupplyCollateral` and `blueSupplyCollateralBorrow` (the Blue
    * position's `collateral`) and Midnight collateral supplies
    * (`collateral(marketId, account, collateralIndex)`).

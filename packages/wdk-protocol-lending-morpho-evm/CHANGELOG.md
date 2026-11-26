@@ -1,5 +1,19 @@
 # @morpho-org/wdk-protocol-lending-morpho-evm
 
+## 4.7.0
+
+### Minor Changes
+
+- Require explicit consent to positive Vault V2 reallocation penalties on Blue borrow, collateral-supply-and-borrow, loan-asset withdrawal, and refinance actions, including their TransactionPlan preparers and stored-plan builders. These actions now reject penalties above `maxPenalty`, which defaults to zero only when omitted and accepts bigint WAD-scaled values from zero through WAD. Planning and fresh-action preparation/building share runtime type and range validation; non-bigint bounds throw `InvalidBigIntInputError`, including through WDK borrow options. `parseTransactionPlan` rejects serialized `maxPenalty` values that fail the uint256 schema with `InvalidTransactionPlanError`. In-memory plans passed directly to `buildTransaction` or `buildTransactions` use the shared validator: non-bigint bounds throw `InvalidBigIntInputError`, negative bounds throw `NegativeInputError`, and bounds above WAD throw `InputExceedsMaxError`. A parsed uint256 bound above WAD also throws `InputExceedsMaxError` when built. Pass the same explicit `maxPenalty` used to plan paid reallocations when building the action. TransactionPlans preserve this bound through serialization and rebuilding. WDK borrow options also forward this bound. Format-2 TransactionPlans saved by an earlier release do not carry `maxPenalty`, so a saved plan with a positive-penalty reallocation now throws `InputExceedsMaxError` from `buildTransaction`; re-prepare such plans, or rebuild them with an explicit `maxPenalty` from a trusted source.
+
+### Patch Changes
+
+- Accrue BlueBundlesV1 position-health checks through realistic finite action deadlines instead of a fixed two-hour horizon, consistently across entity builders and TransactionPlan preparers. Deadlines more than 365 days beyond the current time or market snapshot are treated as unlimited sentinels and retain the legacy two-hour projection, avoiding interest-accrual overflow for maxUint256-style callers. Borrow, collateral withdrawal, and refinance checks retain the LLTV buffer and never accrue backwards. Repay-only calls do not use the withdrawal-health projection, and debt-free withdrawals skip market-interest projection while retaining collateral-amount validation. Share-repay funding keeps its existing two-hour deadline limit. Long finite deadlines can make health quotes for borrows, collateral withdrawals with debt, and refinances throw `TotalOverflow` on markets near the uint128 limit before any transaction is built; a shorter deadline avoids this overflow.
+- Reject vault deposit and V1-to-V2 migration deadlines more than seven days after the reference time with `InputExceedsMaxError`, including TransactionPlan preparation. A reference time `now` that is not a bigint is rejected with `InvalidBigIntInputError` before the window is computed. Export `VAULT_DEPOSIT_MAX_DEADLINE_SECONDS` from the package root and `/constants` so callers can select a supported expiry. This bounds the forward accrual used for maximum share-price protection; the default two-hour expiry is unchanged.
+- Updated dependencies
+  - @morpho-org/morpho-sdk@10.2.0
+  - @morpho-org/blue-sdk-viem@7.6.0
+
 ## 4.6.1
 
 ### Patch Changes

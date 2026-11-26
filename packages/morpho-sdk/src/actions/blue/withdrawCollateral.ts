@@ -28,7 +28,7 @@ export interface BlueWithdrawCollateralParams {
     readonly maxLtv: bigint;
     /** Final call deadline in Unix seconds. */
     readonly deadline: bigint;
-    /** Optional WAD-scaled referral fee, strictly below 100%. */
+    /** Optional WAD-scaled referral fee, at most 10%. */
     readonly referralFeePct?: bigint;
     /** Recipient required when `referralFeePct` is positive. */
     readonly referralFeeRecipient?: Address;
@@ -52,7 +52,7 @@ export interface BlueWithdrawCollateralParams {
  * @param params.args.collateralAssets - Collateral assets withdrawn.
  * @param params.args.maxLtv - Maximum post-operation LTV.
  * @param params.args.deadline - Final call deadline in Unix seconds.
- * @param params.args.referralFeePct - Optional WAD-scaled referral fee.
+ * @param params.args.referralFeePct - Optional WAD-scaled referral fee, at most 10%.
  * @param params.args.referralFeeRecipient - Recipient required for a positive fee.
  * @param params.args.authorizationSignature - Optional Blue authorization signature.
  * @param params.metadata - Optional transaction metadata.
@@ -61,8 +61,9 @@ export interface BlueWithdrawCollateralParams {
  * @throws {MarketIdMismatchError} when `marketParams.id` does not hash from its tuple fields.
  * @throws {NegativeInputError} when collateral, LTV, or fee is negative.
  * @throws {NonPositiveInputError} when collateral or deadline is not positive.
- * @throws {InputExceedsMaxError} when the referral fee is at least WAD.
  * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
+ * @throws {ReferralFeePctExceededError} when the referral fee is at least WAD.
+ * @throws {MidnightReferralFeePctExceededError} when the referral fee is above 10% but below WAD.
  * @throws {DepositOwnerMismatchError} when the signed authorization owner differs from `userAddress`.
  * @throws {BundlesRequirementSignatureMismatchError} when authorization cannot be bound safely.
  * @throws {UnsupportedChainIdError} when the chain is absent from the registry.

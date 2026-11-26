@@ -63,7 +63,7 @@ export type VaultV2WithdrawInput = {
  * @param params.args.onBehalf - Unsupported; VaultBundlesV1 always burns the transaction sender's shares.
  * @param params.args.requirementSignature - Optional ERC-2612 vault-share permit for `userAddress`
  *   and the registered VaultBundlesV1 spender. Omit when the share allowance meets the required amount.
- * @param params.args.referralFeePct - Optional WAD-scaled fee in [0, 1e18), defaulting to zero.
+ * @param params.args.referralFeePct - Optional WAD-scaled fee from 0% to 10%, inclusive, defaulting to zero.
  *   The fee is rounded down and deducted from the gross withdrawn assets.
  * @param params.args.referralFeeRecipient - Optional fee recipient; a nonzero address is required
  *   when `referralFeePct > 0n`.
@@ -78,6 +78,7 @@ export type VaultV2WithdrawInput = {
  * @throws {InputExceedsMaxError} when `amount` or `deadline` exceeds uint256.
  * @throws {NegativeInputError} when `referralFeePct` is negative.
  * @throws {ReferralFeePctExceededError} when `referralFeePct` is at least WAD.
+ * @throws {MidnightReferralFeePctExceededError} when the referral fee is above 10% but below WAD.
  * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no nonzero recipient.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
  * @throws {UnknownAddressError} when VaultBundlesV1 is not registered on the target chain.

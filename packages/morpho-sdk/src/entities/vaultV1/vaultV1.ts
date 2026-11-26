@@ -52,7 +52,11 @@ import {
 } from "../../helpers/index.js";
 import { resolveTransactionMetadata } from "../../helpers/metadata.js";
 import { parseUint256 } from "../../helpers/parse.js";
-import { validateNativeVaultAsset } from "../../helpers/validate.js";
+import {
+  validateNativeVaultAsset,
+  validateReferenceTime,
+  validateVaultDepositDeadline,
+} from "../../helpers/validate.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
   type ActionOutput,
@@ -128,7 +132,7 @@ export interface VaultV1Actions {
    *   only for a wNative vault.
    * @param params.slippageTolerance - Optional WAD-scaled tolerance; defaults to 0.03% and cannot
    *   exceed 10%.
-   * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%, deducted before
+   * @param params.referralFeePct - Optional WAD-scaled referral fee at most 10%, deducted before
    *   the vault deposit.
    * @param params.referralFeeRecipient - Non-zero recipient required for a positive referral fee.
    * @param params.deadline - Optional execution and permit deadline in Unix seconds; defaults to
@@ -139,16 +143,18 @@ export interface VaultV1Actions {
    *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
    * @throws {UnsupportedBlueMarketIrmError} when an allocated market with positive debt uses an unsupported IRM.
    * @throws {VaultAddressMismatchError} when `vaultData` belongs to another vault.
+   * @throws {InvalidBigIntInputError} when `now` is not a bigint.
    * @throws {ExpiredDeadlineError} when the deadline is stale at creation or requirement resolution.
    * @throws {MixedBundlesFundingError} when ERC-20 and native funding are both supplied.
    * @throws {NegativeInputError} when funding, slippage, or the referral fee is negative.
    * @throws {NonPositiveInputError} when funding or the previewed vault shares are not positive.
    * @throws {ExcessiveSlippageToleranceError} when slippage tolerance exceeds the SDK maximum.
    * @throws {ReferralFeePctExceededError} when the referral fee is at least WAD.
+   * @throws {MidnightReferralFeePctExceededError} when the referral fee is above 10% but below WAD.
    * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no recipient.
    * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
    * @throws {NativeAmountOnNonWNativeVaultError} when native funding targets a non-wNative vault.
-   * @throws {InputExceedsMaxError} when funding or the deadline exceeds uint256.
+   * @throws {InputExceedsMaxError} when the deadline exceeds seven days after creation or funding or the deadline exceeds uint256.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple token signatures are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an unsupported signature is supplied.
    * @throws {BundlesPermitMismatchError} from `buildTx()` when the signature's spender, amount or
@@ -217,7 +223,7 @@ export interface VaultV1Actions {
    * @param params.slippageTolerance - Optional WAD-scaled tolerance used only to size the minimum
    *   share allowance. It does not impose an on-chain share-burn bound.
    *   Defaults to 0.03% and cannot exceed 10%.
-   * @param params.referralFeePct - Optional WAD-scaled fee in [0, 1e18), defaulting to zero;
+   * @param params.referralFeePct - Optional WAD-scaled fee from 0% to 10%, inclusive, defaulting to zero;
    *   rounded down and deducted from the gross withdrawn assets.
    * @param params.referralFeeRecipient - Optional nonzero recipient required for a positive fee.
    * @param params.deadline - Optional execution and share-permit deadline in Unix seconds;
@@ -239,6 +245,7 @@ export interface VaultV1Actions {
    * @throws {InputExceedsMaxError} when `amount` or `deadline` exceeds uint256 at handle creation.
    * @throws {NegativeInputError} when `referralFeePct` or `slippageTolerance` is negative.
    * @throws {ReferralFeePctExceededError} when `referralFeePct` is at least WAD.
+   * @throws {MidnightReferralFeePctExceededError} when the referral fee is above 10% but below WAD.
    * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no nonzero recipient.
    * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance` exceeds 10%.
    * @throws {VaultAddressMismatchError} when `vaultData` belongs to another vault.
@@ -302,7 +309,7 @@ export interface VaultV1Actions {
    * @param params.shares - Exact vault shares to burn.
    * @param params.userAddress - Account that signs and submits the transaction; VaultBundlesV1
    *   burns and pays `msg.sender`.
-   * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%, deducted from the
+   * @param params.referralFeePct - Optional WAD-scaled referral fee at most 10%, deducted from the
    *   redeemed assets.
    * @param params.referralFeeRecipient - Optional non-zero recipient required for a positive fee.
    * @param params.deadline - Optional execution and share-permit deadline in Unix seconds; defaults
@@ -315,6 +322,7 @@ export interface VaultV1Actions {
    * @throws {InputExceedsMaxError} when `shares` or `deadline` exceeds uint256.
    * @throws {NegativeInputError} when `referralFeePct` is negative.
    * @throws {ReferralFeePctExceededError} when `referralFeePct` is at least WAD.
+   * @throws {MidnightReferralFeePctExceededError} when the referral fee is above 10% but below WAD.
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no non-zero recipient.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when VaultBundlesV1 is not registered.
@@ -491,7 +499,7 @@ export interface VaultV1Actions {
    * @param params.slippageTolerance - Optional WAD-scaled tolerance used to size the minimum
    *   assets-mode source share allowance and the destination `maxSharePrice`; it does not impose
    *   an on-chain source share-burn bound. Defaults to 0.03% and cannot exceed 10%.
-   * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%, deducted from the
+   * @param params.referralFeePct - Optional WAD-scaled referral fee at most 10%, deducted from the
    *   source-vault proceeds.
    * @param params.referralFeeRecipient - Optional non-zero recipient required for a positive fee.
    * @param params.deadline - Optional execution and share-permit deadline in Unix seconds; defaults
@@ -511,9 +519,11 @@ export interface VaultV1Actions {
    * @throws {NonPositiveInputError} when the selected amount or a computed share value is not positive.
    * @throws {NegativeInputError} when slippage tolerance or `referralFeePct` is negative.
    * @throws {ExcessiveSlippageToleranceError} when slippage tolerance exceeds the SDK maximum.
+   * @throws {InvalidBigIntInputError} when `now` is not a bigint.
    * @throws {ExpiredDeadlineError} when the deadline is stale at creation or requirement resolution.
-   * @throws {InputExceedsMaxError} when the selected amount, `maxSharePriceVaultV2`, or `deadline` exceeds uint256.
+   * @throws {InputExceedsMaxError} when the deadline exceeds seven days after creation or the selected amount, `maxSharePriceVaultV2`, or `deadline` exceeds uint256.
    * @throws {ReferralFeePctExceededError} when `referralFeePct` is at least WAD.
+   * @throws {MidnightReferralFeePctExceededError} when the referral fee is above 10% but below WAD.
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no non-zero recipient.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when VaultBundlesV1 is not registered.
@@ -660,6 +670,8 @@ export class MorphoVaultV1 implements VaultV1Actions {
       throw new VaultAddressMismatchError(this.vault, vaultData.address);
     }
     const createdAt = suppliedNow ?? Time.timestamp();
+    // Reject a non-bigint clock before deriving the default deadline.
+    validateReferenceTime(createdAt);
     const deadline = params.deadline ?? createdAt + Time.s.from.h(2n);
     if (deadline <= createdAt) {
       throw new ExpiredDeadlineError(deadline, createdAt);
@@ -682,6 +694,8 @@ export class MorphoVaultV1 implements VaultV1Actions {
       funding.assets,
       common.referralFeePct,
     );
+    // Bound forward accrual before deriving the deposit price protection.
+    validateVaultDepositDeadline(deadline, { now: createdAt });
     const maxSharePrice = computeVaultMaxSharePrice({
       vaultData,
       deadline,
@@ -1115,6 +1129,8 @@ export class MorphoVaultV1 implements VaultV1Actions {
       params.slippageTolerance ?? DEFAULT_SLIPPAGE_TOLERANCE;
     validateSlippageTolerance(slippageTolerance);
     const createdAt = suppliedNow ?? Time.timestamp();
+    // Reject a non-bigint clock before deriving the default deadline.
+    validateReferenceTime(createdAt);
     const deadline = params.deadline ?? createdAt + Time.s.from.h(2n);
     if (deadline <= createdAt) {
       throw new ExpiredDeadlineError(deadline, createdAt);

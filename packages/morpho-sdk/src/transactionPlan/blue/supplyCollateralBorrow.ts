@@ -3,6 +3,7 @@ import { deepFreeze, Time } from "@morpho-org/morpho-ts";
 import { type Client, maxUint256 } from "viem";
 import { blueSupplyCollateralBorrow } from "../../actions/blue/supplyCollateralBorrow.js";
 import { validateClientChainId } from "../../actions/requirements/validateClientChainId.js";
+import { getBlueBundlesV1QuoteTimestamp } from "../../helpers/getBlueBundlesV1QuoteTimestamp.js";
 import {
   DEFAULT_LLTV_BUFFER,
   validatePositionHealth,
@@ -54,16 +55,21 @@ export interface BlueSupplyCollateralBorrowPlanParams
   readonly borrowAssets: bigint;
   readonly funding?: Funding;
   readonly reallocations?: Iterable<VaultV2BlueReallocation>;
+  /** Maximum WAD-scaled penalty rate per reallocation in [0, WAD], defaulting to zero. Each rate applies to that reallocation's assets, so it does not bound total proceeds lost. */
+  readonly maxPenalty?: bigint;
 }
 
 /**
  * Prepares collateral funding and Morpho authorization for one BlueBundlesV1 call. Snapshots
- * are validated before reads; the position is quoted through max(now, lastUpdate) + two hours,
- * matching the stable entity handle. The SDK never signs. Native funding is exclusive and
+ * are validated before reads; health uses the expiry floored at max(now, lastUpdate).
+ * Expiries more than 365 days out retain the legacy +2h projection, like the entity handle.
+ * The SDK never signs. Native funding is exclusive and
  * only supports the chain's wrapped native collateral token. Reallocation penalties reduce proceeds.
  * @param client - Viem client used for prerequisite and registered-contract reads.
  * @param params - Intent, amounts and caller-fetched market/position snapshots.
+ * @param params.maxPenalty - Maximum WAD-scaled penalty rate per reallocation in [0, WAD], defaulting to zero. Each rate applies to that reallocation's assets, so it does not bound total proceeds lost.
  * @returns A data-only plan with approvals, authorization and the combined operation.
+ * @throws {InvalidBigIntInputError} when a supplied maxPenalty is not a bigint.
  * @throws {ZeroAccountError} when the account is zero.
  * @throws {NonIntegerInputError} when expiry or referral basis points are not safe integers.
  * @throws {ExpiredDeadlineError} when expiry is not later than the reference timestamp.
@@ -74,9 +80,10 @@ export interface BlueSupplyCollateralBorrowPlanParams
  * @throws {MissingAccrualPositionError} when a borrow has no position snapshot.
  * @throws {MissingMarketPriceError} when the position snapshot has no usable oracle price.
  * @throws {BorrowExceedsSafeLtvError} when the quoted debt exceeds the buffered LLTV bound.
- * @throws {NegativeInputError} when an amount or referral fee is negative.
+ * @throws {NegativeInputError} when an amount, maxPenalty or referral fee is negative.
  * @throws {NonPositiveInputError} when both legs are zero, or a reallocation amount is not positive.
  * @throws {InputExceedsMaxError} when an amount exceeds its ABI bound or aggregate penalties exceed borrowing.
+ * Also thrown when maxPenalty exceeds WAD or a penalty exceeds maxPenalty (zero by default).
  * @throws {ReallocationsRequireBorrowError} when reallocations accompany no borrow.
  * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
  * @throws {InvalidVaultV2BlueReallocationShapeError} when a reallocation has an invalid shape.
@@ -84,7 +91,7 @@ export interface BlueSupplyCollateralBorrowPlanParams
  * @throws {InconsistentReallocationPenaltyError} when one vault has conflicting penalties.
  * @throws {ReallocationWithdrawalOnTargetMarketError} when the source equals the target market.
  * @throws {ReallocationLoanTokenMismatchError} when a source has another loan token.
- * @throws {ReferralFeePctExceededError} when the referral fee reaches 100%.
+ * @throws {InputExceedsMaxError} when `referralFee.bps` exceeds 1,000.
  * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no nonzero recipient.
  * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
  * @throws {ChainWNativeMissingError} when native funding has no registered wrapped native token.
@@ -130,6 +137,7 @@ export async function prepareBlueSupplyCollateralBorrow(
   const { chainId, account, marketId, marketData, positionData, now } =
     preparedParams;
   const { collateralAssets, borrowAssets } = params;
+  const { maxPenalty } = params;
   const id = "blueSupplyCollateralBorrow";
   let label = "Supply collateral and borrow on Blue";
   if (borrowAssets === 0n) {
@@ -158,6 +166,7 @@ export async function prepareBlueSupplyCollateralBorrow(
           maxLtv,
           nativeAmount,
           reallocations,
+          maxPenalty,
           ...intent,
         },
       });
@@ -168,7 +177,11 @@ export async function prepareBlueSupplyCollateralBorrow(
         }
         validatePositionHealth({
           positionData: position.accrueInterest(
-            MathLib.max(now, position.market.lastUpdate) + Time.s.from.h(2n),
+            getBlueBundlesV1QuoteTimestamp({
+              lastUpdate: position.market.lastUpdate,
+              now,
+              deadline: intent.deadline,
+            }),
           ),
           additionalCollateral: collateralAssets,
           borrowAmount: borrowAssets,
@@ -228,6 +241,7 @@ export async function prepareBlueSupplyCollateralBorrow(
               borrowAssets,
               maxLtv,
               nativeAssets: nativeAmount,
+              ...(maxPenalty !== undefined && { maxPenalty }),
               reallocations: reallocations.map((entry) => ({
                 ...entry,
                 from:
@@ -423,7 +437,12 @@ export function validateSupplyCollateralBorrowPlanAction(
       reallocations: "array",
     },
   });
-  for (const key of ["nativeAssets", "referralFeePct", "authorizationNonce"]) {
+  for (const key of [
+    "nativeAssets",
+    "referralFeePct",
+    "authorizationNonce",
+    "maxPenalty",
+  ]) {
     if (inputs[key] !== undefined) {
       validatePlanField(inputs[key], {
         path: `${path}.inputs.${key}`,

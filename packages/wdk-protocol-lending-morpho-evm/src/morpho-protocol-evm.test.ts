@@ -6,6 +6,7 @@ import {
   type BundlesTokenRequirementSignature,
   ChainIdMismatchError,
   type Erc2612RequirementSignature,
+  InvalidBigIntInputError,
   MixedBundlesFundingError,
   NegativeInputError,
   NonPositiveInputError,
@@ -2430,6 +2431,44 @@ describe.sequential("MorphoProtocolEvm", () => {
   });
 
   describe("borrow", () => {
+    test.each([1, "1", null])(
+      "rejects a non-bigint maxPenalty %s through the SDK",
+      async (value) => {
+        for (const method of [
+          "borrow",
+          "quoteBorrow",
+          "getBorrowRequirements",
+        ] as const) {
+          marketEntity.borrow.mockImplementationOnce(
+            (args: { readonly maxPenalty?: bigint }) => {
+              morphoSdk.blueBorrow({
+                market: {
+                  chainId: 1,
+                  marketParams: new MarketParams(MARKET_PARAMS),
+                },
+                args: {
+                  userAddress: ADDRESS,
+                  borrowAssets: 100_000n,
+                  maxLtv: MARKET_PARAMS.lltv - 1n,
+                  deadline: BLUE_BUNDLES_V1_DEADLINE,
+                  maxPenalty: args.maxPenalty,
+                },
+              });
+              return borrowAction;
+            },
+          );
+          await expect(
+            protocol[method]({
+              token: TOKEN,
+              amount: 100_000n,
+              maxPenalty: value as unknown as bigint,
+            }),
+          ).rejects.toBeInstanceOf(InvalidBigIntInputError);
+        }
+        expect(account.signTransaction).not.toHaveBeenCalled();
+      },
+    );
+
     test("types: borrow accepts only Vault V2 reallocations", () => {
       expectTypeOf<
         NonNullable<MorphoBorrowOptions["reallocations"]>
@@ -2452,6 +2491,7 @@ describe.sequential("MorphoProtocolEvm", () => {
         borrowAssets: 100_000n,
         positionData,
         reallocations: undefined,
+        maxPenalty: undefined,
         deadline: BLUE_BUNDLES_V1_DEADLINE,
       });
       expect(account.signTransaction).toHaveBeenCalledWith({
@@ -2464,31 +2504,36 @@ describe.sequential("MorphoProtocolEvm", () => {
       });
     });
 
-    test("should forward Vault V2 BluePublicAllocator reallocations", async () => {
-      const reallocation = {
-        vault: VAULT,
-        from: { type: "idle" },
-        to: {
-          adapter: "0x0000000000000000000000000000000000000020",
-        },
-        assets: 50_000n,
-        penalty: 1n,
-      } satisfies VaultV2BlueReallocation;
+    test.each(["borrow", "quoteBorrow", "getBorrowRequirements"] as const)(
+      "should forward Vault V2 BluePublicAllocator reallocations and maxPenalty through %s",
+      async (method) => {
+        const reallocation = {
+          vault: VAULT,
+          from: { type: "idle" },
+          to: {
+            adapter: "0x0000000000000000000000000000000000000020",
+          },
+          assets: 50_000n,
+          penalty: 1n,
+        } satisfies VaultV2BlueReallocation;
 
-      await protocol.borrow({
-        token: TOKEN,
-        amount: 100_000n,
-        reallocations: [reallocation],
-      });
+        await protocol[method]({
+          token: TOKEN,
+          amount: 100_000n,
+          reallocations: [reallocation],
+          maxPenalty: 1n,
+        });
 
-      expect(marketEntity.borrow).toHaveBeenCalledWith({
-        userAddress: ADDRESS,
-        borrowAssets: 100_000n,
-        positionData,
-        reallocations: [reallocation],
-        deadline: BLUE_BUNDLES_V1_DEADLINE,
-      });
-    });
+        expect(marketEntity.borrow).toHaveBeenCalledWith({
+          userAddress: ADDRESS,
+          borrowAssets: 100_000n,
+          positionData,
+          reallocations: [reallocation],
+          maxPenalty: 1n,
+          deadline: BLUE_BUNDLES_V1_DEADLINE,
+        });
+      },
+    );
 
     test("snapshots borrow inputs before resolving chain state", async () => {
       const observedChain = Promise.withResolvers<number>();
@@ -2527,11 +2572,13 @@ describe.sequential("MorphoProtocolEvm", () => {
         token: TOKEN,
         amount: 100_000n,
         reallocations: [reallocation],
+        maxPenalty: 1n,
         requirementSignature,
       } satisfies MorphoBorrowOptions;
 
       const pending = protocol.borrow(options);
       options.amount = 200_000n;
+      options.maxPenalty = 2n;
       reallocation.assets = 75_000n;
       reallocation.to.adapter = TOKEN;
       Object.assign(sourceMarketParams, { collateralToken: TOKEN });
@@ -2543,6 +2590,7 @@ describe.sequential("MorphoProtocolEvm", () => {
       expect(marketEntity.borrow).toHaveBeenCalledWith(
         expect.objectContaining({
           borrowAssets: 100_000n,
+          maxPenalty: 1n,
           reallocations: [
             expect.objectContaining({
               assets: 50_000n,

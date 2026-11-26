@@ -20,7 +20,7 @@ const positiveUint256 = fc.bigInt({ min: 1n, max: maxUint256 });
 describe("vaultV2Withdraw", () => {
   test("default", () => {
     const deadline = 1_900_000_000n;
-    const referralFeePct = MathLib.WAD / 2n;
+    const referralFeePct = MathLib.WAD / 10n;
     const transaction = vaultV2Withdraw({
       vault: { chainId, address: vault },
       args: {
@@ -48,8 +48,8 @@ describe("vaultV2Withdraw", () => {
         deadline,
       ],
     });
-    expect(transaction.action.args.referralFeeAssets).toBe(50n);
-    expect(transaction.action.args.netAssets).toBe(50n);
+    expect(transaction.action.args.referralFeeAssets).toBe(10n);
+    expect(transaction.action.args.netAssets).toBe(90n);
   });
 
   test("behavior: calldata round-trips across uint256 inputs", () => {

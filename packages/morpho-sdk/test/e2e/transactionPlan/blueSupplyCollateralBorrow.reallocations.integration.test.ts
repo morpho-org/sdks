@@ -273,6 +273,7 @@ test("market and idle allocations preserve inputs and pay borrow proceeds net of
     borrowAssets: parseUnits("2", 6),
     funding: { type: "native" as const },
     reallocations,
+    maxPenalty: penalty,
     now: block.timestamp,
     expiresAt: Number(block.timestamp + 3600n),
     supportSignature: true,
@@ -318,6 +319,7 @@ test("market and idle allocations preserve inputs and pay borrow proceeds net of
       borrowAssets: params.borrowAssets,
       nativeAmount: params.collateralAssets,
       reallocations,
+      maxPenalty: penalty,
       maxLtv: MathLib.zeroFloorSub(target.lltv, DEFAULT_LLTV_BUFFER),
       deadline: BigInt(params.expiresAt),
       authorizationSignature: {

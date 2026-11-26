@@ -8,6 +8,7 @@ import {
   computeVaultMaxShareAllowance,
   computeVaultMaxSharePrice,
 } from "../../helpers/slippage.js";
+import { validateVaultDepositDeadline } from "../../helpers/validate.js";
 import type { VaultV1MigrateToV2AmountArgs } from "../../types/index.js";
 
 /**
@@ -16,6 +17,8 @@ import type { VaultV1MigrateToV2AmountArgs } from "../../types/index.js";
  * price bound uses assets net of the referral fee. Neither snapshot is mutated.
  * @param params - Source, target, exclusive amount, fee, slippage, deadline and preparation time.
  * @returns The destination maximum share price and minimum source share allowance.
+ * @throws {InvalidBigIntInputError} when `now` is not a bigint.
+ * @throws {InputExceedsMaxError} when the deadline exceeds seven days after preparation.
  */
 export function computeVaultV1MigrateToV2Quote(
   params: VaultV1MigrateToV2AmountArgs & {
@@ -40,6 +43,8 @@ export function computeVaultV1MigrateToV2Quote(
     deadline,
     now,
   } = params;
+  // Bound the destination's forward-accrued deposit price.
+  validateVaultDepositDeadline(deadline, { now });
   const grossAssets =
     assets ??
     sourceVault

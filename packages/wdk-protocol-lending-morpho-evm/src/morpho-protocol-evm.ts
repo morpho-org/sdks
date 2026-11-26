@@ -277,6 +277,8 @@ export interface MorphoBorrowOptions {
   readonly onBehalfOf?: string;
   /** Optional Vault V2 BluePublicAllocator reallocations to include in the borrow action. */
   readonly reallocations?: readonly VaultV2BlueReallocation[];
+  /** Maximum WAD-scaled penalty rate per reallocation in [0, WAD], defaulting to zero. Each rate applies to that reallocation's assets, so it does not bound total proceeds lost. */
+  readonly maxPenalty?: bigint;
   /** Signature returned by a Morpho SDK BlueBundlesV1 authorization requirement. */
   readonly requirementSignature?: AuthorizationRequirementSignature;
 }
@@ -1852,10 +1854,14 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options.amount - Loan-token amount to borrow, in base units.
    * @param options.onBehalfOf - Optional position owner; when set, it must equal the wallet address.
    * @param options.reallocations - Optional Vault V2 BluePublicAllocator reallocations.
+   * @param options.maxPenalty - Maximum WAD-scaled penalty rate per reallocation in [0, WAD], defaulting to zero. Each rate applies to that reallocation's assets, so it does not bound total proceeds lost.
    * @param options.requirementSignature - Optional signed BlueBundlesV1 authorization returned by
    *   {@link getBorrowRequirements}.
    * @param config - Optional ERC-4337 transaction configuration override.
    * @returns The WDK borrow result, including the submitted transaction hash and fee data.
+   * @throws {NegativeInputError} when maxPenalty is negative.
+   * @throws {InvalidBigIntInputError} when a supplied maxPenalty is not a bigint.
+   * @throws {InputExceedsMaxError} when maxPenalty exceeds WAD or a reallocation penalty exceeds maxPenalty.
    * @throws {ChainIdMismatchError} when the wallet client is connected to another chain.
    * @throws {NonPositiveInputError} when the amount or a reallocation amount is not positive.
    * @throws {BorrowExceedsSafeLtvError} when the resulting position exceeds buffered LLTV.
@@ -1921,10 +1927,14 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options.amount - Loan-token amount to borrow, in base units.
    * @param options.onBehalfOf - Optional position owner; when set, it must equal the wallet address.
    * @param options.reallocations - Optional Vault V2 BluePublicAllocator reallocations.
+   * @param options.maxPenalty - Maximum WAD-scaled penalty rate per reallocation in [0, WAD], defaulting to zero. Each rate applies to that reallocation's assets, so it does not bound total proceeds lost.
    * @param options.requirementSignature - Optional previously signed authorization whose deadline
    *   is reused while resolving a fresh requirement set.
    * @returns A readonly list containing a BlueBundlesV1 authorization transaction or signable
    *   authorization requirement when one is needed.
+   * @throws {NegativeInputError} when maxPenalty is negative.
+   * @throws {InvalidBigIntInputError} when a supplied maxPenalty is not a bigint.
+   * @throws {InputExceedsMaxError} when maxPenalty exceeds WAD or a reallocation penalty exceeds maxPenalty.
    * @throws {ChainIdMismatchError} when the wallet client is connected to another chain.
    * @throws {BorrowExceedsSafeLtvError} when the resulting position exceeds buffered LLTV.
    * @throws {UnknownAddressError} when BlueBundlesV1 is not registered on the target chain.
@@ -1981,9 +1991,13 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options.amount - Loan-token amount to borrow, in base units.
    * @param options.onBehalfOf - Optional position owner; when set, it must equal the wallet address.
    * @param options.reallocations - Optional Vault V2 BluePublicAllocator reallocations.
+   * @param options.maxPenalty - Maximum WAD-scaled penalty rate per reallocation in [0, WAD], defaulting to zero. Each rate applies to that reallocation's assets, so it does not bound total proceeds lost.
    * @param options.requirementSignature - Optional signed BlueBundlesV1 authorization.
    * @param config - Optional ERC-4337 transaction configuration override.
    * @returns The WDK borrow fee quote without a transaction hash.
+   * @throws {NegativeInputError} when maxPenalty is negative.
+   * @throws {InvalidBigIntInputError} when a supplied maxPenalty is not a bigint.
+   * @throws {InputExceedsMaxError} when maxPenalty exceeds WAD or a reallocation penalty exceeds maxPenalty.
    * @throws {ChainIdMismatchError} when the wallet client is connected to another chain.
    * @throws {BorrowExceedsSafeLtvError} when the resulting position exceeds buffered LLTV.
    * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
@@ -2032,6 +2046,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       amount,
       onBehalfOf,
       reallocations,
+      maxPenalty,
       requirementSignature,
     }: MorphoBorrowOptions,
   ) {
@@ -2057,6 +2072,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       borrowAssets: normalizedAmount,
       positionData,
       reallocations,
+      maxPenalty,
       deadline: getBlueBundlesV1Deadline(requirementSignature),
     });
   }

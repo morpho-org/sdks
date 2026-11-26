@@ -1,4 +1,4 @@
-import { Token } from "@morpho-org/blue-sdk";
+import { MathLib, Token } from "@morpho-org/blue-sdk";
 import { getPermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, maxUint256, toHex, zeroAddress } from "viem";
@@ -10,6 +10,7 @@ import {
   IN_KIND_VAULT,
 } from "../../test/fixtures/inKindRedeem.js";
 import { vaultV2Deposit } from "../actions/vaultV2/deposit.js";
+import { MidnightReferralFeePctExceededError } from "../types/error.js";
 import type { Transaction } from "../types/index.js";
 import {
   IncompleteTransactionPlanError,
@@ -295,6 +296,29 @@ describe("buildTransaction", () => {
       }),
     ).toThrow(
       new TransactionPlanSignatureMismatchError("tokenPermit", "reference"),
+    );
+  });
+
+  test("rejects a saved deposit with a referral fee of 1,001 bps at build time", () => {
+    const saved = serializeTransactionPlan({
+      ...completePlan,
+      steps: [
+        {
+          ...depositStep,
+          action: {
+            ...depositStep.action,
+            inputs: {
+              ...inputs,
+              referralFeePct: (1_001n * MathLib.WAD) / 10_000n,
+              referralFeeRecipient: IN_KIND_USER,
+            },
+          },
+        },
+      ],
+    });
+    const restored = parseTransactionPlan(saved);
+    expect(() => buildTransaction(restored, restored.steps[0]!)).toThrow(
+      MidnightReferralFeePctExceededError,
     );
   });
 

@@ -1275,6 +1275,7 @@ describe("BlueBundlesV1 Vault V2 reallocations", () => {
               positionData,
               borrowAssets: operationAssets,
               reallocations: discovery.reallocations,
+              maxPenalty: penalty,
               deadline: maxUint256,
             })
           : market.withdraw({
@@ -1282,6 +1283,7 @@ describe("BlueBundlesV1 Vault V2 reallocations", () => {
               positionData,
               assets: operationAssets,
               reallocations: discovery.reallocations,
+              maxPenalty: penalty,
               deadline: maxUint256,
             });
       const signatures = await satisfyBlueBundlesV1Requirements(anvilClient, {
@@ -1599,6 +1601,7 @@ describe("BlueBundlesV1 Vault V2 reallocations", () => {
         positionData,
         assets: withdrawAssets,
         reallocations: discovery.reallocations,
+        maxPenalty: penalty,
         deadline: maxUint256,
       });
       const signatures = await satisfyBlueBundlesV1Requirements(anvilClient, {
@@ -1890,6 +1893,7 @@ describe("BlueBundlesV1 Vault V2 reallocations", () => {
           positionData: destinationPositionData,
         },
         reallocations: [reallocation],
+        maxPenalty: penalty,
         deadline: maxUint256,
         referralFeePct,
         referralFeeRecipient: client.account.address,

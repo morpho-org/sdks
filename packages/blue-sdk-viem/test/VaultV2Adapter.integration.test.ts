@@ -22,6 +22,7 @@ import {
 } from "viem";
 import { readContract } from "viem/actions";
 import { describe, expect } from "vitest";
+import { QUERY_ADDRESS } from "../src/deployless.js";
 import {
   fetchAccrualVaultV2,
   fetchVaultV2Adapter,
@@ -138,7 +139,12 @@ describe("VaultV2Adapter", () => {
               typeof call === "object" &&
               "data" in call
             ) {
-              if (!("to" in call) || call.to == null) deploylessCalls++;
+              if (
+                !("to" in call) ||
+                call.to == null ||
+                call.to === QUERY_ADDRESS
+              )
+                deploylessCalls++;
               else directCalls++;
             }
             return client.request({ method, params });

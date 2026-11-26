@@ -282,6 +282,7 @@ test("borrow plan executes market and idle allocations with net penalties", asyn
     now: block.timestamp,
     borrowAssets: operationAssets,
     reallocations,
+    maxPenalty: penalty,
   };
   await expect(
     prepareBlueBorrow(client, { ...params, borrowAssets: totalPenalty - 1n }),
@@ -304,6 +305,7 @@ test("borrow plan executes market and idle allocations with net penalties", asyn
         borrowAssets: operationAssets,
         maxLtv: baseTargetMarket.lltv - DEFAULT_LLTV_BUFFER,
         reallocations,
+        maxPenalty: penalty,
         deadline: BigInt(plan.expiresAt),
       },
     }).data,

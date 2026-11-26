@@ -144,6 +144,27 @@ function checkScalarAmount(
     );
   }
   const tolerance = derived ? 0n : slippageTolerance;
+  if (
+    field === "collateralSupplied" &&
+    !(derived && (exact || params.inactiveFields?.includes(field)))
+  ) {
+    const maximum = MathLib.wMulDown(expected, MathLib.WAD + tolerance);
+    if (amount > maximum) {
+      failures.push(
+        violation(
+          `${label}: collateral supplied exceeds maximum "${maximum}" against quote "${expected}"; got "${amount}". Reduce collateral supply or adjust the quote.`,
+          {
+            field,
+            check: derived ? "derivedBound" : "slippageTolerance",
+            expected,
+            observed: amount,
+            tolerance,
+            bound: maximum,
+          },
+        ),
+      );
+    }
+  }
   let bound = expected;
   if (!derived) {
     bound = output

@@ -1130,6 +1130,83 @@ describe("MidnightApi.fetchBookPriceLevels", () => {
 });
 
 describe("MidnightApi.fetchBookTakeableOffers", () => {
+  test.each(
+    [
+      [
+        "max_units",
+        "max_assets",
+        "continuous_fee_cap",
+        "rcf_threshold",
+        "lltv",
+        "liquidation_cursor",
+      ].flatMap((field) =>
+        ["-1", "0x10", ""].map((value) => ({
+          field,
+          value,
+          expected: "a decimal uint256 string",
+        })),
+      ),
+      ["start", "expiry", "chain_id", "maturity"].flatMap((field) =>
+        [[1761922799], 2 ** 64, 1.5, -1, "0x10", ""].map((value) => ({
+          field,
+          value,
+          expected: "a non-negative safe integer",
+        })),
+      ),
+    ].flat(),
+  )(
+    "error: invalid uint field $field = $value",
+    async ({ field, value, expected }) => {
+      const { fetch } = createJsonFetch({
+        data: [
+          {
+            ...apiTakeableOffer,
+            offer: {
+              ...apiOffer,
+              ...([
+                "max_units",
+                "max_assets",
+                "start",
+                "expiry",
+                "continuous_fee_cap",
+              ].includes(field)
+                ? { [field]: value }
+                : {}),
+              market: {
+                ...apiOffer.market,
+                ...(["rcf_threshold", "chain_id", "maturity"].includes(field)
+                  ? { [field]: value }
+                  : {}),
+                collaterals: apiOffer.market.collaterals.map((collateral) => ({
+                  ...collateral,
+                  ...(["lltv", "liquidation_cursor"].includes(field)
+                    ? { [field]: value }
+                    : {}),
+                })),
+              },
+            },
+          },
+        ],
+      });
+
+      const request = MidnightApi.fetchBookTakeableOffers({
+        marketId: MARKET_ID,
+        side: "asks",
+        fetch,
+      });
+      await expect(request).rejects.toBeInstanceOf(
+        InvalidMidnightApiResponseError,
+      );
+      await expect(request).rejects.toMatchObject({
+        cause: expect.objectContaining({
+          message: expect.stringContaining(
+            `${field} (${typeof value}) is not ${expected}`,
+          ),
+        }),
+      });
+    },
+  );
+
   test.each(["-1", "0x10", 1, "", (maxUint256 + 1n).toString()])(
     "error: InvalidMidnightApiResponseError for invalid take units %j",
     async (units) => {
@@ -1251,6 +1328,48 @@ describe("MidnightApi.fetchBookTakeableOffers", () => {
 });
 
 describe("MidnightApi.fetchBookQuote", () => {
+  test.each(["units", "assets"] as const)(
+    "behavior: snapshots the %s target before fetching",
+    async (field) => {
+      const amount = MathLib.WAD;
+      const target: { units: bigint | undefined; assets: bigint | undefined } =
+        {
+          units: field === "units" ? amount : undefined,
+          assets: field === "assets" ? amount : undefined,
+        };
+      const firstAsk = { ...apiTakeableOffer, units: amount.toString() };
+      const secondAsk = { ...firstAsk, offer: { ...apiOffer, tick: 5_000 } };
+      const { calls, fetch } = createQuoteFetch([firstAsk, secondAsk]);
+      const params = {
+        ...target,
+        marketId: MARKET_ID,
+        side: "asks",
+        averageWorstPrice:
+          TickLib.tickToPrice(firstAsk.offer.tick) -
+          (field === "units" ? 1n : 0n),
+        fetch: async (...args: Parameters<MidnightApiFetch>) => {
+          const response = await fetch(...args);
+          params.units = field === "units" ? undefined : 0n;
+          params.assets = field === "assets" ? undefined : 0n;
+          return response;
+        },
+      };
+
+      const request = MidnightApi.fetchBookQuote(
+        params as FetchBookQuoteParams,
+      );
+      await expect(request).rejects.toBeInstanceOf(
+        InvalidMidnightApiResponseError,
+      );
+      await expect(request).rejects.toThrow(
+        "outside average_worst_price guard",
+      );
+      expect(getRequestUrl(calls[0]!).searchParams.get(field)).toBe(
+        amount.toString(),
+      );
+    },
+  );
+
   test.each(["asks", "bids"] as const)(
     "behavior: positive-fee %s partial-fill slippage respects Router rounding boundary",
     async (side) => {
@@ -2000,6 +2119,16 @@ describe("MidnightApi.fetchBookQuote", () => {
   test.each([
     ["both units and assets", { units: 1n, assets: 1n }],
     ["neither units nor assets", {}],
+    ["zero units", { units: 0n }],
+    ["negative units", { units: -1n }],
+    ["zero assets", { assets: 0n }],
+    ["negative assets", { assets: -1n }],
+    ["fractional units", { units: 1.5 }],
+    ["non-numeric units", { units: "abc" }],
+    ["fractional assets", { assets: 1.5 }],
+    ["non-numeric assets", { assets: "abc" }],
+    ["false units", { units: false }],
+    ["false assets", { assets: false }],
   ])("error: InvalidMidnightApiQuoteTargetError for %s", async (_, target) => {
     const { calls, fetch } = createQuoteFetch([]);
 
@@ -2014,6 +2143,23 @@ describe("MidnightApi.fetchBookQuote", () => {
     expect(calls).toHaveLength(0);
   });
 
+  test.each(["units", "assets"] as const)(
+    "behavior: accepts true %s as a positive target",
+    async (field) => {
+      const { calls, fetch } = createQuoteFetch([]);
+      await expect(
+        MidnightApi.fetchBookQuote({
+          marketId: MARKET_ID,
+          side: "asks",
+          ...(field === "units" ? { units: true } : { assets: true }),
+          fetch,
+        }),
+      ).resolves.toBeDefined();
+      expect(calls).toHaveLength(1);
+      expect(getRequestUrl(calls[0]!).searchParams.get(field)).toBe("1");
+    },
+  );
+
   test("error: NegativeValueError", async () => {
     const { calls, fetch } = createQuoteFetch([]);
 
@@ -2021,7 +2167,7 @@ describe("MidnightApi.fetchBookQuote", () => {
       MidnightApi.fetchBookQuote({
         marketId: MARKET_ID,
         side: "asks",
-        units: 0n,
+        units: 1n,
         settlementFee: -1n,
         fetch,
       }),

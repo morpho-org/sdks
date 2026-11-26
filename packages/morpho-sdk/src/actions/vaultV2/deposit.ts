@@ -67,7 +67,7 @@ export interface VaultV2DepositInput {
  * @param params.args.recipient - Unsupported; shares are always minted to the transaction sender.
  * @param params.args.requirementSignature - Optional ERC-2612 or Permit2 SignatureTransfer signature
  *   for the gross amount, vault asset, `userAddress`, and VaultBundlesV1 spender.
- * @param params.args.referralFeePct - Optional WAD-scaled fee in [0, 1e18), defaulting to zero.
+ * @param params.args.referralFeePct - Optional WAD-scaled fee from 0% to 10%, inclusive, defaulting to zero.
  *   The fee is rounded down and deducted from gross assets before depositing.
  * @param params.args.referralFeeRecipient - Optional fee recipient; a nonzero address is required
  *   when `referralFeePct > 0n`.
@@ -85,6 +85,7 @@ export interface VaultV2DepositInput {
  * @throws {NativeAmountOnNonWNativeVaultError} when native funding targets a non-wNative vault.
  * @throws {ReferralFeePctExceededError} when `referralFeePct` is at least WAD; it extends
  *   {@link InputExceedsMaxError}, so either class catches it.
+ * @throws {MidnightReferralFeePctExceededError} when the referral fee is above 10% but below WAD.
  * @throws {ReferralFeeRecipientMissingError} when a positive `referralFeePct` has no recipient.
  * @throws {UnexpectedRequirementSignatureError} when native funding carries a token permit.
  * @throws {InputExceedsMaxError} when funding, `maxSharePrice`, or `deadline` exceeds uint256.

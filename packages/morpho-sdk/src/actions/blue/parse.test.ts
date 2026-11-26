@@ -390,9 +390,9 @@ describe("Blue parsed input contracts", () => {
         ...raw,
         args: {
           ...raw.args,
-          repayAssets: 2n,
-          maxRepayAssets: 2n,
-          referralFeePct: 500_000_000_000_000_000n,
+          repayAssets: 10n,
+          maxRepayAssets: 10n,
+          referralFeePct: 100_000_000_000_000_000n,
           referralFeeRecipient: "0x0000000000000000000000000000000000000001",
         },
       }),
@@ -413,7 +413,9 @@ describe("Blue parsed input contracts", () => {
 
   test("withdraw penalty constraints retain their typed errors", () => {
     const parsedMarket = parseBlueMarket(marketParams);
-    const allocations = parseBlueAllocations([], parsedMarket);
+    const allocations = parseBlueAllocations([], {
+      marketParams: parsedMarket,
+    });
     const mode = parseBlueWithdrawMode(parsedMarket, {
       withdrawAssets: 1n,
       withdrawShares: 0n,

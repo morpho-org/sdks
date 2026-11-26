@@ -6,9 +6,12 @@ export type {
 export {
   AddressMismatchError,
   ChainIdMismatchError,
+  InputExceedsMaxError,
   InsufficientDeadSharesError,
+  InvalidBigIntInputError,
   MissingContractCodeError,
   MissingDeadSharesDataError,
+  NegativeInputError,
   NonPositiveInputError,
   VaultAssetMismatchError,
 } from "@morpho-org/morpho-sdk";

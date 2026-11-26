@@ -1,5 +1,11 @@
 # @morpho-org/midnight-sdk
 
+## 2.9.0
+
+### Minor Changes
+
+- Reject missing, malformed (for example `1.5` or `"abc"`) or nonpositive API quote targets with `InvalidMidnightApiQuoteTargetError` before fetching. Malformed targets used to reach the server and fail with `MidnightApiError`, resolve, or throw a native `RangeError`/`SyntaxError`, so integrators handling those errors for bad targets should catch `InvalidMidnightApiQuoteTargetError` instead. Validate takeable offer uint string fields as non-negative decimal uint256 values.
+
 ## 2.8.0
 
 ### Minor Changes

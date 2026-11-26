@@ -256,7 +256,11 @@ test("ordered market and idle allocations fund a refinance; penalties increase d
     },
   ] as const;
 
-  const plan = await prepareBlueRefinance(client, { ...params, reallocations });
+  const plan = await prepareBlueRefinance(client, {
+    ...params,
+    reallocations,
+    maxPenalty: penalty,
+  });
   const [step] = plan.steps;
   assert(step?.action.type === "blueRefinance");
   expect(step.action.inputs.reallocations).toEqual(reallocations);
@@ -280,6 +284,7 @@ test("ordered market and idle allocations fund a refinance; penalties increase d
         maxLtv,
         deadline: BigInt(plan.expiresAt),
         reallocations,
+        maxPenalty: penalty,
       },
     }).data,
   );
@@ -341,10 +346,18 @@ test("[INV-03] individually safe allocator penalties are rejected when their sum
   }));
   for (const leg of reallocations) {
     await expect(
-      prepareBlueRefinance(client, { ...params, reallocations: [leg] }),
+      prepareBlueRefinance(client, {
+        ...params,
+        reallocations: [leg],
+        maxPenalty: penalty,
+      }),
     ).resolves.toBeDefined();
   }
   await expect(
-    prepareBlueRefinance(client, { ...params, reallocations }),
+    prepareBlueRefinance(client, {
+      ...params,
+      reallocations,
+      maxPenalty: penalty,
+    }),
   ).rejects.toBeInstanceOf(BorrowExceedsSafeLtvError);
 });

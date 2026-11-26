@@ -62,7 +62,7 @@ Cross-layer leaks (entities encoding calldata, actions reading state, helpers de
 
 Per root §5, unit tests are colocated as `src/**/*.test.ts`. Fork and integration tests are named `*.integration.test.ts` and live under `packages/morpho-sdk/test/`; test-only helper units stay beside their helper there. Use parameterized fixtures (`randomMarket(...)`); never weaken assertions to make a test pass.
 
-Security invariants are tests (root §5): deposit routing, inflation-attack guard, LLTV buffer, bounded slippage, `chainId` validation, authorization, and accounting each keep an `[INV-NN]`-tagged test that fails if the invariant is removed. [`SECURITY.md`](../../SECURITY.md) holds the table.
+Security invariants are tests (root §5): deposit routing, inflation-attack guard, LLTV buffer, bounded slippage, `chainId` validation, authorization, accounting, and bounded referral fees each keep an `[INV-NN]`-tagged test that fails if the invariant is removed. [`SECURITY.md`](../../SECURITY.md) holds the table.
 
 ## Glossary
 

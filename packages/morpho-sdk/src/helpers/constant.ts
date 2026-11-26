@@ -2,6 +2,9 @@ import { ChainId, MathLib } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
 import { type Address, maxUint96 } from "viem";
 
+/** Maximum forward accrual window for vault deposits and V1-to-V2 migration, in seconds. */
+export const VAULT_DEPOSIT_MAX_DEADLINE_SECONDS = 604_800n;
+
 /** Maximum time between now and a Midnight taker-flow deadline, in seconds. */
 export const MIDNIGHT_TAKE_MAX_DEADLINE_SECONDS = 3600n;
 

@@ -25,7 +25,7 @@ export interface BlueSupplyParams {
     readonly nativeAmount?: bigint;
     /** Final call deadline in Unix seconds. */
     readonly deadline: bigint;
-    /** Optional WAD-scaled referral fee, strictly below 100%. */
+    /** Optional WAD-scaled referral fee, at most 10%. */
     readonly referralFeePct?: bigint;
     /** Recipient required when `referralFeePct` is positive. */
     readonly referralFeeRecipient?: Address;
@@ -49,7 +49,7 @@ export interface BlueSupplyParams {
  * @param params.args.assets - Gross loan-token funding amount.
  * @param params.args.nativeAmount - Exclusive native funding; must equal `assets`.
  * @param params.args.deadline - Final call deadline in Unix seconds.
- * @param params.args.referralFeePct - Optional WAD-scaled fee below 100%.
+ * @param params.args.referralFeePct - Optional WAD-scaled fee at most 10%.
  * @param params.args.referralFeeRecipient - Recipient required for a positive fee.
  * @param params.args.requirementSignature - Optional ERC-2612 or Permit2 SignatureTransfer result.
  * @param params.metadata - Optional transaction metadata.
@@ -58,8 +58,10 @@ export interface BlueSupplyParams {
  * @throws {MarketIdMismatchError} when `marketParams.id` does not hash from its tuple fields.
  * @throws {NonPositiveInputError} when `assets` or `deadline` is not positive.
  * @throws {NegativeInputError} when `nativeAmount` or `referralFeePct` is negative.
- * @throws {InputExceedsMaxError} when `assets` exceeds `uint256` or `referralFeePct` is at least WAD.
+ * @throws {InputExceedsMaxError} when `assets` exceeds `uint256`.
  * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
+ * @throws {ReferralFeePctExceededError} when the referral fee is at least WAD.
+ * @throws {MidnightReferralFeePctExceededError} when the referral fee is above 10% but below WAD.
  * @throws {NativeFundingAmountMismatchError} when native funding does not equal `assets`.
  * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
  * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.

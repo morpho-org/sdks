@@ -28,9 +28,11 @@ export interface BlueWithdrawParams {
     readonly withdrawShares: bigint;
     /** Optional validated Vault V2 BluePublicAllocator reallocations. */
     readonly reallocations?: Iterable<VaultV2BlueReallocation>;
+    /** Maximum WAD-scaled penalty rate per reallocation, defaulting to zero; it does not bound total proceeds lost. */
+    readonly maxPenalty?: bigint;
     /** Final call deadline in Unix seconds. */
     readonly deadline: bigint;
-    /** Optional WAD-scaled referral fee, strictly below 100%. */
+    /** Optional WAD-scaled referral fee, at most 10%. */
     readonly referralFeePct?: bigint;
     /** Recipient required when `referralFeePct` is positive. */
     readonly referralFeeRecipient?: Address;
@@ -55,8 +57,9 @@ export interface BlueWithdrawParams {
  * @param params.args.withdrawAssets - Exact assets withdrawn, exclusive with shares.
  * @param params.args.withdrawShares - Exact shares burned, exclusive with assets.
  * @param params.args.reallocations - Vault V2 reallocations executed before withdrawal.
+ * @param params.args.maxPenalty - Maximum WAD-scaled penalty rate per reallocation in [0, WAD], defaulting to zero. Each rate applies to that reallocation's assets, so it does not bound total proceeds lost.
  * @param params.args.deadline - Final call deadline in Unix seconds.
- * @param params.args.referralFeePct - Optional WAD-scaled fee below 100%.
+ * @param params.args.referralFeePct - Optional WAD-scaled fee at most 10%.
  * @param params.args.referralFeeRecipient - Recipient required for a positive fee.
  * @param params.args.authorizationSignature - Optional Blue authorization signature.
  * @param params.metadata - Optional transaction metadata.
@@ -64,12 +67,17 @@ export interface BlueWithdrawParams {
  *   BlueBundlesV1 and whose `action` records the normalized withdrawal inputs.
  * @throws {MarketIdMismatchError} when the target market or a reallocation source market has an
  *   `id` that does not hash from its tuple fields.
+ * @throws {InvalidBigIntInputError} when a supplied maxPenalty is not a bigint.
  * @throws {NegativeInputError} when an amount, fee, or reallocation penalty is negative.
+ *   Also thrown when maxPenalty is negative.
  * @throws {MutuallyExclusiveWithdrawAmountsError} when assets and shares are both nonzero.
  * @throws {NonPositiveInputError} when neither mode, no valid deadline, or a non-positive
  *   reallocation amount is provided.
- * @throws {InputExceedsMaxError} when a withdraw amount, fee, reallocation amount, or penalty exceeds its ABI bound.
+ * @throws {InputExceedsMaxError} when a withdraw amount, reallocation amount, or penalty exceeds its ABI bound.
+ *   Also thrown when maxPenalty exceeds WAD or a penalty exceeds maxPenalty (zero by default).
  * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
+ * @throws {ReferralFeePctExceededError} when the referral fee is at least WAD.
+ * @throws {MidnightReferralFeePctExceededError} when the referral fee is above 10% but below WAD.
  * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
  * @throws {InvalidVaultV2BlueReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
  * @throws {InvalidReallocationSourceTypeError} when a reallocation source is malformed.

@@ -1042,11 +1042,18 @@ supply/vault `sharesBurned`, debt `sharesMinted`, `collateralWithdrawn`,
 `creditRedeemed` (Midnight credit units), `unitsSold` (net Midnight position
 units, on `midnightTakeBorrow`) and the `collateralWithdrawals` position
 decrease — must be at most `floor(quote * (1 + tolerance))`.
+`collateralSupplied` additionally must not exceed
+`floor(quote * (1 + tolerance))`; typed-input exact collateral amounts remain exact.
+This upper cap applies to the scalar `collateralSupplied` field on
+`blueSupplyCollateral`, `blueSupplyCollateralBorrow`, `midnightSupplyCollateral`
+and `midnightSupplyCollateralMakeBorrow`; only derived inactive placeholders skip
+the cap. Explicit quotes on inactive legs remain capped at quote plus tolerance.
+Per-index Midnight `collateralSupplies` remain lower-bound only.
 `collateralSupplied` and `collateralWithdrawn` are measured on the Blue
 position's `collateral`, except on `midnightSupplyCollateral` and
 `midnightSupplyCollateralMakeBorrow`, where
 `collateralSupplied` is the Midnight collateral slot delta. Equality and
-favorable movement pass.
+favorable movement pass, except scalar `collateralSupplied` must stay within both bounds.
 
 For typed-input vault exits, `sharesBurned` (including a migration's source vault)
 measures the account's share-balance decrease plus vault shares minted to that
@@ -1079,10 +1086,16 @@ pulls or receipts. Quote-only overrides remain trusted as before.
 For `blueSupplyCollateral` and `blueSupplyCollateralBorrow`, quote-only
 `assetPaid: ethAddress` also measures ETH plus the sender's net wNative debit
 when the market collateral is the chain's registered wNative:
-`assetsPaid = max(0, net ETH sent + max(0, wrappedBefore - wrappedAfter))`, where net ETH sent subtracts ETH the sender receives back.
+`netPayment = max(0, net ETH sent + max(0, wrappedBefore - wrappedAfter))`, where net ETH sent subtracts ETH the sender receives back.
+The collateral cap uses `assetsPaid = max(netPayment, grossFunding)`, where
+`grossFunding` sums owner-originated ETH and wNative outflows, less only
+matching wrap/unwrap conversion receipts as described below.
 Wrapped credits never reduce the ETH payment. Separate wNative
 debits count against `assetsPaid`; wrapping ETH into wNative and supplying it
-does not count the same funding twice. Other quote-only overrides are unchanged.
+does not count the same funding twice. This additional wNative balance read
+applies only to native-sentinel Blue collateral quotes on registered wNative
+collateral; other Blue collateral pay-ins still use the gross collateral cap
+described below.
 If another operation already checks the same sender wNative balance, that
 operation's bound covers wNative funding instead of adding an overlapping read
 to the native quote. Native-sentinel collateral quotes' combined payment reads
@@ -1094,6 +1107,32 @@ borrow proceeds cannot offset ETH funding. Extra wNative debits instead reduce
 `assetsReceived` and are checked against its minimum. A different token or
 receiver does not trigger this exception. Typed same-token net measurements
 remain unchanged.
+Both ETH-only fallbacks retain the gross owner-originated ETH outflow cap;
+ETH refunds cannot hide oversized native funding. ETH sent to the registered
+wrapper is offset only up to matching ETH returned from that wrapper on unwrap,
+after subtracting all external wNative credits to the owner (excluding mints
+and self-transfers) from the eligible unwrap amount. Borrow proceeds or other
+wNative credits can therefore conservatively prevent a round-trip offset.
+Without external credits, a wallet-local wrap/unwrap round trip is not charged
+as collateral funding.
+Unmatched wraps and unwrapped ETH sent onward still count.
+For Blue collateral quotes using the combined ETH+wNative payment measurement,
+a helper that wraps the owner's ETH and returns wNative to the owner before
+pulling it as collateral is unsupported: both the ETH send and the wNative pull
+count as funding. If a quote already measures the owner's wNative proceeds,
+the payment measurement instead falls back to ETH-only; the wrapped pull reduces
+the measured net proceeds rather than increasing the native payment cap.
+Blue SDK flows wrap inside BlueBundlesV1 without routing wNative through the
+owner. This restriction does
+not apply to Midnight's native collateral supply, which retains its net
+ETH+wNative payment measurement.
+If a sibling Blue collateral quote measures wNative as an ERC-20, its gross
+pulls exclude matching wNative mints funded by ETH still charged to the native
+quote's ETH-only fallback. Wraps already offset by that fallback cannot also
+count toward this mint credit. The sibling also excludes owner-to-zero wNative
+burns up to the fallback's matched unwrap offset. Unmatched burns and ordinary
+transfers still count. Without that fallback, these offsets do not apply;
+external wNative credits are not mints and cannot offset pulls.
 Typed wNative measurements on the sender also include native ETH whenever the
 request sends native value, even without an explicit native alias.
 Requests that send native value with typed inputs must have that value covered
@@ -1117,8 +1156,24 @@ bounds for the intended bundle-wide effects.
 Measurements cover the named subject over the **whole bundle**. Entries do not
 attribute aggregate state changes to individual transactions. Use separate
 simulations for per-transaction limits. Asset bounds use net wallet balance
-changes (gas excluded). To measure native ETH alone in a quote-only limit,
-set `assetPaid` or `assetReceived` to
+changes (gas excluded), except Blue collateral supply pay-ins (`blueSupplyCollateral`
+and `blueSupplyCollateralBorrow`): their `assetsPaid` cap uses the larger of
+the net debit and gross parsed collateral-token transfers from the owner to
+other addresses, including traced ETH outflows for native-ETH quotes.
+Same-token loan proceeds and refunds do not offset gross pulls;
+downstream forwarding is not counted again.
+When measuring ETH and wNative together, gross pulls also count outgoing native
+ETH. Wrap and unwrap conversions are offset only up to matching wNative mints
+to the owner or native ETH receipts from the wrapper. Unmatched burns remain
+counted, and loan proceeds and refunds do not offset external outflows.
+Missing or skipped transfer events retain the net measurement where available.
+Native transaction value without corresponding outgoing traces fails closed.
+Typed-input same-token collateral/borrow operations retain net measurement when
+`assetsPaid` is derived as collateral paid minus loan proceeds; an explicit
+`assetsPaid` quote still caps gross pulls.
+Loan receipts remain net; Midnight composed wallet bounds are unchanged.
+To measure native ETH alone in a quote-only limit (subject to the Blue
+collateral ETH+wNative exception above), set `assetPaid` or `assetReceived` to
 viem's `ethAddress` (`0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE`); other
 sentinels such as `zeroAddress` are read as ERC-20 tokens. For a native-funded
 Midnight collateral supply, measure ETH and wrapped native together as described

@@ -3,6 +3,7 @@ import { deepFreeze, MathLib, Time } from "@morpho-org/morpho-ts";
 import type { Client } from "viem";
 import { blueBorrow } from "../../actions/blue/borrow.js";
 import { normalizeBundlesCommonParams } from "../../actions/bundles/common.js";
+import { getBlueBundlesV1QuoteTimestamp } from "../../helpers/getBlueBundlesV1QuoteTimestamp.js";
 import { DEFAULT_LLTV_BUFFER } from "../../helpers/index.js";
 import { validatePositionHealth } from "../../helpers/validate.js";
 import type { VaultV2BlueReallocation } from "../../types/index.js";
@@ -12,7 +13,11 @@ import {
 } from "../error.js";
 import type { IntentParams } from "../intent.js";
 import type { Action, SignatureRequest, TransactionPlan } from "../types.js";
-import { getPlanObject, validatePlanFields } from "../validation.js";
+import {
+  getPlanObject,
+  validatePlanField,
+  validatePlanFields,
+} from "../validation.js";
 import {
   type BlueMarketSnapshot,
   type BluePositionSnapshot,
@@ -35,17 +40,22 @@ export interface BlueBorrowPlanParams extends IntentParams {
   /** Gross debt increase, before allocator penalties and referral fees. */
   readonly borrowAssets: bigint;
   readonly reallocations?: readonly VaultV2BlueReallocation[];
+  /** Maximum WAD-scaled penalty rate per reallocation in [0, WAD], defaulting to zero. Each rate applies to that reallocation's assets, so it does not bound total proceeds lost. */
+  readonly maxPenalty?: bigint;
   readonly now?: bigint;
 }
 
 /**
  * Prepares a BlueBundlesV1 borrow against existing collateral. No token allowance is needed.
- * Health is checked on the position accrued two hours beyond the later of now and last update,
- * matching the existing Blue borrow handle. Snapshots are not retained in the stored plan.
+ * Health uses the expiry, floored at max(now, lastUpdate), like the entity handle.
+ * Expiries more than 365 days out retain the legacy +2h projection for unlimited sentinels.
+ * Snapshots are not retained in the stored plan.
  * Reads Morpho authorization of BlueBundlesV1 (and its nonce when signing) from `client`.
  * @param client - Viem client for `params.chainId`, used for Morpho authorization and contract code reads.
  * @param params - Borrow intent and chain-tagged snapshots for the borrowing account.
+ * @param params.maxPenalty - Maximum WAD-scaled penalty rate per reallocation in [0, WAD], defaulting to zero. Each rate applies to that reallocation's assets, so it does not bound total proceeds lost.
  * @returns A data-only plan with any Morpho authorization prerequisite before the borrow.
+ * @throws {InvalidBigIntInputError} when a supplied maxPenalty is not a bigint.
  * @throws {ChainIdMismatchError} When the client declares another chain or its RPC reports another chain.
  * @throws {MissingContractCodeError} When BlueBundlesV1 or Morpho Blue has no deployed code.
  * @throws {UnsupportedBlueMarketIrmError} When positive debt requires an unsupported IRM projection.
@@ -57,10 +67,11 @@ export interface BlueBorrowPlanParams extends IntentParams {
  * @throws {NonIntegerInputError} When `expiresAt` or `referralFee.bps` is not a safe integer.
  * @throws {NonPositiveInputError} When `expiresAt`, `borrowAssets` or a reallocation amount is not positive.
  * @throws {ExpiredDeadlineError} When `expiresAt` is at or before `now`.
- * @throws {NegativeInputError} When `referralFee.bps` or a reallocation penalty is negative.
+ * @throws {NegativeInputError} When `referralFee.bps`, maxPenalty or a reallocation penalty is negative.
  * @throws {InputExceedsMaxError} When a fee or reallocation bound is exceeded, including aggregate allocator penalties above the borrow.
+ * Also thrown when maxPenalty exceeds WAD or a penalty exceeds maxPenalty (zero by default).
  * @throws {InvalidCalldataOriginError} When `calldataOrigin` is empty, malformed or has an odd number of hex digits.
- * @throws {ReferralFeePctExceededError} When `referralFee.bps` equals 10,000.
+ * @throws {InputExceedsMaxError} when `referralFee.bps` exceeds 1,000.
  * @throws {ReferralFeeRecipientMissingError} When a positive referral fee has no recipient.
  * @throws {InvalidVaultV2BlueReallocationShapeError} When a reallocation entry is malformed.
  * @throws {ReallocationWithdrawalOnTargetMarketError} When a reallocation sources the target market.
@@ -97,6 +108,7 @@ export async function prepareBlueBorrow(
     positionData,
     borrowAssets,
     reallocations,
+    maxPenalty,
     expiresAt,
     referralFee,
     supportSignature,
@@ -113,6 +125,7 @@ export async function prepareBlueBorrow(
     positionData,
     borrowAssets,
     reallocations,
+    maxPenalty,
     expiresAt,
     referralFee,
     supportSignature,
@@ -133,6 +146,7 @@ export async function prepareBlueBorrow(
         authorizationNonce: 0n,
         maxLtv: MathLib.zeroFloorSub(marketParams.lltv, DEFAULT_LLTV_BUFFER),
         reallocations: structuredClone(params.reallocations ?? []),
+        ...(maxPenalty !== undefined && { maxPenalty }),
         ...normalizeBundlesCommonParams({
           deadline: resolvedIntent.deadline,
           referralFeePct: resolvedIntent.referralFeePct,
@@ -144,10 +158,14 @@ export async function prepareBlueBorrow(
         { type: "blueBorrow", inputs, signatureRequestIds: {} },
         [],
       );
-      // Apply the same deadline-independent two-hour health quote as the existing handle.
+      // Reject debt that exceeds the buffered LLTV at the shared health horizon.
       validatePositionHealth({
         positionData: position.accrueInterest(
-          MathLib.max(now, position.market.lastUpdate) + Time.s.from.h(2n),
+          getBlueBundlesV1QuoteTimestamp({
+            lastUpdate: position.market.lastUpdate,
+            now,
+            deadline: resolvedIntent.deadline,
+          }),
         ),
         additionalCollateral: 0n,
         borrowAmount: params.borrowAssets,
@@ -206,6 +224,7 @@ export function buildBlueBorrow(
     borrowAssets,
     maxLtv,
     reallocations,
+    maxPenalty,
     deadline,
     referralFeePct,
     referralFeeRecipient,
@@ -242,6 +261,7 @@ export function buildBlueBorrow(
       borrowAssets,
       maxLtv,
       reallocations,
+      maxPenalty,
       deadline,
       referralFeePct,
       referralFeeRecipient,
@@ -292,6 +312,12 @@ export function validateBorrowPlanAction(
     },
   });
   validateMarket(inputs.marketParams, `${path}.inputs.marketParams`);
+  if (inputs.maxPenalty !== undefined) {
+    validatePlanField(inputs.maxPenalty, {
+      path: `${path}.inputs.maxPenalty`,
+      type: "uint256 bigint",
+    });
+  }
   for (const [index, value] of (inputs.reallocations as unknown[]).entries()) {
     const entryPath = `${path}.inputs.reallocations[${index}]`;
     const entry = getPlanObject(value, entryPath);

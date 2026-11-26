@@ -491,7 +491,7 @@ describe.sequential("simulate pipeline — blue borrow/repay", () => {
             quote: {
               assetsReceived: borrowAssets,
               assetsPaid: collateralAssets,
-              collateralSupplied: 1n,
+              collateralSupplied: collateralAssets,
               sharesMinted:
                 (await market.getMarketData()).toBorrowShares(
                   borrowAssets,
@@ -671,7 +671,7 @@ describe.sequential("simulate pipeline — blue borrow/repay", () => {
             quote: {
               assetsReceived: borrowAssets,
               assetsPaid: collateralAssets,
-              collateralSupplied: 1n,
+              collateralSupplied: collateralAssets,
               // Generous debt-share cap: virtual conversion overestimates the
               // real minted shares, so the bound stays permissive.
               sharesMinted: SharesMath.toShares(borrowAssets, 0n, 0n, "Up"),
@@ -693,7 +693,7 @@ describe.sequential("simulate pipeline — blue borrow/repay", () => {
       quote: {
         assetsReceived: borrowAssets,
         assetsPaid: collateralAssets,
-        collateralSupplied: 1n,
+        collateralSupplied: collateralAssets,
         sharesMinted: SharesMath.toShares(borrowAssets, 0n, 0n, "Up"),
       },
       slippageTolerance: 0n,

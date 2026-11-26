@@ -29,7 +29,7 @@ export interface BlueRepayParams {
     readonly nativeAmount?: bigint;
     /** Final call deadline in Unix seconds. */
     readonly deadline: bigint;
-    /** Optional WAD-scaled referral fee, strictly below 100%. */
+    /** Optional WAD-scaled referral fee, at most 10%. */
     readonly referralFeePct?: bigint;
     /** Recipient required when `referralFeePct` is positive. */
     readonly referralFeeRecipient?: Address;
@@ -55,7 +55,7 @@ export interface BlueRepayParams {
  * @param params.args.maxRepayAssets - Gross repayment and fee funding cap.
  * @param params.args.nativeAmount - Exclusive native repay funding.
  * @param params.args.deadline - Final call deadline in Unix seconds.
- * @param params.args.referralFeePct - Optional WAD-scaled referral fee.
+ * @param params.args.referralFeePct - Optional WAD-scaled referral fee, at most 10%.
  * @param params.args.referralFeeRecipient - Recipient required for a positive fee.
  * @param params.args.requirementSignature - Optional loan-token signature.
  * @param params.metadata - Optional transaction metadata.
@@ -75,8 +75,9 @@ export interface BlueRepayParams {
  * @throws {DepositAmountMismatchError} when the signed amount differs from `maxRepayAssets`.
  * @throws {DepositSpenderMismatchError} when the signed spender is not BlueBundlesV1.
  * @throws {BundlesRequirementSignatureMismatchError} when a signature cannot be encoded safely.
- * @throws {InputExceedsMaxError} when the referral fee is at least WAD.
  * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
+ * @throws {ReferralFeePctExceededError} when the referral fee is at least WAD.
+ * @throws {MidnightReferralFeePctExceededError} when the referral fee is above 10% but below WAD.
  * @throws {UnsupportedChainIdError} when the chain is absent from the registry.
  * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
  * @example

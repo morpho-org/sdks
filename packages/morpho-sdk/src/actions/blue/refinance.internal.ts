@@ -58,7 +58,10 @@ export const parseBlueRefinance = (params: BlueRefinanceParams) => {
   });
   const allocations = parseBlueAllocations(
     [...(params.args.reallocations ?? [])],
-    markets.destinationMarketParams,
+    {
+      marketParams: markets.destinationMarketParams,
+      maxPenalty: params.args.maxPenalty,
+    },
   );
   const fields: Omit<BlueRefinanceInput, symbol> = {
     ...parsedMarkets,

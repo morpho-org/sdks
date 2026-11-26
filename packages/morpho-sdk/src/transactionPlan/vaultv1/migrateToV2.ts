@@ -14,8 +14,10 @@ import {
 import { vaultV1MigrateToV2 } from "../../actions/vaultV1/migrateToV2.js";
 import { computeVaultV1MigrateToV2Quote } from "../../entities/vaultV1/migrateToV2Quote.js";
 import {
+  validateReferenceTime,
   validateSlippageTolerance,
   validateUint256Field,
+  validateVaultDepositDeadline,
 } from "../../helpers/validate.js";
 import {
   AmountAndSharesExclusiveError,
@@ -115,7 +117,7 @@ export type VaultV1MigrateToV2PlanParams = Omit<IntentParams, "deployless"> &
  * @param params.account - Non-zero account approving or permitting shares and sending the migration.
  * @param params.assets - Positive gross migration in asset base units, before referral fees; mutually exclusive with `shares`.
  * @param params.shares - Positive source share amount to migrate; mutually exclusive with `assets`.
- * @param params.referralFee.bps - Optional integer fee in basis points of the gross amount; defaults to zero and must be below 10,000.
+ * @param params.referralFee.bps - Optional integer fee in basis points of the gross amount; defaults to zero and must be at most 1,000.
  * @param params.referralFee.recipient - Recipient of the optional fee; must be non-zero when the fee is positive.
  * @param params.slippageTolerance - Optional WAD-scaled tolerance for the destination price and source share allowance quotes; defaults to `DEFAULT_SLIPPAGE_TOLERANCE` and must not exceed `MAX_SLIPPAGE_TOLERANCE`.
  * @param params.supportSignature - Optional unlimited ERC-2612 share-permit preference, defaulting to `false`; otherwise uses unlimited direct share approval when allowance is insufficient. Vault V1 shares support ERC-2612; no Permit2 is used.
@@ -123,6 +125,7 @@ export type VaultV1MigrateToV2PlanParams = Omit<IntentParams, "deployless"> &
  * @param params.expiresAt - Optional Unix timestamp in seconds as a safe integer, later than `now`; defaults to `now + 2h`.
  * @param params.calldataOrigin - Optional non-empty, even-length hex bytes appended to each built transaction's calldata.
  * @returns A static migration plan with any required source share approval or permit.
+ * @throws {InvalidBigIntInputError} when `now` is not a bigint.
  * @throws {VaultAssetMismatchError} If the vault assets differ.
  * @throws {SameVaultMigrationError} If source and target are identical.
  * @throws {AmountAndSharesExclusiveError} If both or neither amount is supplied.
@@ -130,11 +133,10 @@ export type VaultV1MigrateToV2PlanParams = Omit<IntentParams, "deployless"> &
  * @throws {NonIntegerInputError} when `expiresAt` or `referralFee.bps` is not a safe integer.
  * @throws {NonPositiveInputError} when `expiresAt`, the selected amount, net migrated assets or previewed shares are not positive.
  * @throws {NegativeInputError} when `referralFee.bps` or `slippageTolerance` is negative.
- * @throws {InputExceedsMaxError} when `referralFee.bps` exceeds 10,000 or the selected amount exceeds uint256.
+ * @throws {InputExceedsMaxError} when `expiresAt` exceeds seven days after `now`, `referralFee.bps` exceeds 1,000 or the selected amount exceeds uint256.
  * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance` exceeds `MAX_SLIPPAGE_TOLERANCE`.
  * @throws {InvalidCalldataOriginError} when `calldataOrigin` is empty, malformed or has an odd number of hex digits.
  * @throws {InvalidTransactionPlanError} when `account` is malformed or `calldataOrigin` exceeds 1 MiB.
- * @throws {ReferralFeePctExceededError} when `referralFee.bps` equals 10,000; the normalized fee must be below WAD.
  * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no recipient or a zero recipient.
  * @throws {ExpiredDeadlineError} If the expiry is not in the future.
  * @throws {ChainIdMismatchError} If the client targets another chain.
@@ -168,7 +170,11 @@ export async function prepareVaultV1MigrateToV2(
 ): Promise<TransactionPlan> {
   const { sourceVault, targetVault, chainId, account } = params;
   const now = params.now ?? Time.timestamp();
+  // Reject a non-bigint clock before deriving the default expiry.
+  validateReferenceTime(now);
   const intent = resolveIntent(params, now);
+  // Report the plan's public expiry field before computing the shared quote.
+  validateVaultDepositDeadline(intent.deadline, { now, field: "expiresAt" });
   const slippageTolerance =
     params.slippageTolerance ?? DEFAULT_SLIPPAGE_TOLERANCE;
   validateSlippageTolerance(slippageTolerance);

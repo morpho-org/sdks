@@ -6,11 +6,11 @@ import {
   MarketParams,
 } from "@morpho-org/blue-sdk";
 import { type Client, isAddressEqual, zeroAddress } from "viem";
-
 import { getChainId, readContract } from "viem/actions";
 import { adaptiveCurveIrmAbi, blueAbi, blueOracleAbi } from "../abis.js";
+import { readDeploylessContract } from "../deployless.js";
 import { MarketParamsIdMismatchError } from "../error.js";
-import { abi, code } from "../queries/GetMarket.js";
+import { abi, code, deployedCode } from "../queries/GetMarket.js";
 import type { DeploylessFetchParameters } from "../types.js";
 import {
   catchRevertOnly,
@@ -80,10 +80,11 @@ export async function fetchMarket(
         price,
         rateAtTarget,
         deadSupplyShares,
-      } = await readContract(client, {
+      } = await readDeploylessContract(client, {
         ...parameters,
         abi,
         code,
+        deployedCode,
         functionName: "query",
         args: [blue, id, adaptiveCurveIrm],
       });

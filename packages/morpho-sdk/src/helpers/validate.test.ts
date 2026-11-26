@@ -30,6 +30,7 @@ import {
   ExcessiveSlippageToleranceError,
   InconsistentReallocationPenaltyError,
   InputExceedsMaxError,
+  InvalidBigIntInputError,
   InvalidMidnightNativeAmountTypeError,
   InvalidReallocationAddressError,
   InvalidReallocationSourceTypeError,
@@ -893,12 +894,30 @@ describe("reallocation validation", () => {
 
   test("behavior: accepts a valid Blue Public Allocator idle reallocation", () => {
     expect(() =>
-      validateVaultV2BlueReallocations(
-        [validBluePublicAllocatorReallocation],
+      validateVaultV2BlueReallocations([validBluePublicAllocatorReallocation], {
         targetMarketId,
-      ),
+        maxPenalty: MAX_REALLOCATION_PENALTY,
+      }),
     ).not.toThrow();
   });
+
+  test.each([1, "1", null])(
+    "rejects a non-bigint maxPenalty %s even without reallocations",
+    (value) => {
+      const maxPenalty = value as unknown as bigint;
+      for (const reallocations of [
+        [],
+        [validBluePublicAllocatorReallocation],
+      ]) {
+        expect(() =>
+          validateVaultV2BlueReallocations(reallocations, {
+            targetMarketId,
+            maxPenalty,
+          }),
+        ).toThrow(InvalidBigIntInputError);
+      }
+    },
+  );
 
   test.each([
     {
@@ -939,7 +958,10 @@ describe("reallocation validation", () => {
     "error: rejects Blue Public Allocator $name",
     ({ reallocation, ErrorClass }) => {
       expect(() =>
-        validateVaultV2BlueReallocations([reallocation], targetMarketId),
+        validateVaultV2BlueReallocations([reallocation], {
+          targetMarketId,
+          maxPenalty: MAX_REALLOCATION_PENALTY,
+        }),
       ).toThrow(ErrorClass);
     },
   );
@@ -951,7 +973,7 @@ describe("reallocation validation", () => {
           { ...validBluePublicAllocatorReallocation, penalty: 5n },
           { ...validBluePublicAllocatorReallocation, penalty: 11n },
         ],
-        targetMarketId,
+        { targetMarketId, maxPenalty: MAX_REALLOCATION_PENALTY },
       ),
     ).toThrow(InconsistentReallocationPenaltyError);
   });
@@ -965,7 +987,7 @@ describe("reallocation validation", () => {
             assets: maxUint128,
           },
         ],
-        targetMarketId,
+        { targetMarketId, maxPenalty: MAX_REALLOCATION_PENALTY },
       ),
     ).not.toThrow();
   });
@@ -979,7 +1001,7 @@ describe("reallocation validation", () => {
             penalty: MAX_REALLOCATION_PENALTY,
           },
         ],
-        targetMarketId,
+        { targetMarketId, maxPenalty: MAX_REALLOCATION_PENALTY },
       ),
     ).not.toThrow();
   });
@@ -995,7 +1017,7 @@ describe("reallocation validation", () => {
             penalty: 11n,
           },
         ],
-        targetMarketId,
+        { targetMarketId, maxPenalty: MAX_REALLOCATION_PENALTY },
       ),
     ).not.toThrow();
   });
@@ -1013,7 +1035,7 @@ describe("reallocation validation", () => {
             },
           } satisfies VaultV2BlueReallocation,
         ],
-        targetMarketId,
+        { targetMarketId, maxPenalty: MAX_REALLOCATION_PENALTY },
       ),
     ).toThrow(ReallocationWithdrawalOnTargetMarketError);
   });
@@ -1031,7 +1053,7 @@ describe("reallocation validation", () => {
             },
           } satisfies VaultV2BlueReallocation,
         ],
-        targetMarketId,
+        { targetMarketId, maxPenalty: MAX_REALLOCATION_PENALTY },
       ),
     ).toThrow(ReallocationWithdrawalOnTargetMarketError);
   });
@@ -1054,7 +1076,10 @@ describe("reallocation validation", () => {
     } as unknown as VaultV2BlueReallocation;
 
     expect(() =>
-      validateVaultV2BlueReallocations([reallocation], targetMarketId),
+      validateVaultV2BlueReallocations([reallocation], {
+        targetMarketId,
+        maxPenalty: MAX_REALLOCATION_PENALTY,
+      }),
     ).toThrow(ReallocationWithdrawalOnTargetMarketError);
   });
 
@@ -1072,7 +1097,10 @@ describe("reallocation validation", () => {
     } as unknown as VaultV2BlueReallocation;
 
     expect(() =>
-      validateVaultV2BlueReallocations([reallocation], targetMarketId),
+      validateVaultV2BlueReallocations([reallocation], {
+        targetMarketId,
+        maxPenalty: MAX_REALLOCATION_PENALTY,
+      }),
     ).toThrow(InvalidReallocationAddressError);
   });
 
@@ -1083,7 +1111,10 @@ describe("reallocation validation", () => {
     } as unknown as VaultV2BlueReallocation;
 
     expect(() =>
-      validateVaultV2BlueReallocations([reallocation], targetMarketId),
+      validateVaultV2BlueReallocations([reallocation], {
+        targetMarketId,
+        maxPenalty: MAX_REALLOCATION_PENALTY,
+      }),
     ).toThrow(InvalidReallocationSourceTypeError);
   });
 
@@ -1101,7 +1132,10 @@ describe("reallocation validation", () => {
     } as unknown as VaultV2BlueReallocation;
 
     expect(() =>
-      validateVaultV2BlueReallocations([reallocation], targetMarketId),
+      validateVaultV2BlueReallocations([reallocation], {
+        targetMarketId,
+        maxPenalty: MAX_REALLOCATION_PENALTY,
+      }),
     ).toThrow(InvalidReallocationSourceTypeError);
   });
 
@@ -1112,7 +1146,10 @@ describe("reallocation validation", () => {
     } as unknown as VaultV2BlueReallocation;
 
     expect(() =>
-      validateVaultV2BlueReallocations([reallocation], targetMarketId),
+      validateVaultV2BlueReallocations([reallocation], {
+        targetMarketId,
+        maxPenalty: MAX_REALLOCATION_PENALTY,
+      }),
     ).toThrow(InvalidReallocationAddressError);
   });
 
@@ -1148,7 +1185,10 @@ describe("reallocation validation", () => {
     "error: InvalidVaultV2BlueReallocationShapeError for $name",
     ({ reallocation }) => {
       expect(() =>
-        validateVaultV2BlueReallocations([reallocation], targetMarketId),
+        validateVaultV2BlueReallocations([reallocation], {
+          targetMarketId,
+          maxPenalty: MAX_REALLOCATION_PENALTY,
+        }),
       ).toThrow(InvalidVaultV2BlueReallocationShapeError);
     },
   );

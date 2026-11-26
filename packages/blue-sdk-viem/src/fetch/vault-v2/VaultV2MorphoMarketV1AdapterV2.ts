@@ -13,10 +13,12 @@ import {
   morphoMarketV1AdapterV2Abi,
   morphoMarketV1AdapterV2FactoryAbi,
 } from "../../abis.js";
+import { readDeploylessContract } from "../../deployless.js";
 import { isUnknownOfFactoryError } from "../../error.js";
 import {
   abi,
   code,
+  deployedCode,
 } from "../../queries/vault-v2/GetVaultV2MorphoMarketV1AdapterV2.js";
 import type { DeploylessFetchParameters } from "../../types.js";
 import { catchRevertOnly, isTransportError } from "../../utils.js";
@@ -73,10 +75,11 @@ export async function fetchVaultV2MorphoMarketV1AdapterV2(
 
   if (deployless) {
     try {
-      const adapter = await readContract(client, {
+      const adapter = await readDeploylessContract(client, {
         ...parameters,
         abi,
         code,
+        deployedCode,
         functionName: "query",
         args: [address, morphoMarketV1AdapterV2Factory],
       });

@@ -100,6 +100,7 @@ test("error: aggregate penalty exceeds shares-mode proceeds", async () => {
   const result = prepareBlueWithdraw(client().client, {
     ...params,
     shares: 1_500_000n,
+    maxPenalty: 10n ** 18n,
     reallocations: [1n, 1n].map((assets) => ({
       vault: owner.address,
       from: { type: "idle" },
@@ -124,6 +125,7 @@ test("error: shares-mode penalty exceeds proceeds quoted by the position snapsho
       market: new Market({ ...market, totalSupplyAssets: 1_000n }),
     },
     shares: 1_500_000n,
+    maxPenalty: 10n ** 18n,
     reallocations: [
       {
         vault: owner.address,
@@ -141,6 +143,58 @@ test("error: shares-mode penalty exceeds proceeds quoted by the position snapsho
     max: 1n,
   });
 });
+
+test.each([
+  { initial: 0n, mutated: 1n },
+  { initial: 1n, mutated: 0n },
+])(
+  "snapshots maxPenalty $initial before the first RPC await",
+  async ({ initial, mutated }) => {
+    const handle = client();
+    const started = Promise.withResolvers<void>();
+    const gate = Promise.withResolvers<void>();
+    handle.request.mockImplementationOnce(async () => {
+      started.resolve();
+      await gate.promise;
+      return toHex(mainnet.id);
+    });
+    const options = {
+      ...params,
+      assets: 1n,
+      maxPenalty: initial,
+      reallocations: [
+        {
+          vault: owner.address,
+          from: { type: "idle" as const },
+          to: { adapter: owner.address },
+          assets: 1n,
+          penalty: 1n,
+        },
+      ],
+    };
+    const pending = prepareBlueWithdraw(handle.client, options);
+    await started.promise;
+    expect(handle.request.mock.calls[0]?.[0].method).toBe("eth_chainId");
+    options.maxPenalty = mutated;
+    gate.resolve();
+    if (initial === 0n) {
+      await expect(pending).rejects.toBeInstanceOf(InputExceedsMaxError);
+      await expect(pending).rejects.toMatchObject({
+        field: "reallocation.penalty",
+        value: 1n,
+        max: initial,
+      });
+      return;
+    }
+    const plan = await pending;
+    expect(plan.steps.at(-1)?.action.inputs).toHaveProperty(
+      "maxPenalty",
+      initial,
+    );
+    expect(buildTransactions(plan)).toHaveLength(1);
+    expect(options.maxPenalty).toBe(mutated);
+  },
+);
 
 test.each([
   [{ assets: position.supplyAssets + 1n }, WithdrawExceedsSupplyError],

@@ -94,7 +94,13 @@ describe("planStateReads", () => {
               plannedLimit.type === "blueSupplyCollateral",
           )
           ?.measurements.find(({ field }) => field === "assetsPaid"),
-      ).toEqual({ field: "assetsPaid", type: "native", account: owner });
+      ).toEqual({
+        field: "assetsPaid",
+        type: "native",
+        account: owner,
+        collateralPayInToken: ethAddress,
+        nativeConversionWrapper: asset,
+      });
       expect(
         plan.operations
           .find(({ limit: plannedLimit }) => plannedLimit.type === "blueBorrow")
@@ -153,6 +159,11 @@ describe("planStateReads", () => {
         field: "assetsPaid",
         type: "native",
         account: owner,
+        collateralPayInToken:
+          input || payoutReceiver !== owner ? asset : ethAddress,
+        ...(!input && payoutReceiver === owner
+          ? { nativeConversionWrapper: asset }
+          : {}),
         ...(input || payoutReceiver !== owner
           ? { readId: `balance:${asset}:${owner}` }
           : {}),

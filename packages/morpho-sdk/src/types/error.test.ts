@@ -54,7 +54,7 @@ describe("ReferralFeePctExceededError", () => {
     expect(error.name).toBe("ReferralFeePctExceededError");
     expect(error.referralFeePct).toBe(MathLib.WAD);
     expect(error.message).toBe(
-      'Referral fee percentage "1000000000000000000" must be below WAD. Reduce referralFeePct or disable the referral fee.',
+      'Referral fee percentage "1000000000000000000" must be below WAD; the SDK also caps referral fees at 10%. Reduce referralFeePct or disable the referral fee.',
     );
   });
 
@@ -64,7 +64,7 @@ describe("ReferralFeePctExceededError", () => {
     expect(error).toBeInstanceOf(InputExceedsMaxError);
     expect(error.field).toBe("referralFeePct");
     expect(error.value).toBe(MathLib.WAD);
-    expect(error.max).toBe(MathLib.WAD - 1n);
+    expect(error.max).toBe(MathLib.WAD / 10n);
   });
 });
 
@@ -97,7 +97,7 @@ describe("MidnightReferralFeePctExceededError", () => {
     expect(error.name).toBe("MidnightReferralFeePctExceededError");
     expect(error.referralFeePct).toBe(referralFeePct);
     expect(error.message).toBe(
-      `Referral fee "${referralFeePct}" exceeds the SDK's 10% Midnight referral-fee cap "${MathLib.WAD / 10n}". Reduce referralFeePct.`,
+      `Referral fee "${referralFeePct}" exceeds the SDK's 10% referral-fee cap "${MathLib.WAD / 10n}". Reduce referralFeePct.`,
     );
   });
 

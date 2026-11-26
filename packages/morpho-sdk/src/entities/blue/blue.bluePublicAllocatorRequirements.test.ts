@@ -75,6 +75,7 @@ describe("MorphoBlue BluePublicAllocator requirements", () => {
       positionData,
       borrowAssets: 100n,
       reallocations: reallocations.values(),
+      maxPenalty: MathLib.WAD / 10n,
       deadline: maxUint256,
     });
 
@@ -104,6 +105,7 @@ describe("MorphoBlue BluePublicAllocator requirements", () => {
       collateralAssets: 10n,
       borrowAssets: 100n,
       reallocations,
+      maxPenalty: MathLib.WAD / 10n,
       deadline: maxUint256,
     });
 
@@ -151,6 +153,7 @@ describe("MorphoBlue BluePublicAllocator requirements", () => {
         positionData: lowValuePositionData,
         shares: 1n,
         reallocations,
+        maxPenalty: MathLib.WAD / 10n,
         deadline: maxUint256,
       });
     } catch (error) {

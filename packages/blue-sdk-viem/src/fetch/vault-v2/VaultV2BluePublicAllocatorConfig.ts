@@ -10,9 +10,11 @@ import {
 import type { Address, Client, Hash } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import { vaultV2Abi, vaultV2BluePublicAllocatorAbi } from "../../abis.js";
+import { readDeploylessContract } from "../../deployless.js";
 import {
   abi,
   code,
+  deployedCode,
 } from "../../queries/vault-v2/GetVaultV2BluePublicAllocatorConfig.js";
 import type {
   DeploylessFetchParameters,
@@ -301,10 +303,11 @@ async function fetchPublicAllocatorDataWithQuery(
     readonly parameters: FetchParameters;
   },
 ) {
-  const result = await readContract(client, {
+  const result = await readDeploylessContract(client, {
     ...parameters,
     abi,
     code,
+    deployedCode,
     functionName: "query",
     args: [allocator, address, adapterList, marketRequests, allocationIdList],
   });

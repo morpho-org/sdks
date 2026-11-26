@@ -25,6 +25,7 @@ import {
   DepositSpenderMismatchError,
   InputExceedsMaxError,
   MarketIdMismatchError,
+  MidnightReferralFeePctExceededError,
   NativeFundingAmountMismatchError,
   NonPositiveInputError,
   ReferralFeeRecipientMissingError,
@@ -51,6 +52,28 @@ const metadata = { origin: "a1b2c3d4" } as const;
 const positiveUint256Arbitrary = fc.bigInt({ min: 1n, max: maxUint256 });
 
 describe("blueSupply", () => {
+  test.each([0n, MathLib.WAD / 10n, MathLib.WAD / 10n + 1n])(
+    "[INV-10] checks referral fee %s against the 10% cap",
+    (referralFeePct) => {
+      const build = () =>
+        blueSupply({
+          market,
+          args: {
+            assets: 100n,
+            userAddress,
+            deadline,
+            referralFeePct,
+            referralFeeRecipient,
+          },
+        });
+      if (referralFeePct > MathLib.WAD / 10n) {
+        expect(build).toThrow(MidnightReferralFeePctExceededError);
+      } else {
+        expect(build().action.args.referralFeePct).toBe(referralFeePct);
+      }
+    },
+  );
+
   test("default", () => {
     const referralFeePct = MathLib.WAD / 10n;
     const plain = blueSupply({

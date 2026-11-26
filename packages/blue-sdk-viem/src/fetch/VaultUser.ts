@@ -1,9 +1,9 @@
 import { VaultUser } from "@morpho-org/blue-sdk";
 import { type Address, type Client, erc20Abi } from "viem";
-
 import { readContract } from "viem/actions";
 import { metaMorphoAbi } from "../abis.js";
-import { abi, code } from "../queries/GetVaultUser.js";
+import { readDeploylessContract } from "../deployless.js";
+import { abi, code, deployedCode } from "../queries/GetVaultUser.js";
 import type { DeploylessFetchParameters } from "../types.js";
 import { isTransportError } from "../utils.js";
 import { fetchVaultConfig } from "./VaultConfig.js";
@@ -62,10 +62,11 @@ export async function fetchVaultUser(
   /* v8 ignore next: V8 reports a negative false-branch count here; deployless=false is tested. */
   if (deployless) {
     try {
-      const { isAllocator, allowance } = await readContract(client, {
+      const { isAllocator, allowance } = await readDeploylessContract(client, {
         ...parameters,
         abi,
         code,
+        deployedCode,
         functionName: "query",
         args: [vault, user],
       });

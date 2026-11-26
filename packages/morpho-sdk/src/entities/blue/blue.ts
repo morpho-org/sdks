@@ -76,6 +76,7 @@ import {
   type ChainCheck,
   createChainCheck,
 } from "../../actions/requirements/chainCheck.js";
+import { getBlueBundlesV1QuoteTimestamp } from "../../helpers/getBlueBundlesV1QuoteTimestamp.js";
 import {
   DEFAULT_LLTV_BUFFER,
   validateAccrualPosition,
@@ -221,7 +222,7 @@ export interface BlueActions {
    * @param params.collateralAssets - Gross collateral assets supplied.
    * @param params.nativeAmount - Optional full native funding equal to `collateralAssets`.
    * @param params.deadline - Final call deadline in Unix seconds.
-   * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%.
+   * @param params.referralFeePct - Optional WAD-scaled referral fee at most 10%.
    * @param params.referralFeeRecipient - Recipient required for a positive fee.
    * @returns Lazy token prerequisite resolution and a synchronous deep-frozen transaction.
    * @throws {ChainIdMismatchError} when the client targets another chain, or from
@@ -232,8 +233,9 @@ export interface BlueActions {
    * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
    * @throws {ChainWNativeMissingError} when native funding is requested without registered wNative.
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
-   * @throws {InputExceedsMaxError} when the referral fee is at least WAD.
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
+   * @throws {ReferralFeePctExceededError} when the referral fee is at least WAD.
+   * @throws {MidnightReferralFeePctExceededError} when the referral fee is above 10% but below WAD.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple token signatures are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an unsupported signature is supplied.
    * @throws {DepositOwnerMismatchError} from `buildTx()` when the signed owner differs from `userAddress`.
@@ -302,7 +304,7 @@ export interface BlueActions {
    * @param params.assets - Gross loan-token assets funded before the referral fee.
    * @param params.nativeAmount - Optional full native funding; must equal `assets` and requires wNative.
    * @param params.deadline - Final call deadline in Unix seconds.
-   * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%.
+   * @param params.referralFeePct - Optional WAD-scaled referral fee at most 10%.
    * @param params.referralFeeRecipient - Recipient required for a positive fee.
    * @returns Lazy prerequisite resolution and a synchronous deep-frozen transaction builder.
    * @throws {ChainIdMismatchError} when the client targets another chain, or from
@@ -313,8 +315,10 @@ export interface BlueActions {
    * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
    * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
-   * @throws {InputExceedsMaxError} when `assets` or `deadline` exceeds `uint256`, when the referral fee is at least WAD.
+   * @throws {InputExceedsMaxError} when `assets` or `deadline` exceeds `uint256`.
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
+   * @throws {ReferralFeePctExceededError} when the referral fee is at least WAD.
+   * @throws {MidnightReferralFeePctExceededError} when the referral fee is above 10% but below WAD.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple token signatures are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when the route cannot consume a supplied signature.
    * @throws {DepositOwnerMismatchError} from `buildTx()` when the signed owner differs from `userAddress`.
@@ -404,10 +408,12 @@ export interface BlueActions {
    * @param params.assets - Exact assets withdrawn, exclusive with `shares`.
    * @param params.shares - Exact shares burned, exclusive with `assets`.
    * @param params.reallocations - Optional Vault V2 reallocations executed before withdrawal.
+   * @param params.maxPenalty - Maximum WAD-scaled penalty rate per reallocation in [0, WAD], defaulting to zero. Each rate applies to that reallocation's assets, so it does not bound total proceeds lost.
    * @param params.deadline - Final call deadline in Unix seconds.
-   * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%.
+   * @param params.referralFeePct - Optional WAD-scaled referral fee at most 10%.
    * @param params.referralFeeRecipient - Recipient required for a positive fee.
    * @returns Lazy authorization resolution and a synchronous deep-frozen transaction builder.
+   * @throws {InvalidBigIntInputError} when a supplied maxPenalty is not a bigint.
    * @throws {ChainIdMismatchError} when the client targets another chain, or from
    *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
    * @throws {ExpiredDeadlineError} when the deadline is stale.
@@ -416,12 +422,16 @@ export interface BlueActions {
    *   reallocation source market's `id` does not hash from its tuple fields.
    * @throws {AccrualPositionUserMismatchError} when `positionData` belongs to another user.
    * @throws {NegativeInputError} when an amount, referral fee, or reallocation penalty is negative.
+   *   Also thrown when maxPenalty is negative.
    * @throws {NonPositiveInputError} when no withdrawal mode or positive reallocation amount is provided.
    * @throws {MutuallyExclusiveWithdrawAmountsError} when assets and shares are both nonzero.
    * @throws {WithdrawExceedsSupplyError} when assets exceed the supplied balance.
    * @throws {WithdrawSharesExceedSupplyError} when shares exceed the owned balance.
    * @throws {InputExceedsMaxError} when a fee or reallocation exceeds its ABI bound.
+   *   Also thrown when maxPenalty exceeds WAD or a reallocation penalty exceeds maxPenalty.
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
+   * @throws {ReferralFeePctExceededError} when the referral fee is at least WAD.
+   * @throws {MidnightReferralFeePctExceededError} when the referral fee is above 10% but below WAD.
    * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
    * @throws {InvalidVaultV2BlueReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
    * @throws {InvalidReallocationSourceTypeError} when a reallocation source is malformed.
@@ -471,6 +481,8 @@ export interface BlueActions {
       readonly userAddress: Address;
       readonly positionData: AccrualPosition;
       readonly reallocations?: Iterable<VaultV2BlueReallocation>;
+      /** Maximum WAD-scaled penalty rate per reallocation in [0, WAD], defaulting to zero. Each rate applies to that reallocation's assets, so it does not bound total proceeds lost. */
+      readonly maxPenalty?: bigint;
       readonly deadline: bigint;
       readonly referralFeePct?: bigint;
       readonly referralFeeRecipient?: Address;
@@ -566,10 +578,12 @@ export interface BlueActions {
    * @param params.borrowAssets - Gross loan assets borrowed before penalties and referral fees.
    * @param params.positionData - Pre-fetched position used for the health check.
    * @param params.reallocations - Optional Vault V2 reallocations before borrowing.
+   * @param params.maxPenalty - Maximum WAD-scaled penalty rate per reallocation in [0, WAD], defaulting to zero. Each rate applies to that reallocation's assets, so it does not bound total proceeds lost.
    * @param params.deadline - Final call deadline in Unix seconds.
-   * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%.
+   * @param params.referralFeePct - Optional WAD-scaled referral fee at most 10%.
    * @param params.referralFeeRecipient - Recipient required for a positive fee.
    * @returns Lazy Blue authorization resolution and a synchronous deep-frozen transaction.
+   * @throws {InvalidBigIntInputError} when a supplied maxPenalty is not a bigint.
    * @throws {ChainIdMismatchError} when the client targets another chain, or from
    *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
    * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
@@ -582,8 +596,12 @@ export interface BlueActions {
    * @throws {BorrowExceedsSafeLtvError} when the resulting position exceeds buffered LLTV.
    * @throws {NonPositiveInputError} when `borrowAssets` is not positive.
    * @throws {NegativeInputError} when the borrow, fee, or a reallocation value is negative.
+   *   Also thrown when maxPenalty is negative.
    * @throws {InputExceedsMaxError} when a fee, penalty, or reallocation exceeds its bound.
+   *   Also thrown when maxPenalty exceeds WAD or a reallocation penalty exceeds maxPenalty.
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
+   * @throws {ReferralFeePctExceededError} when the referral fee is at least WAD.
+   * @throws {MidnightReferralFeePctExceededError} when the referral fee is above 10% but below WAD.
    * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
    * @throws {InvalidVaultV2BlueReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
    * @throws {InvalidReallocationSourceTypeError} when a reallocation source is malformed.
@@ -632,6 +650,8 @@ export interface BlueActions {
       readonly borrowAssets: bigint;
       readonly positionData: AccrualPosition;
       readonly reallocations?: Iterable<VaultV2BlueReallocation>;
+      /** Maximum WAD-scaled penalty rate per reallocation in [0, WAD], defaulting to zero. Each rate applies to that reallocation's assets, so it does not bound total proceeds lost. */
+      readonly maxPenalty?: bigint;
       readonly deadline: bigint;
       readonly referralFeePct?: bigint;
       readonly referralFeeRecipient?: Address;
@@ -655,7 +675,7 @@ export interface BlueActions {
    * @param params.repayShares - Exact shares, or `maxUint256` for a full repay.
    * @param params.nativeAmount - Optional full native funding equal to the derived repayment cap.
    * @param params.deadline - Final call deadline in Unix seconds.
-   * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%.
+   * @param params.referralFeePct - Optional WAD-scaled referral fee at most 10%.
    * @param params.referralFeeRecipient - Recipient required for a positive fee.
    * @returns Lazy token prerequisite resolution and a synchronous deep-frozen transaction.
    * @throws {ChainIdMismatchError} when the client targets another chain, or from
@@ -673,6 +693,8 @@ export interface BlueActions {
    * @throws {InputExceedsMaxError} when a fee is out of bounds or a share quote deadline is too far away.
    * @throws {MaxRepayAssetsBelowRepayAssetsError} when a signed share cap no longer covers the fresh quote.
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
+   * @throws {ReferralFeePctExceededError} when the referral fee is at least WAD.
+   * @throws {MidnightReferralFeePctExceededError} when the referral fee is above 10% but below WAD.
    * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
    * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
@@ -749,7 +771,7 @@ export interface BlueActions {
    * @param params.positionData - Pre-fetched position used for balance and health validation.
    * @param params.collateralAssets - Collateral assets withdrawn.
    * @param params.deadline - Final call deadline in Unix seconds.
-   * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%.
+   * @param params.referralFeePct - Optional WAD-scaled referral fee at most 10%.
    * @param params.referralFeeRecipient - Recipient required for a positive fee.
    * @returns Lazy Blue authorization resolution and a synchronous deep-frozen transaction.
    * @throws {ChainIdMismatchError} when the client targets another chain, or from
@@ -764,8 +786,9 @@ export interface BlueActions {
    * @throws {WithdrawMakesPositionUnhealthyError} when the result exceeds buffered LLTV.
    * @throws {NonPositiveInputError} when `collateralAssets` is not positive.
    * @throws {NegativeInputError} when collateral or the referral fee is negative.
-   * @throws {InputExceedsMaxError} when the referral fee is at least WAD.
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
+   * @throws {ReferralFeePctExceededError} when the referral fee is at least WAD.
+   * @throws {MidnightReferralFeePctExceededError} when the referral fee is above 10% but below WAD.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple authorization signatures are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a token signature is supplied.
    * @throws {DepositOwnerMismatchError} from `buildTx()` when the signed owner differs from `userAddress`.
@@ -837,7 +860,7 @@ export interface BlueActions {
    * @param params.collateralAssets - Collateral withdrawn, or zero for pure repay.
    * @param params.nativeAmount - Optional full native funding; must equal derived `maxRepayAssets`.
    * @param params.deadline - Final call deadline in Unix seconds; share mode is limited to the two-hour funding quote horizon.
-   * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%.
+   * @param params.referralFeePct - Optional WAD-scaled referral fee at most 10%.
    * @param params.referralFeeRecipient - Recipient required for a positive fee.
    * @returns Lazy funding/authorization resolution and a synchronous deep-frozen transaction builder.
    * @throws {ChainIdMismatchError} when the client targets another chain, or from
@@ -855,9 +878,11 @@ export interface BlueActions {
    * @throws {MissingMarketPriceError} when withdrawal health cannot be validated without an oracle price.
    * @throws {WithdrawMakesPositionUnhealthyError} when the post-repay withdrawal exceeds buffered LLTV.
    * @throws {ExpiredDeadlineError} when the deadline is stale.
-   * @throws {InputExceedsMaxError} when the referral fee is at least WAD or a share-mode deadline exceeds the funding quote horizon.
+   * @throws {InputExceedsMaxError} when a share-mode deadline exceeds the funding quote horizon.
    * @throws {MaxRepayAssetsBelowRepayAssetsError} from `buildTx()` when a previously signed share-mode cap no longer covers the fresh derived minimum.
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
+   * @throws {ReferralFeePctExceededError} when the referral fee is at least WAD.
+   * @throws {MidnightReferralFeePctExceededError} when the referral fee is above 10% but below WAD.
    * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
    * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
@@ -943,10 +968,12 @@ export interface BlueActions {
    * @param params.positionData - Pre-fetched position; required when `borrowAssets` is positive.
    * @param params.nativeAmount - Optional full native collateral funding; must equal `collateralAssets`.
    * @param params.reallocations - Optional Vault V2 reallocations; valid only for a borrow.
+   * @param params.maxPenalty - Maximum WAD-scaled penalty rate per reallocation in [0, WAD], defaulting to zero. Each rate applies to that reallocation's assets, so it does not bound total proceeds lost.
    * @param params.deadline - Final call deadline in Unix seconds.
-   * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%.
+   * @param params.referralFeePct - Optional WAD-scaled referral fee at most 10%.
    * @param params.referralFeeRecipient - Recipient required for a positive fee.
    * @returns Lazy funding/authorization resolution and a synchronous deep-frozen transaction builder.
+   * @throws {InvalidBigIntInputError} when a supplied maxPenalty is not a bigint.
    * @throws {ChainIdMismatchError} when the client targets another chain, or from
    *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
    * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
@@ -959,12 +986,16 @@ export interface BlueActions {
    * @throws {ReallocationsRequireBorrowError} when reallocations accompany no borrow.
    * @throws {ExpiredDeadlineError} when the deadline is stale.
    * @throws {NegativeInputError} when an amount, native funding, referral fee, or reallocation penalty is negative.
+   *   Also thrown when maxPenalty is negative.
    * @throws {NonPositiveInputError} when both legs or a reallocation amount is not positive.
    * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
    * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
    * @throws {InputExceedsMaxError} when a fee or reallocation exceeds its ABI bound.
+   *   Also thrown when maxPenalty exceeds WAD or a reallocation penalty exceeds maxPenalty.
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
+   * @throws {ReferralFeePctExceededError} when the referral fee is at least WAD.
+   * @throws {MidnightReferralFeePctExceededError} when the referral fee is above 10% but below WAD.
    * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
    * @throws {InvalidVaultV2BlueReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
    * @throws {InvalidReallocationSourceTypeError} when a reallocation source is malformed.
@@ -1021,6 +1052,8 @@ export interface BlueActions {
       readonly positionData?: AccrualPosition;
       readonly nativeAmount?: bigint;
       readonly reallocations?: Iterable<VaultV2BlueReallocation>;
+      /** Maximum WAD-scaled penalty rate per reallocation in [0, WAD], defaulting to zero. Each rate applies to that reallocation's assets, so it does not bound total proceeds lost. */
+      readonly maxPenalty?: bigint;
       readonly deadline: bigint;
       readonly referralFeePct?: bigint;
       readonly referralFeeRecipient?: Address;
@@ -1047,10 +1080,12 @@ export interface BlueActions {
    * @param params.destination.marketParams - Distinct destination market with matching tokens.
    * @param params.destination.positionData - User's pre-fetched destination position.
    * @param params.reallocations - Optional Vault V2 reallocations into the destination.
+   * @param params.maxPenalty - Maximum WAD-scaled penalty rate per reallocation in [0, WAD], defaulting to zero. Each rate applies to that reallocation's assets, so it does not bound the total penalty added to destination debt.
    * @param params.deadline - Final call deadline in Unix seconds.
-   * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%.
+   * @param params.referralFeePct - Optional WAD-scaled referral fee at most 10%.
    * @param params.referralFeeRecipient - Recipient required for a positive fee.
    * @returns Lazy Blue authorization resolution and a synchronous deep-frozen transaction builder.
+   * @throws {InvalidBigIntInputError} when a supplied maxPenalty is not a bigint.
    * @throws {ChainIdMismatchError} when the client targets another chain, or from
    *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
    * @throws {UnsupportedBlueMarketIrmError} when positive source or destination debt requires an unsupported IRM projection.
@@ -1061,12 +1096,16 @@ export interface BlueActions {
    * @throws {RefinanceSameMarketError} when source and destination IDs match.
    * @throws {RefinanceTokenMismatchError} when their loan or collateral tokens differ.
    * @throws {NegativeInputError} when a referral fee or reallocation penalty is negative.
+   *   Also thrown when maxPenalty is negative.
    * @throws {NonPositiveInputError} when the source has no borrow shares or a reallocation amount is not positive.
    * @throws {MissingMarketPriceError} when destination health cannot be validated without an oracle price.
    * @throws {BorrowExceedsSafeLtvError} when the complete destination exceeds buffered LLTV.
    * @throws {ExpiredDeadlineError} when the deadline is stale.
    * @throws {InputExceedsMaxError} when a fee or reallocation exceeds its ABI bound.
+   *   Also thrown when maxPenalty exceeds WAD or a reallocation penalty exceeds maxPenalty.
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
+   * @throws {ReferralFeePctExceededError} when the referral fee is at least WAD.
+   * @throws {MidnightReferralFeePctExceededError} when the referral fee is above 10% but below WAD.
    * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
    * @throws {InvalidVaultV2BlueReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
    * @throws {InvalidReallocationSourceTypeError} when a reallocation source is malformed.
@@ -1127,6 +1166,8 @@ export interface BlueActions {
         readonly positionData: AccrualPosition;
       };
       readonly reallocations?: Iterable<VaultV2BlueReallocation>;
+      /** Maximum WAD-scaled penalty rate per reallocation in [0, WAD], defaulting to zero. Each rate applies to that reallocation's assets, so it does not bound the total penalty added to destination debt. */
+      readonly maxPenalty?: bigint;
       readonly deadline: bigint;
       readonly referralFeePct?: bigint;
       readonly referralFeeRecipient?: Address;
@@ -1197,20 +1238,28 @@ export interface BlueActions {
    * For `refinance`, compute the plan on the destination-market handle (for
    * example, `client.morpho.blue(destination.marketParams, chainId)`), not the
    * source-market handle. Pass the source position's `borrowAssets` accrued to
-   * `max(now, source.lastUpdate, destination.lastUpdate) + 2h` as
-   * `operation.amount`; the optional `operation.referralFeePct` is WAD-scaled.
+   * the resolved plan expiry (or the required action deadline for entity
+   * `refinance`) as `operation.amount`. With
+   * `minTs = max(now, source.lastUpdate, destination.lastUpdate)`, the horizon is
+   * `max(minTs, resolved expiry)`. For `prepareBlueRefinance`, omitted `expiresAt`
+   * resolves to `now + 2h`, not `minTs + 2h`. Only when the resolved expiry exceeds
+   * `minTs + 365 days`, use `minTs + 2h` for unlimited-deadline sentinel
+   * compatibility. The optional `operation.referralFeePct` is WAD-scaled.
    * The planner includes the referral fee and its own planned allocator-leg
    * penalties in destination debt. Refinance never uses vaults with a 100%
-   * penalty.
+   * penalty. When executing the returned reallocations, pass the same explicit
+   * maxPenalty to borrow, supplyCollateralBorrow, withdraw, or refinance.
    *
    * @param params.reallocationData - State returned by {@link getVaultV2BlueReallocationData}.
    * @param params.options - Optional allocator discovery controls and operation to support.
    * @returns Action-ready reallocations and their post-simulation state.
+   * @throws {InvalidBigIntInputError} when options.maxPenalty is supplied but is not a bigint.
    * @throws {ChainIdMismatchError} when `reallocationData` belongs to another chain.
    * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
    * @throws {NegativeInputError} when the cap-accrual buffer, allocator cap headroom, utilization, penalty limit, or referral-fee percentage is negative.
    * @throws {InputExceedsMaxError} when the allocator cap headroom, a utilization, or a penalty limit exceeds WAD, or a selected borrow/withdraw plan otherwise covers its shortfall but its planned penalty exceeds the operation amount.
    * @throws {ReferralFeePctExceededError} when the referral-fee percentage is at least WAD.
+   * @throws {MidnightReferralFeePctExceededError} when the referral fee is above 10% but below WAD.
    * @throws {NonPositiveInputError} when an enabled operation amount is not positive.
    * @throws {UnknownReallocationMarketError} when a required market is absent.
    * @throws {UnknownReallocationVaultError} when configured vault state is absent.
@@ -1328,13 +1377,6 @@ export class MorphoBlue implements BlueActions {
     marketParams: Pick<MarketParams, "lltv"> = this.parsedMarket,
   ): bigint {
     return MathLib.zeroFloorSub(marketParams.lltv, DEFAULT_LLTV_BUFFER);
-  }
-
-  private getBlueBundlesV1QuoteTimestamp(
-    lastUpdate: bigint,
-    now = Time.timestamp(),
-  ): bigint {
-    return MathLib.max(now, lastUpdate) + Time.s.from.h(2n);
   }
 
   private async getTokenRequirements(
@@ -1560,6 +1602,8 @@ export class MorphoBlue implements BlueActions {
       readonly userAddress: Address;
       readonly positionData: AccrualPosition;
       readonly reallocations?: Iterable<VaultV2BlueReallocation>;
+      /** Maximum WAD-scaled penalty rate per reallocation in [0, WAD], defaulting to zero. Each rate applies to that reallocation's assets, so it does not bound total proceeds lost. */
+      readonly maxPenalty?: bigint;
       readonly deadline: bigint;
       readonly referralFeePct?: bigint;
       readonly referralFeeRecipient?: Address;
@@ -1613,10 +1657,10 @@ export class MorphoBlue implements BlueActions {
       });
     }
     const allocations = parseBlueWithdrawPenalty(
-      parseBlueAllocations(
-        [...(params.reallocations ?? [])],
-        this.parsedMarket,
-      ),
+      parseBlueAllocations([...(params.reallocations ?? [])], {
+        marketParams: this.parsedMarket,
+        maxPenalty: params.maxPenalty,
+      }),
       mode,
     );
     const reallocationPenaltyAssets = allocations.penaltyAssets;
@@ -1888,6 +1932,8 @@ export class MorphoBlue implements BlueActions {
       readonly borrowAssets: bigint;
       readonly positionData: AccrualPosition;
       readonly reallocations?: Iterable<VaultV2BlueReallocation>;
+      /** Maximum WAD-scaled penalty rate per reallocation in [0, WAD], defaulting to zero. Each rate applies to that reallocation's assets, so it does not bound total proceeds lost. */
+      readonly maxPenalty?: bigint;
       readonly deadline: bigint;
       readonly referralFeePct?: bigint;
       readonly referralFeeRecipient?: Address;
@@ -1908,6 +1954,7 @@ export class MorphoBlue implements BlueActions {
       borrowAssets,
       positionData,
       reallocations,
+      maxPenalty,
       deadline,
       referralFeePct,
       referralFeeRecipient,
@@ -1921,6 +1968,7 @@ export class MorphoBlue implements BlueActions {
         borrowAssets,
         positionData,
         reallocations: normalizedReallocations,
+        maxPenalty,
         deadline,
         referralFeePct,
         referralFeeRecipient,
@@ -2131,12 +2179,18 @@ export class MorphoBlue implements BlueActions {
         repayShares,
         deadline,
         now: createdAt,
+        healthTimestamp:
+          collateralAssets > 0n
+            ? getBlueBundlesV1QuoteTimestamp({
+                lastUpdate: positionData.market.lastUpdate,
+                now: createdAt,
+                deadline,
+              })
+            : undefined,
       });
-    const referralFeeAssets = getBlueBundlesV1ReferralFeeAssets(
-      expectedRepayAssets,
-      referralFeePct,
-    );
-    const maxRepayAssets = expectedRepayAssets + referralFeeAssets;
+    const maxRepayAssets =
+      expectedRepayAssets +
+      getBlueBundlesV1ReferralFeeAssets(expectedRepayAssets, referralFeePct);
     const nativeValue = parseNativeFunding({
       chainId: this.chainId,
       token: this.parsedMarket.loanToken,
@@ -2263,6 +2317,8 @@ export class MorphoBlue implements BlueActions {
       readonly positionData?: AccrualPosition;
       readonly nativeAmount?: bigint;
       readonly reallocations?: Iterable<VaultV2BlueReallocation>;
+      /** Maximum WAD-scaled penalty rate per reallocation in [0, WAD], defaulting to zero. Each rate applies to that reallocation's assets, so it does not bound total proceeds lost. */
+      readonly maxPenalty?: bigint;
       readonly deadline: bigint;
       readonly referralFeePct?: bigint;
       readonly referralFeeRecipient?: Address;
@@ -2296,6 +2352,7 @@ export class MorphoBlue implements BlueActions {
       collateralAssets,
       borrowAssets,
       reallocations: [...(params.reallocations ?? [])],
+      maxPenalty: params.maxPenalty,
     });
     const allocations = parseBlueSupplyCollateralBorrowAllocations(
       this.parsedMarket,
@@ -2314,10 +2371,11 @@ export class MorphoBlue implements BlueActions {
       // Reject resulting debt above the buffered LLTV.
       validatePositionHealth({
         positionData: positionData.accrueInterest(
-          this.getBlueBundlesV1QuoteTimestamp(
-            positionData.market.lastUpdate,
-            createdAt,
-          ),
+          getBlueBundlesV1QuoteTimestamp({
+            lastUpdate: positionData.market.lastUpdate,
+            now: createdAt,
+            deadline: normalized.deadline,
+          }),
         ),
         additionalCollateral: collateralAssets,
         borrowAmount: borrowAssets,
@@ -2430,6 +2488,8 @@ export class MorphoBlue implements BlueActions {
         readonly positionData: AccrualPosition;
       };
       readonly reallocations?: Iterable<VaultV2BlueReallocation>;
+      /** Maximum WAD-scaled penalty rate per reallocation in [0, WAD], defaulting to zero. Each rate applies to that reallocation's assets, so it does not bound the total penalty added to destination debt. */
+      readonly maxPenalty?: bigint;
       readonly deadline: bigint;
       readonly referralFeePct?: bigint;
       readonly referralFeeRecipient?: Address;
@@ -2481,7 +2541,10 @@ export class MorphoBlue implements BlueActions {
 
     const allocations = parseBlueAllocations(
       [...(params.reallocations ?? [])],
-      markets.destinationMarketParams,
+      {
+        marketParams: markets.destinationMarketParams,
+        maxPenalty: params.maxPenalty,
+      },
     );
     validateBlueRefinanceQuote({
       destinationMarketParams,
@@ -2490,6 +2553,7 @@ export class MorphoBlue implements BlueActions {
       penaltyAssets: allocations.penaltyAssets,
       referralFeePct,
       now: createdAt,
+      deadline: normalized.deadline,
     });
 
     const input: Omit<BlueRefinanceInput & ReferenceTimestampParams, symbol> = {
@@ -2691,20 +2755,28 @@ export class MorphoBlue implements BlueActions {
    * For `refinance`, compute the plan on the destination-market handle (for
    * example, `client.morpho.blue(destination.marketParams, chainId)`), not the
    * source-market handle. Pass the source position's `borrowAssets` accrued to
-   * `max(now, source.lastUpdate, destination.lastUpdate) + 2h` as
-   * `operation.amount`; the optional `operation.referralFeePct` is WAD-scaled.
+   * the resolved plan expiry (or the required action deadline for entity
+   * `refinance`) as `operation.amount`. With
+   * `minTs = max(now, source.lastUpdate, destination.lastUpdate)`, the horizon is
+   * `max(minTs, resolved expiry)`. For `prepareBlueRefinance`, omitted `expiresAt`
+   * resolves to `now + 2h`, not `minTs + 2h`. Only when the resolved expiry exceeds
+   * `minTs + 365 days`, use `minTs + 2h` for unlimited-deadline sentinel
+   * compatibility. The optional `operation.referralFeePct` is WAD-scaled.
    * The planner includes the referral fee and its own planned allocator-leg
    * penalties in destination debt. Refinance never uses vaults with a 100%
-   * penalty.
+   * penalty. When executing the returned reallocations, pass the same explicit
+   * maxPenalty to borrow, supplyCollateralBorrow, withdraw, or refinance.
    *
    * @param params.reallocationData - State returned by {@link getVaultV2BlueReallocationData}.
    * @param params.options - Optional allocator discovery controls and operation to support.
    * @returns Action-ready reallocations and their post-simulation state.
+   * @throws {InvalidBigIntInputError} when options.maxPenalty is supplied but is not a bigint.
    * @throws {ChainIdMismatchError} when `reallocationData` belongs to another chain.
    * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
    * @throws {NegativeInputError} when the cap-accrual buffer, allocator cap headroom, utilization, penalty limit, or referral-fee percentage is negative.
    * @throws {InputExceedsMaxError} when the allocator cap headroom, a utilization, or a penalty limit exceeds WAD, or a selected borrow/withdraw plan otherwise covers its shortfall but its planned penalty exceeds the operation amount.
    * @throws {ReferralFeePctExceededError} when the referral-fee percentage is at least WAD.
+   * @throws {MidnightReferralFeePctExceededError} when the referral fee is above 10% but below WAD.
    * @throws {NonPositiveInputError} when an enabled operation amount is not positive.
    * @throws {UnknownReallocationMarketError} when a required market is absent.
    * @throws {UnknownReallocationVaultError} when configured vault state is absent.

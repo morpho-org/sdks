@@ -20,6 +20,7 @@ import { vaultExitBundlesV1Abi } from "../../abis.js";
 import {
   BundlesPermitMismatchError,
   InputExceedsMaxError,
+  MidnightReferralFeePctExceededError,
   NegativeInputError,
   NonPositiveInputError,
   type PermitRequirementSignature,
@@ -51,7 +52,7 @@ const forceWithdrawArbitrary = fc.record({
   adapterAddress: addressArbitrary,
   exitAssets: positiveUint256Arbitrary,
   minSharePriceE27: fc.bigInt({ min: 0n, max: maxUint256 }),
-  referralFeePct: fc.bigInt({ min: 0n, max: MathLib.WAD - 1n }),
+  referralFeePct: fc.bigInt({ min: 0n, max: MathLib.WAD / 10n }),
   referralFeeRecipient: addressArbitrary,
   onBehalf: addressArbitrary,
   deadline: positiveUint256Arbitrary,
@@ -107,6 +108,30 @@ const decode = (data: `0x${string}`) => {
 };
 
 describe("vaultV2ForceWithdraw", () => {
+  test.each([0n, MathLib.WAD / 10n, MathLib.WAD / 10n + 1n])(
+    "checks referral fee %s against the 10% cap",
+    (referralFeePct) => {
+      const build = () =>
+        vaultV2ForceWithdraw({
+          vault: { chainId, address: vault },
+          args: {
+            adapter,
+            exitAssets: 100n,
+            minSharePriceE27,
+            userAddress,
+            deadline,
+            referralFeePct,
+            referralFeeRecipient,
+          },
+        });
+      if (referralFeePct > MathLib.WAD / 10n) {
+        expect(build).toThrow(MidnightReferralFeePctExceededError);
+      } else {
+        expect(build().action.args.referralFeePct).toBe(referralFeePct);
+      }
+    },
+  );
+
   test("default", () => {
     const tx = vaultV2ForceWithdraw({
       vault: { chainId, address: vault },
