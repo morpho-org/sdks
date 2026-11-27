@@ -12,6 +12,7 @@ import {
   CalldataTargetError,
 } from "./errors.js";
 import { midnightRules } from "./midnight.js";
+import { midnightMakerRules } from "./midnightMakers.js";
 import { midnightOfferRules } from "./midnightOffers.js";
 import type {
   ActionProofInput,
@@ -30,6 +31,7 @@ const rules: Readonly<Partial<Record<string, Rule>>> = {
   ...blueRules,
   ...midnightRules,
   ...midnightOfferRules,
+  ...midnightMakerRules,
 } as Readonly<Partial<Record<string, Rule>>>;
 
 /**

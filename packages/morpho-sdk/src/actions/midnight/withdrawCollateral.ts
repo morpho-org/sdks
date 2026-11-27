@@ -1,13 +1,19 @@
-import type { MarketInput } from "@morpho-org/midnight-sdk";
+import type {
+  AccrualPosition,
+  Market,
+  MarketInput,
+} from "@morpho-org/midnight-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import type { Address } from "viem";
+import { type Address, maxUint256 } from "viem";
 import {
   type MidnightMarket,
+  parseMidnightAccount,
   parseMidnightAddress,
   parseMidnightCollateral,
   parseMidnightMarket,
   parseMidnightOwner,
   parseMidnightPositiveAmount,
+  validateMidnightPositionBinding,
 } from "../../helpers/parseMidnight.js";
 import { validateMidnightReceiver } from "../../helpers/validateMidnightReceiver.js";
 import type {
@@ -115,4 +121,50 @@ export const parseMidnightWithdrawCollateral = (
     metadata: snapshotMidnightMetadata(params.metadata),
     [parsedWithdrawCollateral]: true as const,
   });
+};
+
+/** Complete raw withdrawal preparation; domain snapshots stay caller-owned. @internal */
+export interface MidnightWithdrawCollateralPreparationParams
+  extends Omit<
+    MidnightWithdrawCollateralParams,
+    "market" | "onBehalf" | "receiver"
+  > {
+  readonly accountAddress: Address;
+  readonly marketData: Market;
+  readonly positionData: AccrualPosition;
+  /** Defaults to `accountAddress`. */
+  readonly receiver?: Address;
+}
+
+/**
+ * Owns the snapshot-bound withdrawal checks in entity order: account, market, position binding,
+ * collateral index, `maxUint256` resolution to the snapshot balance, then the direct-call checks.
+ * Balance and health checks against the snapshot are left to the caller. @internal
+ */
+export const parseMidnightWithdrawCollateralPreparation = (
+  params: MidnightWithdrawCollateralPreparationParams,
+): ParsedMidnightWithdrawCollateral => {
+  const onBehalf = parseMidnightAccount(
+    "accountAddress",
+    params.accountAddress,
+  );
+  const market = parseMidnightMarket(params.marketData, params.chainId);
+  // Bind the supplied snapshot before interpreting its collateral balances.
+  validateMidnightPositionBinding(params);
+  const collateral = parseMidnightCollateral(
+    market,
+    params.collateralIndex ?? 0n,
+  );
+  const available =
+    params.positionData.collateral[Number(collateral.index)] ?? 0n;
+  const action = parseMidnightWithdrawCollateral({
+    chainId: params.chainId,
+    market: market.struct,
+    assets: params.assets === maxUint256 ? available : params.assets,
+    onBehalf,
+    receiver: params.receiver ?? onBehalf,
+    collateralIndex: collateral.index,
+    metadata: params.metadata,
+  });
+  return action;
 };

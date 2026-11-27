@@ -1,5 +1,6 @@
 export * from "./abis.js";
 export type { CollateralTransfer, GroupCancellation } from "./bundlesV2.js";
+export { getBlueBuyCallbackAddress } from "./callbacks/BlueBuyCallback.js";
 export * from "./constants.js";
 export * from "./errors.js";
 export * from "./fetch/index.js";

@@ -21,6 +21,7 @@ import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
   ContractFunctionExecutionError,
+  ContractFunctionZeroDataError,
   maxUint256,
   parseUnits,
   zeroAddress,
@@ -262,10 +263,14 @@ describe("chaos: S8 reads on code-less contracts", () => {
   }) => {
     await wipeCode(client, SteakhouseUsdcVaultV1.address);
     const promise = fetchVault(SteakhouseUsdcVaultV1.address, client);
-    await expectFailClosed(promise, "config");
-    await expect(promise).rejects.toBeInstanceOf(
-      ContractFunctionExecutionError,
-    );
+    const error = await expectFailClosed(promise, "config");
+    // Fallback reads race: the vault read or the share token's decimals can fail first.
+    if (error instanceof UnknownTokenError) {
+      expect(error.address).toBe(SteakhouseUsdcVaultV1.address);
+    } else {
+      expect(error).toBeInstanceOf(ContractFunctionExecutionError);
+      expect(error.cause).toBeInstanceOf(ContractFunctionZeroDataError);
+    }
   });
 
   test("fetchVaultV2 rejects when the VaultV2 has no code", async ({

@@ -182,6 +182,7 @@ The tooling decision is recorded in [ADR-2026-11-18](./docs/adrs/ADR-2026-11-18-
   It also includes `prepareBlueWithdrawCollateral` and `BlueWithdrawCollateralPlanParams`.
   This includes `prepareBlueRepayWithdrawCollateral` and `BlueRepayWithdrawCollateralPlanParams`.
   The Blue refinance exports `prepareBlueRefinance` and `BlueRefinancePlanParams` are also covered.
+  It also includes `prepareBlueWithdrawBuyCallback` and `BlueWithdrawBuyCallbackPlanParams`.
 - **`evm-simulation` 9.0 `simulate` retype.** Only the successor, deprecation and coexistence-minor steps are waived, for `simulate` in `@morpho-org/evm-simulation` 9.0.0: its return type, its client-first signature, and the removal of `params.chainId`, `SimulationConfig`, `ChainSimulationConfig` and `InvalidChainIdError`, plus 8.9.0's `ChainSimulationClientConfig` and `ChainSimulationConfigEntry` and 8.8.0's `findings` and `SimulationRejectedError` name; the major changeset, migration guide and dependent audit remain required (see [docs/EXCEPTIONS.md](./docs/EXCEPTIONS.md#evm-simulation-report-returning-simulate)).
 - **Cantina audit on every major release**, with the public report linked from the CHANGELOG entry. Critical CVEs trigger out-of-band patches.
 - **Pre-release dogfood on every minor:** at least one internal app and one external partner before the `latest` tag flips.

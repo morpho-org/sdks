@@ -1,6 +1,32 @@
-import { type Address, isAddress, isAddressEqual, maxUint256 } from "viem";
+import {
+  type Address,
+  isAddress,
+  isAddressEqual,
+  maxUint128,
+  maxUint256,
+} from "viem";
 import { InvalidTransactionPlanError } from "./error.js";
-import type { TransactionPlan } from "./types.js";
+import type { Action, TransactionPlan } from "./types.js";
+
+/**
+ * @internal Actions whose preparation stores `deadline = BigInt(expiresAt)`, so any other stored
+ * deadline would let the bundle execute after the expiry the plan reports.
+ */
+const EXPIRES_AT_DEADLINE_ACTIONS: ReadonlySet<Action["type"]> = new Set([
+  "midnightTakeLend",
+  "midnightTakeBorrow",
+  "midnightTakeWithdraw",
+  "midnightRepayWithdrawCollateral",
+  "midnightMakeBorrow",
+  "midnightMakeLend",
+  "midnightMakeWithdraw",
+  "midnightMakeRepay",
+  "midnightSupplyCollateralMakeBorrow",
+  "midnightSupplyBlueMakeLend",
+  "midnightSupplyCollateralTakeBorrow",
+  "midnightTakeRepayWithdrawCollateral",
+  "midnightSupplyCollateralWithNative",
+]);
 
 /** @internal Maximum calldata-origin length in bytes. */
 const MAX_CALLDATA_ORIGIN_BYTES = 1024 * 1024;
@@ -67,6 +93,15 @@ export function validateTransactionPlanHeader(plan: TransactionPlan): void {
         reason: "expected a deadline no earlier than expiresAt",
       });
     }
+    if (
+      EXPIRES_AT_DEADLINE_ACTIONS.has(step.action.type) &&
+      (!("deadline" in inputs) || inputs.deadline !== BigInt(plan.expiresAt))
+    ) {
+      throw new InvalidTransactionPlanError({
+        path: `${path}.action.inputs.deadline`,
+        reason: "expected the plan expiresAt",
+      });
+    }
   }
   const requestIds = new Set<string>();
   for (const [index, request] of plan.signatureRequests.entries()) {
@@ -102,9 +137,12 @@ type PlanFieldType =
   | "string"
   | "address"
   | "hex"
+  | "bytes32"
+  | "boolean"
   | "safe integer"
   | "positive safe integer"
   | "bigint"
+  | "uint128 bigint"
   | "uint256 bigint"
   | "array";
 
@@ -126,6 +164,12 @@ export function validatePlanField(
       valid =
         typeof value === "string" && /^0x(?:[0-9a-fA-F]{2})*$/.test(value);
       break;
+    case "bytes32":
+      valid = typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value);
+      break;
+    case "boolean":
+      valid = typeof value === "boolean";
+      break;
     case "safe integer":
       valid = typeof value === "number" && Number.isSafeInteger(value);
       break;
@@ -136,8 +180,12 @@ export function validatePlanField(
     case "bigint":
       valid = typeof value === "bigint";
       break;
+    case "uint128 bigint":
     case "uint256 bigint":
-      valid = typeof value === "bigint" && value >= 0n && value <= maxUint256;
+      valid =
+        typeof value === "bigint" &&
+        value >= 0n &&
+        value <= (type === "uint128 bigint" ? maxUint128 : maxUint256);
       break;
     case "array":
       valid = Array.isArray(value);

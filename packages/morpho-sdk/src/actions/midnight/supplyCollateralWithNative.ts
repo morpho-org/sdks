@@ -178,3 +178,68 @@ export function prepareMidnightSupplyCollateralWithNative(
     }),
   };
 }
+
+/** Owned native collateral supply inputs, checked in the encoder's order. @internal */
+export interface ParsedMidnightSupplyCollateralWithNative {
+  readonly chainId: number;
+  readonly market: ReturnType<typeof MarketUtils.toStruct>;
+  readonly marketId: ReturnType<typeof encodeMidnightMarketId>;
+  readonly collateralIndex: bigint;
+  readonly assets: bigint;
+  /** wNative collateral pulled from the sender. */
+  readonly token: Address;
+  readonly accountAddress: Address;
+  /** Native funding sent as transaction value. */
+  readonly value: bigint;
+  readonly wrappedNative: Address;
+  readonly deadline: bigint;
+}
+
+/**
+ * Parses a native collateral supply with the same checks, in the same order, as
+ * `midnightSupplyCollateralWithNative`, without encoding the bundle call. Resolving
+ * MidnightBundlesV2 is left to the caller. `assetsField` names the amount in its errors, so a
+ * caller can report its own parameter name. @internal
+ */
+export function parseMidnightSupplyCollateralWithNative(
+  params: Omit<MidnightSupplyCollateralWithNativeParams, "metadata">,
+  assetsField: "assets" | "collateralAssets" = "assets",
+): ParsedMidnightSupplyCollateralWithNative {
+  validateMidnightAddress("accountAddress", params.accountAddress);
+  const assets = parseMidnightNativeCollateralAmount(
+    assetsField,
+    params.assets,
+  );
+  if (isAddressEqual(params.accountAddress, zeroAddress)) {
+    throw new MidnightZeroOnBehalfError("accountAddress");
+  }
+  validateMidnightMarket({ market: params.market, chainId: params.chainId });
+  const market = wrapMidnightEncoding("marketId", () =>
+    MarketUtils.toStruct(params.market),
+  );
+  const marketId = encodeMidnightMarketId(market);
+  const collateralIndex = params.collateralIndex ?? 0n;
+  const { token } = MarketUtils.getCollateralByIndex(market, collateralIndex);
+  if (params.nativeAmount === 0n || params.nativeAmount === undefined) {
+    throw new NonPositiveInputError("nativeAmount", params.nativeAmount ?? 0n);
+  }
+  const { value, wrappedNative } = validateMidnightNativeAmount({
+    chainId: params.chainId,
+    nativeAmount: params.nativeAmount,
+    pulls: [{ token, assets }],
+  });
+  const deadline = params.deadline ?? 0n;
+  validateDeadline(deadline);
+  return deepFreeze({
+    chainId: params.chainId,
+    market,
+    marketId,
+    collateralIndex,
+    assets,
+    token,
+    accountAddress: params.accountAddress,
+    value,
+    wrappedNative,
+    deadline,
+  });
+}

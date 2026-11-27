@@ -75,19 +75,23 @@ export function buildApprovalStep(
   };
 }
 
-interface TokenRequirementsParams {
+type TokenRequirementsParams = {
   readonly token: Address;
   readonly spender: Address;
   readonly amount: bigint;
   readonly owner: Address;
   readonly chainId: number;
-  readonly deadline: bigint;
-  readonly now: bigint;
-  readonly supportSignature: boolean;
-  readonly deployless: boolean | undefined;
-  readonly permitId: string;
   readonly approvalId: (index: number) => string;
-}
+} & (
+  | { readonly supportSignature?: false }
+  | {
+      readonly supportSignature: boolean;
+      readonly deadline: bigint;
+      readonly now: bigint;
+      readonly deployless: boolean | undefined;
+      readonly permitId: string;
+    }
+);
 
 /**
  * @internal Resolves the token prerequisite of a bundles pull without Permit2. A sufficient
@@ -101,8 +105,7 @@ export async function getTokenRequirements(
   readonly approvals: Step<Extract<Action, { type: "erc20Approval" }>>[];
   readonly permit?: Extract<SignatureRequest, { kind: "permit" }>;
 }> {
-  const { token, spender, amount, owner, chainId, permitId, approvalId } =
-    params;
+  const { token, spender, amount, owner, chainId, approvalId } = params;
   // The allowance is trusted as returned by the RPC. See THREAT_MODEL.md, RPC.
   const allowance = await readContract(client, {
     abi: erc20Abi,
@@ -116,7 +119,7 @@ export async function getTokenRequirements(
   if (params.supportSignature) {
     const permit = await getTokenPermit(client, {
       ...params,
-      id: permitId,
+      id: params.permitId,
       supportDeployless: params.deployless,
     });
     if (permit !== undefined) {

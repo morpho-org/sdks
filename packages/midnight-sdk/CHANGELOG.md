@@ -1,5 +1,11 @@
 # @morpho-org/midnight-sdk
 
+## 2.10.0
+
+### Minor Changes
+
+- Add `Payload.decodeSync`, a synchronous `Payload.decode` that takes a caller-supplied gzip decompressor and applies the same wire, size and item checks. Add `getBlueBuyCallbackAddress`, which derives the CREATE2 address of a maker's `BlueBuyCallback` from the pinned creation bytecode and the address registry.
+
 ## 2.9.1
 
 ### Patch Changes

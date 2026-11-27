@@ -60,8 +60,10 @@ import {
   validateAccrualPosition,
   validateChainId,
   validateMarketParamsId,
+  validateMidnightBorrowHealth,
   validateMidnightMarketChainId,
   validateMidnightNativeAmount,
+  validateMidnightWithdrawHealth,
   validateNativeAsset,
   validatePositionHealth,
   validatePositionHealthAfterWithdraw,
@@ -264,6 +266,79 @@ describe("getMidnightMaxSafeDebt", () => {
 // ---------------------------------------------------------------------------
 // validateUserAddress
 // ---------------------------------------------------------------------------
+
+describe("validateMidnightBorrowHealth", () => {
+  const base = {
+    market: midnightMarketData(),
+    collateral: [1_000n],
+    collateralPrices: [ORACLE_PRICE_SCALE],
+    debt: 700n,
+  };
+
+  test("behavior: accepts post-borrow debt exactly at the buffered capacity", () => {
+    expect(() =>
+      validateMidnightBorrowHealth({ ...base, borrowUnits: 65n }),
+    ).not.toThrow();
+  });
+
+  test("error: rejects post-borrow debt above the buffered capacity with the remaining headroom", () => {
+    const borrow = () =>
+      validateMidnightBorrowHealth({ ...base, borrowUnits: 66n });
+
+    expect(borrow).toThrow(BorrowExceedsSafeLtvError);
+    expect(borrow).toThrow(new BorrowExceedsSafeLtvError(66n, 65n).message);
+  });
+
+  test("behavior: skips prices when the post-borrow debt is zero", () => {
+    expect(() =>
+      validateMidnightBorrowHealth({
+        ...base,
+        collateralPrices: [],
+        debt: 0n,
+        borrowUnits: 0n,
+      }),
+    ).not.toThrow();
+  });
+});
+
+describe("validateMidnightWithdrawHealth", () => {
+  const base = {
+    market: midnightMarketData(),
+    collateral: [1_000n],
+    collateralPrices: [ORACLE_PRICE_SCALE],
+    withdrawAmount: 10n,
+  };
+
+  test("behavior: accepts post-withdraw debt exactly at the buffered capacity", () => {
+    expect(() =>
+      validateMidnightWithdrawHealth({ ...base, debt: 765n }),
+    ).not.toThrow();
+  });
+
+  test("error: rejects post-withdraw debt above the buffered capacity", () => {
+    const withdraw = () =>
+      validateMidnightWithdrawHealth({ ...base, debt: 766n });
+
+    expect(withdraw).toThrow(WithdrawMakesPositionUnhealthyError);
+    expect(withdraw).toThrow(
+      new WithdrawMakesPositionUnhealthyError({
+        withdrawAmount: 10n,
+        borrowAssets: 766n,
+        maxSafeBorrow: 765n,
+      }).message,
+    );
+  });
+
+  test("behavior: skips prices when the position has no debt", () => {
+    expect(() =>
+      validateMidnightWithdrawHealth({
+        ...base,
+        collateralPrices: [],
+        debt: 0n,
+      }),
+    ).not.toThrow();
+  });
+});
 
 describe("validateUserAddress", () => {
   test("should pass when addresses match", () => {

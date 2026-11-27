@@ -43,7 +43,11 @@ type Context = {
 };
 type BundleCall = ReturnType<typeof decode<typeof midnightBundlesV2Abi>>;
 type Transfer = { readonly collateralIndex: bigint; readonly assets: bigint };
-type TokenPull = { readonly token: Address; readonly assets: bigint };
+type TokenPull = {
+  readonly token: Address;
+  readonly assets: bigint;
+  readonly spender?: Address;
+};
 type RequestedTransfer = {
   readonly collateral: { readonly address: Address };
   readonly amount:
@@ -120,7 +124,8 @@ function assetsMatch(
   });
 }
 
-function checkCollateral(
+/** @internal */
+export function checkCollateral(
   transfers: readonly Transfer[],
   {
     requested,
@@ -160,7 +165,8 @@ function noValue(call: CalldataCall) {
   });
 }
 
-function checkPrerequisites(
+/** @internal */
+export function checkPrerequisites(
   calls: readonly CalldataCall[],
   {
     intent,
@@ -168,9 +174,12 @@ function checkPrerequisites(
     call: main,
     pulls,
     allowAuthorization,
-  }: Context & {
-    pulls: readonly TokenPull[];
-    allowAuthorization: boolean;
+  }: {
+    readonly intent: { readonly account: Address };
+    readonly chain: ChainAddresses;
+    readonly call: CalldataCall;
+    readonly pulls: readonly TokenPull[];
+    readonly allowAuthorization: boolean;
   },
 ) {
   let authorized = false;
@@ -205,9 +214,9 @@ function checkPrerequisites(
     if (pull == null) {
       throw new CalldataTargetError("approval.token", call.id);
     }
-    const { token, assets } = pull;
+    const { token, assets, spender = main.to } = pull;
     const verified = approval(call, {
-      spender: main.to,
+      spender,
       token,
       minAmount: assets,
       allowReset: sameAddress(calls[index + 1]?.to, token),

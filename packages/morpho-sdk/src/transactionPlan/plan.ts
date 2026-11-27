@@ -41,6 +41,7 @@ import {
   buildBlueWithdraw,
   validateBlueWithdrawAuthorizationRequest,
 } from "./blue/withdraw.js";
+import { buildBlueWithdrawBuyCallback } from "./blue/withdrawBuyCallback.js";
 import {
   buildBlueWithdrawCollateral,
   validateBlueWithdrawCollateralAuthorizationRequest,
@@ -49,6 +50,20 @@ import {
   IncompleteTransactionPlanError,
   TransactionPlanSignatureMismatchError,
 } from "./error.js";
+import { buildMidnightAuthorization } from "./midnight/authorization.js";
+import { buildMidnightCancelOffers } from "./midnight/cancelOffers.js";
+import { buildMidnightMakerPublication } from "./midnight/makerPublication.js";
+import { buildMidnightRedeem } from "./midnight/redeem.js";
+import { buildMidnightRepayWithdrawCollateral } from "./midnight/repayWithdrawCollateral.js";
+import { buildMidnightSupplyCollateral } from "./midnight/supplyCollateral.js";
+import { buildMidnightSupplyCollateralBatch } from "./midnight/supplyCollateralBatch.js";
+import { buildMidnightSupplyCollateralWithNative } from "./midnight/supplyCollateralWithNative.js";
+import { buildMidnightTakeBorrow } from "./midnight/takeBorrow.js";
+import { buildMidnightTakeLend } from "./midnight/takeLend.js";
+import { buildMidnightTakeRepayWithdrawCollateral } from "./midnight/takeRepayWithdrawCollateral.js";
+import { buildMidnightTakeWithdraw } from "./midnight/takeWithdraw.js";
+import { buildMidnightWithdrawCollateral } from "./midnight/withdrawCollateral.js";
+import { buildMidnightWithdrawCollateralBatch } from "./midnight/withdrawCollateralBatch.js";
 import { validateVaultPermitRequest } from "./permit.js";
 import type {
   Action,
@@ -405,6 +420,8 @@ function encodeStep(action: Action, requests: readonly SignatureRequest[]) {
       return buildBlueWithdraw(action, requests);
     case "blueWithdrawCollateral":
       return buildBlueWithdrawCollateral(action, requests);
+    case "blueWithdrawBuyCallback":
+      return buildBlueWithdrawBuyCallback(action);
     case "blueRepayWithdrawCollateral":
       return buildBlueRepayWithdrawCollateral(action, requests);
     case "blueRefinance":
@@ -418,6 +435,40 @@ function encodeStep(action: Action, requests: readonly SignatureRequest[]) {
       return buildVaultV1Deposit(action, requests);
     case "morphoAuthorization":
       return buildMorphoAuthorization(action);
+    case "midnightAuthorization":
+      return buildMidnightAuthorization(action);
+    case "midnightMakeBorrow":
+    case "midnightMakeLend":
+    case "midnightMakeRepay":
+    case "midnightMakeWithdraw":
+    case "midnightSupplyCollateralMakeBorrow":
+    case "midnightSupplyBlueMakeLend":
+      return buildMidnightMakerPublication(action);
+    case "midnightTakeBorrow":
+    case "midnightSupplyCollateralTakeBorrow":
+      return buildMidnightTakeBorrow(action);
+    case "midnightTakeWithdraw":
+      return buildMidnightTakeWithdraw(action);
+    case "midnightRepayWithdrawCollateral":
+      return buildMidnightRepayWithdrawCollateral(action);
+    case "midnightTakeLend":
+      return buildMidnightTakeLend(action);
+    case "midnightSupplyCollateral":
+      return buildMidnightSupplyCollateral(action);
+    case "midnightSupplyCollateralBatch":
+      return buildMidnightSupplyCollateralBatch(action);
+    case "midnightSupplyCollateralWithNative":
+      return buildMidnightSupplyCollateralWithNative(action);
+    case "midnightWithdrawCollateral":
+      return buildMidnightWithdrawCollateral(action);
+    case "midnightWithdrawCollateralBatch":
+      return buildMidnightWithdrawCollateralBatch(action);
+    case "midnightRedeem":
+      return buildMidnightRedeem(action);
+    case "midnightTakeRepayWithdrawCollateral":
+      return buildMidnightTakeRepayWithdrawCollateral(action);
+    case "midnightCancelOffers":
+      return buildMidnightCancelOffers(action);
     case "vaultV2Deposit":
       return buildVaultV2Deposit(action, requests);
     case "vaultV2Withdraw":
@@ -447,16 +498,24 @@ function encodeStep(action: Action, requests: readonly SignatureRequest[]) {
  * @param plan - Plan supplying referenced signature requests and the calldata origin; chain and account come from the action inputs.
  * @param step - Recipe to encode; missing signatures on unrelated supported steps do not block it.
  * @returns A frozen `{ to, data, value, action }`, ready to simulate or submit. `data` ends with the plan's `calldataOrigin` when one was set.
- * @throws {InvalidTransactionPlanError} If the plan header, action context, IDs or deadlines are inconsistent.
- * @throws {InvalidBigIntInputError} If a supplied Blue maxPenalty is not a bigint; uint256 schema validation is performed by parseTransactionPlan, not this builder.
+ * @throws {InvalidTransactionPlanError} If the plan header, action context, IDs or deadlines are inconsistent, a Midnight repayment type is unsupported, a Midnight market lists its collateral out of ascending token order, a Midnight single-collateral step has no bigint `collateralIndex`, or a Midnight collateral batch's list is not an array or holds a non-object entry (path under `$.inputs`).
+ * @throws {InvalidBigIntInputError} If a supplied Blue maxPenalty, or a Midnight collateral batch entry's `collateralIndex` or `assets`, is not a bigint; uint256 schema validation is performed by parseTransactionPlan, not this builder.
  * @throws {InvalidSignatureError} If a stored signature has high s, cannot recover a public key or does not match the request owner.
  * @throws {UnsupportedTransactionPlanVersionError} If the plan version is unsupported.
  * @throws {UnsupportedTransactionPlanActionError} If any plan step or the selected step names an unsupported action type.
  * @throws {UnsupportedErc20ApprovalSpenderError} If an approval names an unregistered spender.
  * @throws {SameVaultMigrationError} If a migration's source and destination vaults are identical.
  * @throws {AmountAndSharesExclusiveError} If a migration supplies both `assets` and `shares`, or neither.
- * @throws {NonPositiveInputError} If a deposit, withdrawal or migration amount, a deposit or migration destination share-price bound, a Blue collateral amount, a deadline, force-redeem shares or deallocation amount is not positive.
+ * @throws {NonPositiveInputError} If a deposit, withdrawal or migration amount, a deposit or migration destination share-price bound, a collateral amount, Midnight redeem units, a deadline, force-redeem shares or deallocation amount is not positive, or a Midnight repayment step has a nonpositive full repayment cap or neither repays nor withdraws.
  * @throws {MarketIdMismatchError} If a Blue collateral step's market ID doesn't match its market parameters.
+ * @throws {MidnightMarketAddressMismatchError} If a Midnight collateral, redeem or repayment step's market targets another Midnight deployment.
+ * @throws {ChainIdMismatchError} If a Midnight redeem or repayment step's market targets another chain.
+ * @throws {MidnightZeroOnBehalfError} If a Midnight redeem, `midnightWithdrawCollateral`, `midnightWithdrawCollateralBatch` or `midnightSupplyCollateralWithNative` step names the zero address as its account.
+ * @throws {MidnightZeroReceiverError} If a Midnight redeem, `midnightWithdrawCollateral` or `midnightWithdrawCollateralBatch` step, or a `midnightRepayWithdrawCollateral` step that withdraws collateral, names the zero address as its receiver.
+ * @throws {MidnightContractReceiverError} If a Midnight redeem, `midnightWithdrawCollateral` or `midnightWithdrawCollateralBatch` step, or a `midnightRepayWithdrawCollateral` step that withdraws collateral, names a blocked protocol or token contract as its receiver.
+ * @throws {MidnightCalldataEncodingError} If the market tuple or withdrawal arguments cannot be encoded for a Midnight redeem step, or a Midnight repayment step has malformed addresses or other unencodable inputs.
+ * @throws {InvalidMarketParameterError} If a Midnight collateral, redeem, take or repayment step has an invalid market configuration.
+ * @throws {UnknownCollateralIndexError} If a Midnight collateral or repayment step targets an index not configured on its market.
  * @throws {NativeAmountOnNonWNativeAssetError} If a native-funded Blue collateral step targets a token other than wNative.
  * @throws {ChainWNativeMissingError} If a native-funded Blue collateral step targets a chain without registered wNative.
  * @throws {EmptyDeallocationsError} If a force-redeem step has no deallocations.
@@ -468,8 +527,10 @@ function encodeStep(action: Action, requests: readonly SignatureRequest[]) {
  * @throws {TransactionPlanSignatureMismatchError} If a referenced request disagrees with the step's action or its encoding arguments.
  * @throws {BundlesPermitMismatchError} If a stored signature cannot be parsed or a signed permit's encoding arguments do not match the step.
  * @throws {MarketIdMismatchError} If a Blue market ID differs from its parameter tuple.
- * @throws {NegativeInputError} If a Blue amount, native value, LTV bound, maxPenalty or referral fee is negative.
- * @throws {InputExceedsMaxError} If a Blue amount, bound or deadline exceeds uint256, maxPenalty exceeds WAD, a reallocation penalty exceeds maxPenalty (default zero, rejecting any positive penalty), or withdrawal-only funding is nonzero.
+ * @throws {NegativeInputError} If a Blue amount, native value, LTV bound, maxPenalty or referral fee is negative, or a Midnight repayment's exact asset amount or native funding is negative.
+ * @throws {InputExceedsMaxError} If a Blue amount, bound or deadline exceeds uint256, maxPenalty exceeds WAD, a reallocation penalty exceeds maxPenalty (default zero, rejecting any positive penalty), withdrawal-only funding is nonzero, Midnight redeem units exceed uint128, or a Midnight batch collateral supply amount exceeds uint128.
+ *   For `midnightRepayWithdrawCollateral`, if `repay.assets` or `repay.maxBuyerAssets` is at least `maxUint256`,
+ *   a withdrawal amount or deadline exceeds uint256, or native funding exceeds the repayment pull.
  * @throws {MutuallyExclusiveRepayAmountsError} If a Blue repayment specifies both nonzero assets and shares.
  * @throws {MaxRepayAssetsBelowRepayAssetsError} If exact-asset funding cannot cover repayment plus referral fees.
  * @throws {NativeFundingAmountMismatchError} If Blue native funding does not equal the full repayment cap.
@@ -482,8 +543,15 @@ function encodeStep(action: Action, requests: readonly SignatureRequest[]) {
  * @throws {DepositSpenderMismatchError} If a token signature names another spender.
  * @throws {UnsupportedRequirementSignatureError} If a token signature has an unsupported action type.
  * @throws {BundlesRequirementSignatureMismatchError} If a Blue signature cannot be bound or parsed safely.
- * @throws {UnsupportedChainIdError} If a Blue action's chain is absent from the registry.
- * @throws {UnknownAddressError} If BlueBundlesV1 is not registered on the action's chain.
+ * @throws {UnsupportedChainIdError} If a Blue or Midnight action's chain is absent from the registry.
+ * @throws {UnknownAddressError} If BlueBundlesV1, Midnight core, or MidnightBundlesV2 for a Midnight repayment step is not registered on the action's chain.
+ * @throws {EmptyMidnightGroupCancellationsError} If a Midnight cancellation lists no groups.
+ * @throws {InvalidMidnightHexInputError} If a Midnight cancellation group is not 32 bytes.
+ * @throws {DuplicateMidnightGroupCancellationError} If a Midnight cancellation lists a group twice.
+ * @throws {EmptyMidnightCollateralWithdrawalsError} If a Midnight batch collateral withdrawal lists no withdrawals.
+ * @throws {EmptyMidnightCollateralSuppliesError} If a Midnight batch collateral supply lists no supplies.
+ * @throws {DuplicateMidnightCollateralIndexError} If a Midnight batch collateral supply or withdrawal repeats a collateral index.
+ * @throws {MidnightZeroOnBehalfError} If a Midnight cancellation's account is the zero address.
  * @example
  * ```ts
  * import { buildTransaction, parseTransactionPlan } from "@morpho-org/morpho-sdk";
@@ -559,16 +627,23 @@ export function buildTransaction(
  * Builds every step of the plan in order.
  * @param plan - Plan whose referenced signature requests all carry a signature.
  * @returns Frozen SDK transactions in step order; discriminate on `action.type` for per-step handling.
- * @throws {InvalidTransactionPlanError} If the plan header, action context, IDs or deadlines are inconsistent.
- * @throws {InvalidBigIntInputError} If a supplied Blue maxPenalty is not a bigint; uint256 schema validation is performed by parseTransactionPlan, not this builder.
+ * @throws {InvalidTransactionPlanError} If the plan header, action context, IDs or deadlines are inconsistent, a Midnight repayment type is unsupported, a Midnight market lists its collateral out of ascending token order, a Midnight single-collateral step has no bigint `collateralIndex`, or a Midnight collateral batch's list is not an array or holds a non-object entry (path under `$.inputs`).
+ * @throws {InvalidBigIntInputError} If a supplied Blue maxPenalty, or a Midnight collateral batch entry's `collateralIndex` or `assets`, is not a bigint; uint256 schema validation is performed by parseTransactionPlan, not this builder.
  * @throws {InvalidSignatureError} If a stored signature has high s, cannot recover a public key or does not match the request owner.
  * @throws {UnsupportedTransactionPlanVersionError} If the plan version is unsupported, including empty plans.
  * @throws {UnsupportedTransactionPlanActionError} If any plan step names an unsupported action type, before reading requests.
  * @throws {UnsupportedErc20ApprovalSpenderError} If an approval names an unregistered spender.
  * @throws {SameVaultMigrationError} If a migration's source and destination vaults are identical.
  * @throws {AmountAndSharesExclusiveError} If a migration supplies both `assets` and `shares`, or neither.
- * @throws {NonPositiveInputError} If a deposit, withdrawal or migration amount, a deposit or migration destination share-price bound, a Blue collateral amount, a deadline, force-redeem shares or deallocation amount is not positive.
+ * @throws {NonPositiveInputError} If a deposit, withdrawal or migration amount, a deposit or migration destination share-price bound, a collateral amount, Midnight redeem units, a deadline, force-redeem shares or deallocation amount is not positive, or a Midnight repayment step has a nonpositive full repayment cap or neither repays nor withdraws.
  * @throws {MarketIdMismatchError} If a Blue collateral step's market ID doesn't match its market parameters.
+ * @throws {MidnightMarketAddressMismatchError} If a Midnight collateral, redeem or repayment step's market targets another Midnight deployment.
+ * @throws {ChainIdMismatchError} If a Midnight redeem or repayment step's market targets another chain.
+ * @throws {MidnightZeroOnBehalfError} If a Midnight redeem, `midnightWithdrawCollateral`, `midnightWithdrawCollateralBatch` or `midnightSupplyCollateralWithNative` step names the zero address as its account.
+ * @throws {MidnightZeroReceiverError} If a Midnight redeem, `midnightWithdrawCollateral` or `midnightWithdrawCollateralBatch` step, or a `midnightRepayWithdrawCollateral` step that withdraws collateral, names the zero address as its receiver.
+ * @throws {MidnightContractReceiverError} If a Midnight redeem, `midnightWithdrawCollateral` or `midnightWithdrawCollateralBatch` step, or a `midnightRepayWithdrawCollateral` step that withdraws collateral, names a blocked protocol or token contract as its receiver.
+ * @throws {MidnightCalldataEncodingError} If the market tuple or withdrawal arguments cannot be encoded for a Midnight redeem step, or a Midnight repayment step has malformed addresses or other unencodable inputs.
+ * @throws {UnknownCollateralIndexError} If a Midnight collateral or repayment step targets an index not configured on its market.
  * @throws {NativeAmountOnNonWNativeAssetError} If a native-funded Blue collateral step targets a token other than wNative.
  * @throws {ChainWNativeMissingError} If a native-funded Blue collateral step targets a chain without registered wNative.
  * @throws {EmptyDeallocationsError} If a force-redeem step has no deallocations.
@@ -577,11 +652,14 @@ export function buildTransaction(
  * @throws {MidnightReferralFeePctExceededError} when the referral fee is above 10% but below WAD.
  * @throws {ReferralFeeRecipientMissingError} If a positive referral fee has no nonzero recipient.
  * @throws {IncompleteTransactionPlanError} If any step references a signature request or signature that is missing.
+ * @throws {InvalidMarketParameterError} If a Midnight collateral, redeem, take or repayment step has an invalid market configuration.
  * @throws {TransactionPlanSignatureMismatchError} If a referenced request disagrees with its action or encoding arguments.
  * @throws {BundlesPermitMismatchError} If a stored signature cannot be parsed or a signed permit's encoding arguments do not match the step.
  * @throws {MarketIdMismatchError} If a Blue market ID differs from its parameter tuple.
- * @throws {NegativeInputError} If a Blue amount, native value, LTV bound, maxPenalty or referral fee is negative.
- * @throws {InputExceedsMaxError} If a Blue amount, bound or deadline exceeds uint256, maxPenalty exceeds WAD, a reallocation penalty exceeds maxPenalty (default zero, rejecting any positive penalty), or withdrawal-only funding is nonzero.
+ * @throws {NegativeInputError} If a Blue amount, native value, LTV bound, maxPenalty or referral fee is negative, or a Midnight repayment's exact asset amount or native funding is negative.
+ * @throws {InputExceedsMaxError} If a Blue amount, bound or deadline exceeds uint256, maxPenalty exceeds WAD, a reallocation penalty exceeds maxPenalty (default zero, rejecting any positive penalty), withdrawal-only funding is nonzero, Midnight redeem units exceed uint128, or a Midnight batch collateral supply amount exceeds uint128.
+ *   For `midnightRepayWithdrawCollateral`, if `repay.assets` or `repay.maxBuyerAssets` is at least `maxUint256`,
+ *   a withdrawal amount or deadline exceeds uint256, or native funding exceeds the repayment pull.
  * @throws {MutuallyExclusiveRepayAmountsError} If a Blue repayment specifies both nonzero assets and shares.
  * @throws {MaxRepayAssetsBelowRepayAssetsError} If exact-asset funding cannot cover repayment plus referral fees.
  * @throws {NativeFundingAmountMismatchError} If Blue native funding does not equal the full repayment cap.
@@ -594,8 +672,15 @@ export function buildTransaction(
  * @throws {DepositSpenderMismatchError} If a token signature names another spender.
  * @throws {UnsupportedRequirementSignatureError} If a token signature has an unsupported action type.
  * @throws {BundlesRequirementSignatureMismatchError} If a Blue signature cannot be bound or parsed safely.
- * @throws {UnsupportedChainIdError} If a Blue action's chain is absent from the registry.
- * @throws {UnknownAddressError} If BlueBundlesV1 is not registered on the action's chain.
+ * @throws {UnsupportedChainIdError} If a Blue or Midnight action's chain is absent from the registry.
+ * @throws {UnknownAddressError} If BlueBundlesV1, Midnight core, or MidnightBundlesV2 for a Midnight repayment step is not registered on the action's chain.
+ * @throws {EmptyMidnightGroupCancellationsError} If a Midnight cancellation lists no groups.
+ * @throws {InvalidMidnightHexInputError} If a Midnight cancellation group is not 32 bytes.
+ * @throws {DuplicateMidnightGroupCancellationError} If a Midnight cancellation lists a group twice.
+ * @throws {EmptyMidnightCollateralWithdrawalsError} If a Midnight batch collateral withdrawal lists no withdrawals.
+ * @throws {EmptyMidnightCollateralSuppliesError} If a Midnight batch collateral supply lists no supplies.
+ * @throws {DuplicateMidnightCollateralIndexError} If a Midnight batch collateral supply or withdrawal repeats a collateral index.
+ * @throws {MidnightZeroOnBehalfError} If a Midnight cancellation's account is the zero address.
  * @example
  * ```ts
  * import { buildTransactions, type TransactionPlan } from "@morpho-org/morpho-sdk";

@@ -2,7 +2,7 @@
 
 - Production source imports morpho-sdk ABIs only, from `@morpho-org/morpho-sdk/abis`; never import builders, actions, entities or plans there. Test files may use morpho-sdk builders to generate fixtures.
 - Import ABIs and addresses from the packages that own them; never copy, redefine or move them.
-- Allowed dependencies: `morpho-ts`, `blue-sdk-viem`, `midnight-sdk`, `morpho-sdk` (ABIs only), `viem` (peer), and `@noble/curves` (P-256 proof verification). No Effect, no API client, no new dependency without review.
+- Allowed dependencies: `morpho-ts`, `blue-sdk-viem`, `midnight-sdk`, `morpho-sdk` (ABIs only), `viem` (peer), `@noble/curves` (P-256 proof verification), and `fflate` (synchronous gunzip of Midnight maker payloads). No Effect, no API client, no new dependency without review.
 - Pure and synchronous: no network, RPC, file or clock access.
 - Check only what calldata and intent can prove with local ABIs and registries. Document checks that need onchain state as out of scope and leave them to EVM simulation; never substitute an assumption for a state check.
 - Fail closed: unknown contract, unknown selector, extra call or undecodable nested call throws. Never skip a call. Accept dynamic addresses only where a rule authorizes their role.

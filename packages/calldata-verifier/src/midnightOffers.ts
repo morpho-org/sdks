@@ -20,7 +20,6 @@ import {
   CalldataAmountError,
   CalldataCallError,
   CalldataTargetError,
-  CalldataUnsupportedError,
 } from "./errors.js";
 import type { CalldataCall, MidnightOfferManagementIntent } from "./types.js";
 
@@ -143,19 +142,8 @@ function withdrawFunding(
   return [checked(call, decoded)];
 }
 
-function unsupported(
-  intent: MidnightOfferManagementIntent,
-  { calls }: Context,
-): never {
-  throw new CalldataUnsupportedError(intent.action, calls[0]?.id);
-}
-
 /** @internal */
 export const midnightOfferRules = {
   "midnight.cancel_offers": cancel,
   "midnight.withdraw_funding": withdrawFunding,
-  "midnight.make_borrow": unsupported,
-  "midnight.make_lend": unsupported,
-  "midnight.make_repay": unsupported,
-  "midnight.make_withdraw": unsupported,
 };

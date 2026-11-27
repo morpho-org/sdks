@@ -1,5 +1,60 @@
 # @morpho-org/morpho-sdk
 
+## 10.4.0
+
+### Minor Changes
+
+- Add experimental `prepareMidnightCancelOffers` to prepare a serializable plan that cancels Midnight offer groups through a direct Midnight call, with no authorization or signature request.
+- Add the experimental `prepareMidnightMakeBorrow` API for publishing PriceRatifierV1 or RateRatifierV1 borrow offers without adding collateral. Save and restore the resulting TransactionPlan to build the publication offline without a root signature.
+
+  The bundle deadline defaults to two hours after preparation or one second before the earliest offer expiry, whichever comes first. Explicit deadlines must also precede every offer expiry.
+
+  Preparation rejects a malformed cancellation (a group that is not bytes32 hex, a repeated group, a `maxConsumed` outside uint128, or a group in the new tree) before any RPC or API call. Entity outputs and errors are unchanged.
+
+- Add experimental `prepareMidnightMakeLend` to publish resting Midnight lend offers
+  from a serializable TransactionPlan. The plan checks loan-token allowance to Midnight
+  core for the offered and reserved assets and publishes without moving the maker's funds.
+  Entity outputs and errors are unchanged.
+- Add experimental `prepareMidnightMakeRepay` to publish resting reduce-only buy
+  offers from a serializable TransactionPlan. The maker needs existing Midnight
+  debt and loan-token allowance to Midnight core for later fills. Publication does
+  not repay debt or move tokens. Entity outputs and errors are unchanged.
+- Add experimental `prepareMidnightMakeWithdraw` to publish resting reduce-only sell
+  offers from a serializable TransactionPlan. The maker needs existing Midnight
+  credit, but publication does not reduce that credit or move loan tokens.
+  Entity outputs and errors are unchanged.
+- Add experimental Midnight redemption transaction plans. Prepare a direct redemption from an accrued position snapshot, then serialize and rebuild the transaction without RPC. Entity outputs and errors are unchanged.
+- Add experimental `prepareMidnightRepayWithdrawCollateral` for direct Midnight repayment and optional collateral withdrawal, including wrapped-native funding. Restore and build a saved plan offline with token approval and standalone bundle authorization only when needed. Entity outputs and errors are unchanged.
+- Add experimental `prepareMidnightSupplyBlueMakeLend` plans to supply Blue liquidity to a maker's callback and publish resting Midnight lend offers atomically. The plan runs the entity `supplyBlueMakeLend` checks through its own plan-side constructor, rejects callback, loan-token and native funding errors and deadlines already past at `now` before any RPC read or mempool API call, checks the deadline again against the pinned block's timestamp after reading that block and before the mempool API call, and reads the Blue market for the parking-share preview at the block of the offer-state reads. Entity outputs and errors are unchanged.
+- Add experimental `prepareMidnightSupplyCollateralBatch` plans that supply several collaterals atomically to a Midnight market in one Midnight core multicall, adding, for each collateral token whose allowance is below its total, the approval steps that token requires (usually one unlimited approval, possibly a reset to zero first or a capped amount). Run every returned step in order. Entity outputs and errors are unchanged.
+- Add experimental `prepareMidnightSupplyCollateralMakeBorrow` to supply collateral
+  and publish Midnight borrow offers atomically without filling them. It applies the
+  entity `supplyCollateralMakeBorrow` checks through its own plan-side constructor, and
+  rejects market, collateral and native funding errors before any RPC read or mempool
+  API call. The saved TransactionPlan includes any necessary token approvals and bundle
+  authorization; it can be built offline without signatures. Midnight maker
+  TransactionPlan preparers also reject a deadline already reached at the pinned block
+  before any contract read while every offer is still live. When an offer has also
+  expired, they skip that early check and read Midnight state, then validate the offers in
+  tree order, so an earlier offer's error can be thrown before `MidnightOfferExpiredError`.
+  Entity outputs and errors are unchanged.
+- Add experimental `prepareMidnightSupplyCollateral` plans that deposit collateral directly into Midnight and include a separate ERC-20 approval to Midnight core when needed.
+- Add experimental TransactionPlan preparation for supplying collateral and borrowing from a Midnight quote in one bundle. Entity outputs and errors are unchanged.
+- Add experimental `prepareMidnightSupplyCollateralWithNative` plans that supply wNative collateral to a Midnight market through MidnightBundlesV2, funded partly or fully with native currency, adding the wNative approval and bundle authorization only when missing. Entity outputs and errors are unchanged.
+- Add the experimental `prepareMidnightTakeBorrow` API to prepare, serialize, and build fixed-rate Midnight borrows with standalone bundle authorization when needed and no signature requests. Entity outputs and errors are unchanged.
+- Add the experimental `prepareMidnightTakeLend` API to prepare, serialize, and build fixed-rate Midnight lends from a `marketData` snapshot with ordinary token approvals and bundle authorization, without signing requests. Preparation validates inputs and fill feasibility like the entity `takeLend`, and also rejects a malformed takeable-offer field (an address, `uint256`, `group`, `callbackData`, `ratifierData`, `reduceOnly` or fill `units`) before any read with a `MidnightCalldataEncodingError` whose `input` names the field, such as `takeableOffers[0].offer.maker`. Entity outputs and errors are unchanged.
+- Add experimental TransactionPlan preparation for repaying Midnight debt through borrow offers, optionally repaying the remainder directly and withdrawing collateral in the same bundle. The plan uses the same buy-budget check as the entity `takeRepayWithdrawCollateral`. Entity outputs and errors are unchanged.
+- Add experimental `prepareMidnightTakeWithdraw` for reduce-only withdrawals of Midnight credit into lend offers. Build a saved plan offline with standalone bundle authorization when needed and no signature requests. It throws the new experimental `MidnightTakeCreditInsufficientError` when the target needs more units than the position's accrued credit. Entity outputs and errors are unchanged.
+- Add experimental `prepareMidnightWithdrawCollateralBatch` plans that withdraw several collaterals atomically from a Midnight position in one Midnight core multicall, checked against a caller-supplied position snapshot. Entity outputs and errors are unchanged.
+- Add experimental `prepareMidnightWithdrawCollateral` plans that withdraw one collateral directly from a Midnight position, checked against a caller-supplied position snapshot. Entity outputs and errors are unchanged.
+- Expose midnight-sdk's `getBlueBuyCallbackAddress` from `@morpho-org/morpho-sdk/midnight/utils`. `getMidnightBlueBuyCallbackAddress` now delegates to it and returns the same addresses.
+- Add `prepareBlueWithdrawBuyCallback`, the TransactionPlan counterpart of `client.morpho.blue(...).withdrawBuyCallback`. It prepares one `blueWithdrawBuyCallback` step: a direct Morpho Blue `withdraw` of a BlueBuyCallback's whole supply position to its owner, after checking the factory, the callback's owner and its Blue authorization.
+
+### Patch Changes
+
+- Updated dependencies
+  - @morpho-org/midnight-sdk@2.10.0
+
 ## 10.3.1
 
 ### Patch Changes

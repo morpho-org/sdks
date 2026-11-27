@@ -2162,3 +2162,38 @@ describe("verifyCalldata on Midnight markets", () => {
     });
   });
 });
+
+describe("Midnight take guards", () => {
+  it("rejects native value when the intent has no funding", () => {
+    const { intent, calls } = midnightCases.repay_native;
+    const { funding: _, ...unfunded } = intent as typeof intent & {
+      funding?: unknown;
+    };
+    expect(() => verifyCalldata(unfunded as typeof intent, calls)).toThrow(
+      CalldataAmountError,
+    );
+  });
+
+  it("rejects a MidnightBundlesV2 function outside the take rules", () => {
+    const { intent, calls } = midnightCases.repay_native;
+    const call = lastCall(calls);
+    expect(() =>
+      verifyCalldata(intent, [
+        ...calls.slice(0, -1),
+        {
+          ...call,
+          value: "0",
+          data: encodeFunctionData({
+            abi: midnightBundlesV2Abi,
+            functionName: "MIDNIGHT",
+          }),
+        },
+      ]),
+    ).toThrow(
+      expect.objectContaining({
+        constructor: CalldataCallError,
+        field: "function",
+      }),
+    );
+  });
+});

@@ -1,8 +1,18 @@
 import type { InputMarketParams, MarketParams } from "@morpho-org/blue-sdk";
+import type { MarketUtils } from "@morpho-org/midnight-sdk";
 import type { Address, Hex } from "viem";
 import type { BlueRepayParams } from "../actions/blue/repay.js";
 import type { BlueRepayWithdrawCollateralParams } from "../actions/blue/repayWithdrawCollateral.js";
 import type { BlueSupplyCollateralBorrowParams } from "../actions/blue/supplyCollateralBorrow.js";
+import type { MidnightRepayWithdrawCollateralParams } from "../actions/midnight/repayWithdrawCollateral.js";
+import type { MidnightTakeBorrowParams } from "../actions/midnight/takeBorrow.js";
+import type { MidnightTakeLendParams } from "../actions/midnight/takeLend.js";
+import type { MidnightTakeRepayWithdrawCollateralParams } from "../actions/midnight/takeRepayWithdrawCollateral.js";
+import type { MidnightTakeableOffer } from "../actions/midnight/types.js";
+import type {
+  MidnightBlueSupply,
+  MidnightCollateralTransfer,
+} from "../types/action.js";
 import type {
   AuthorizationSignatureArgs,
   PermitAction,
@@ -10,6 +20,7 @@ import type {
   VaultV1MigrateToV2AmountArgs,
   VaultV2BlueReallocation,
 } from "../types/index.js";
+import type { MidnightCancelAndMakeParams } from "../types/midnightCancelAndMake.js";
 
 interface ActionInputs {
   readonly chainId: number;
@@ -36,6 +47,29 @@ type VaultSignatureRequestIds = {
   readonly tokenPermit?: string;
 };
 
+type MidnightSellInputs = ActionInputs &
+  Omit<
+    MidnightTakeBorrowParams,
+    | "chainId"
+    | "market"
+    | "metadata"
+    | "referralFeePct"
+    | "referralFeeRecipient"
+  > & {
+    readonly market: MidnightTakeableOffer["offer"]["market"];
+    readonly referralFeePct: bigint;
+    readonly referralFeeRecipient: Address;
+  };
+
+type MidnightMakerPublicationInputs = ActionInputs &
+  Pick<MidnightCancelAndMakeParams, "cancellations" | "deadline"> & {
+    readonly ratifierType: "priceV1" | "rateV1";
+    readonly ratifier: Address;
+    readonly root: Hex;
+    readonly groups: readonly Hex[];
+    readonly payload: Hex;
+  };
+
 /**
  * Recipes supported by TransactionPlan.
  * Snapshot-derived values such as the asset and the quote are fixed on `inputs` at preparation;
@@ -44,6 +78,160 @@ type VaultSignatureRequestIds = {
  * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
  */
 export type Action =
+  | {
+      readonly type: "midnightMakeBorrow";
+      readonly inputs: MidnightMakerPublicationInputs;
+    }
+  | {
+      readonly type: "midnightMakeLend";
+      readonly inputs: MidnightMakerPublicationInputs;
+    }
+  | {
+      readonly type: "midnightMakeRepay";
+      readonly inputs: MidnightMakerPublicationInputs;
+    }
+  | {
+      readonly type: "midnightMakeWithdraw";
+      readonly inputs: MidnightMakerPublicationInputs;
+    }
+  | {
+      readonly type: "midnightSupplyBlueMakeLend";
+      readonly inputs: MidnightMakerPublicationInputs & {
+        readonly blueSupply: MidnightBlueSupply;
+        /** Native ETH in wei, passed as transaction value. */
+        readonly nativeAssets?: bigint;
+      };
+    }
+  | {
+      readonly type: "midnightSupplyCollateralMakeBorrow";
+      readonly inputs: MidnightMakerPublicationInputs & {
+        readonly collateral: {
+          readonly market: ReturnType<typeof MarketUtils.toStruct>;
+          readonly supplies: readonly MidnightCollateralTransfer[];
+        };
+        /** Native ETH in wei, passed as transaction value. */
+        readonly nativeAssets?: bigint;
+      };
+    }
+  | {
+      readonly type: "midnightRepayWithdrawCollateral";
+      readonly inputs: ActionInputs &
+        Omit<
+          MidnightRepayWithdrawCollateralParams,
+          "chainId" | "market" | "metadata" | "nativeAmount"
+        > & {
+          readonly market: ReturnType<typeof MarketUtils.toStruct>;
+          /** Native ETH in wei, passed as transaction value. Omitted or zero means no ETH funding. */
+          readonly nativeAssets?: bigint;
+        };
+    }
+  | {
+      readonly type: "midnightTakeBorrow";
+      readonly inputs: MidnightSellInputs;
+    }
+  | {
+      readonly type: "midnightTakeRepayWithdrawCollateral";
+      readonly inputs: ActionInputs &
+        Omit<
+          MidnightTakeRepayWithdrawCollateralParams,
+          | "chainId"
+          | "market"
+          | "metadata"
+          | "nativeAmount"
+          | "referralFeePct"
+          | "referralFeeRecipient"
+        > & {
+          readonly market: MidnightTakeableOffer["offer"]["market"];
+          readonly nativeAssets?: bigint;
+          readonly referralFeePct: bigint;
+          readonly referralFeeRecipient: Address;
+        };
+    }
+  | {
+      readonly type: "midnightSupplyCollateralTakeBorrow";
+      readonly inputs: MidnightSellInputs & {
+        readonly collateralSupplies: readonly MidnightCollateralTransfer[];
+        /** Native ETH in wei, passed as transaction value. */
+        readonly nativeAssets?: bigint;
+      };
+    }
+  | {
+      readonly type: "midnightTakeWithdraw";
+      readonly inputs: MidnightSellInputs;
+    }
+  | {
+      readonly type: "midnightTakeLend";
+      readonly inputs: ActionInputs &
+        Omit<
+          MidnightTakeLendParams,
+          | "chainId"
+          | "market"
+          | "metadata"
+          | "nativeAmount"
+          | "referralFeePct"
+          | "referralFeeRecipient"
+        > & {
+          readonly market: MidnightTakeableOffer["offer"]["market"];
+          readonly nativeAssets?: bigint;
+          readonly referralFeePct: bigint;
+          readonly referralFeeRecipient: Address;
+        };
+    }
+  | {
+      readonly type: "midnightAuthorization";
+      readonly inputs: ActionInputs;
+    }
+  | {
+      readonly type: "midnightSupplyCollateral";
+      readonly inputs: ActionInputs & {
+        readonly market: ReturnType<typeof MarketUtils.toStruct>;
+        readonly collateralIndex: bigint;
+        readonly collateralAssets: bigint;
+      };
+    }
+  | {
+      readonly type: "midnightWithdrawCollateral";
+      readonly inputs: ActionInputs & {
+        readonly market: ReturnType<typeof MarketUtils.toStruct>;
+        readonly collateralIndex: bigint;
+        readonly assets: bigint;
+        readonly receiver: Address;
+      };
+    }
+  | {
+      readonly type: "midnightWithdrawCollateralBatch";
+      readonly inputs: ActionInputs & {
+        readonly market: ReturnType<typeof MarketUtils.toStruct>;
+        readonly collateralWithdrawals: readonly MidnightCollateralTransfer[];
+        readonly receiver: Address;
+      };
+    }
+  | {
+      readonly type: "midnightSupplyCollateralBatch";
+      readonly inputs: ActionInputs & {
+        readonly market: ReturnType<typeof MarketUtils.toStruct>;
+        readonly collateralSupplies: readonly MidnightCollateralTransfer[];
+      };
+    }
+  | {
+      readonly type: "midnightSupplyCollateralWithNative";
+      readonly inputs: ActionInputs & {
+        readonly market: ReturnType<typeof MarketUtils.toStruct>;
+        readonly collateralIndex: bigint;
+        readonly collateralAssets: bigint;
+        /** Native ETH in wei, passed as transaction value. */
+        readonly nativeAssets: bigint;
+        readonly deadline: bigint;
+      };
+    }
+  | {
+      readonly type: "midnightRedeem";
+      readonly inputs: ActionInputs & {
+        readonly market: ReturnType<typeof MarketUtils.toStruct>;
+        readonly units: bigint;
+        readonly receiver: Address;
+      };
+    }
   | {
       readonly type: "vaultV2ForceRedeem";
       readonly inputs: ActionInputs & {
@@ -176,6 +364,16 @@ export type Action =
         readonly deadline: bigint;
         readonly referralFeePct: bigint;
         readonly referralFeeRecipient: Address;
+      };
+    }
+  | {
+      readonly type: "blueWithdrawBuyCallback";
+      readonly inputs: ActionInputs & {
+        readonly marketParams: Readonly<InputMarketParams>;
+        /** BlueBuyCallback whose supply position is withdrawn to `account`, its owner. */
+        readonly callbackAddress: Address;
+        /** Every supply share the callback held in the prepared snapshot. */
+        readonly shares: bigint;
       };
     }
   | {
@@ -320,6 +518,10 @@ export type Action =
   | {
       readonly type: "morphoAuthorization";
       readonly inputs: ActionInputs;
+    }
+  | {
+      readonly type: "midnightCancelOffers";
+      readonly inputs: ActionInputs & { readonly groups: readonly Hex[] };
     };
 
 /**

@@ -26,6 +26,7 @@ import {
   InputExceedsMaxError,
   InvalidBigIntInputError,
   InvalidMidnightNativeAmountTypeError,
+  MidnightCalldataEncodingError,
   MidnightZeroOnBehalfError,
   NativeAmountOnNonWNativeAssetError,
   NegativeInputError,
@@ -35,7 +36,10 @@ import {
   midnightSupplyCollateral,
   parseMidnightSupplyCollateral,
 } from "./supplyCollateral.js";
-import { midnightSupplyCollateralWithNative } from "./supplyCollateralWithNative.js";
+import {
+  midnightSupplyCollateralWithNative,
+  parseMidnightSupplyCollateralWithNative,
+} from "./supplyCollateralWithNative.js";
 
 const wNative = getChainAddress(midnightChainId, "wNative");
 const nativeMarket = new MarketParams({
@@ -379,5 +383,120 @@ describe("midnightSupplyCollateral", () => {
         onBehalf: midnightAddresses.taker,
       }),
     ).toThrow(ChainIdMismatchError);
+  });
+});
+
+describe("parseMidnightSupplyCollateralWithNative", () => {
+  const settle = <T>(run: () => T) => {
+    try {
+      return { value: run() };
+    } catch (error) {
+      return { error: error as Error };
+    }
+  };
+
+  propertyTest.prop(
+    {
+      market: fc.constantFrom(
+        nativeMarket,
+        midnightTwoCollateralMarket,
+        new MarketParams({ ...nativeMarket, chainId: 1n }),
+      ),
+      collateralIndex: fc.constantFrom(undefined, 0n, 1n, 2n),
+      assets: fc.constantFrom(
+        0n,
+        1n,
+        500n,
+        2_000n,
+        maxUint128,
+        maxUint128 + 1n,
+      ),
+      accountAddress: fc.constantFrom(
+        midnightAddresses.taker,
+        zeroAddress,
+        "0x01",
+      ),
+      nativeAmount: fc.constantFrom(undefined, -1n, 0n, 1n, 500n, 2_001n),
+      deadline: fc.constantFrom(undefined, 0n, 1_900_000_000n, maxUint256 + 1n),
+    },
+    { numRuns: 200 },
+  )(
+    "matches the encoder's errors, their order and its arguments",
+    (changes) => {
+      const params = { ...nativeParams, ...changes } as typeof nativeParams;
+      const parsed = settle(() =>
+        parseMidnightSupplyCollateralWithNative(params),
+      );
+      const encoded = settle(() => midnightSupplyCollateralWithNative(params));
+      if (encoded.error) {
+        expect(parsed.error?.constructor).toBe(encoded.error.constructor);
+        expect(parsed.error?.message).toBe(encoded.error.message);
+        return;
+      }
+      expect(parsed.error).toBeUndefined();
+      const { args } = decodeFunctionData({
+        abi: midnightBundlesV2Abi,
+        data: encoded.value.data,
+      });
+      expect({
+        market: args[3],
+        collateralSupplies: args[4],
+        deadline: args[15],
+        wrappedNative: args[16],
+        value: encoded.value.value,
+      }).toStrictEqual({
+        market: parsed.value?.market,
+        collateralSupplies: [
+          {
+            collateralIndex: parsed.value?.collateralIndex,
+            assets: parsed.value?.assets,
+          },
+        ],
+        deadline: parsed.value?.deadline,
+        wrappedNative: parsed.value?.wrappedNative,
+        value: parsed.value?.value,
+      });
+    },
+  );
+
+  test("default", () => {
+    const parsed = parseMidnightSupplyCollateralWithNative(nativeParams);
+    expect(parsed).toMatchObject({
+      chainId: midnightChainId,
+      collateralIndex: 0n,
+      assets: 2_000n,
+      token: wNative,
+      accountAddress: midnightAddresses.taker,
+      value: 500n,
+      wrappedNative: wNative,
+      deadline: 1_900_000_000n,
+    });
+    expect(Object.isFrozen(parsed)).toBe(true);
+  });
+
+  test.each([
+    {
+      changes: { accountAddress: "0x01" },
+      error: MidnightCalldataEncodingError,
+    },
+    {
+      changes: { accountAddress: zeroAddress },
+      error: MidnightZeroOnBehalfError,
+    },
+    {
+      changes: {
+        market: { ...nativeMarket, chainId: BigInt(midnightChainId + 1) },
+      },
+      error: ChainIdMismatchError,
+    },
+    { changes: { nativeAmount: 0n }, error: NonPositiveInputError },
+    { changes: { deadline: 0n }, error: NonPositiveInputError },
+    { changes: { deadline: maxUint256 + 1n }, error: InputExceedsMaxError },
+  ])("error: rejects $changes", ({ changes, error }) => {
+    expect(() =>
+      Reflect.apply(parseMidnightSupplyCollateralWithNative, undefined, [
+        { ...nativeParams, ...changes },
+      ]),
+    ).toThrow(error);
   });
 });

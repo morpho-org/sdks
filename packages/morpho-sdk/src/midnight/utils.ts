@@ -4,6 +4,7 @@ export {
   EcrecoverRatifierUtils,
   eip712Digest,
   GroupUtils,
+  getBlueBuyCallbackAddress,
   MarketUtils,
   OfferChainUtils,
   OfferUtils,

@@ -131,6 +131,9 @@ export default defineConfig({
             // Unit tests for test-only support modules stay beside those modules.
             "packages/morpho-sdk/test/helpers/**/*.test.ts",
             "packages/morpho-sdk/test/e2e/**/*.test.ts",
+            "packages/morpho-sdk/test/parity/**/*.test.ts",
+            // Unit tests for consumer examples stay beside the example.
+            "packages/morpho-sdk/examples/**/*.test.ts",
           ],
           exclude: ["packages/morpho-sdk/test/e2e/**/*.integration.test.ts"],
         },

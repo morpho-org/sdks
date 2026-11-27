@@ -1,5 +1,17 @@
 # @morpho-org/calldata-verifier
 
+## 0.3.0
+
+### Minor Changes
+
+- Verify `midnight.make_lend`, `midnight.make_borrow`, `midnight.make_repay` and `midnight.make_withdraw` calldata. The verifier decompresses the published offer payload, checks that it rebuilds the activated root, and checks every offer against the request. `midnight.make_lend` funded from a variable-rate market is verified too: the Blue market, the parked amount, the callback salt, and each offer's `BlueBuyCallback` address and data.
+
+### Patch Changes
+
+- Updated dependencies
+  - @morpho-org/morpho-sdk@10.4.0
+  - @morpho-org/midnight-sdk@2.10.0
+
 ## 0.2.0
 
 ### Minor Changes

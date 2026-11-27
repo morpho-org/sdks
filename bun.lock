@@ -31,7 +31,7 @@
     },
     "packages/blue-sdk": {
       "name": "@morpho-org/blue-sdk",
-      "version": "8.4.0",
+      "version": "8.4.1",
       "dependencies": {
         "@noble/hashes": "^2.4.0",
       },
@@ -49,7 +49,7 @@
     },
     "packages/blue-sdk-viem": {
       "name": "@morpho-org/blue-sdk-viem",
-      "version": "7.5.1",
+      "version": "7.6.0",
       "devDependencies": {
         "@morpho-org/blue-sdk": "workspace:^",
         "@morpho-org/morpho-test": "workspace:^",
@@ -67,13 +67,14 @@
     },
     "packages/calldata-verifier": {
       "name": "@morpho-org/calldata-verifier",
-      "version": "0.0.0",
+      "version": "0.2.0",
       "dependencies": {
         "@morpho-org/blue-sdk-viem": "workspace:^",
         "@morpho-org/midnight-sdk": "workspace:^",
         "@morpho-org/morpho-sdk": "workspace:^",
         "@morpho-org/morpho-ts": "workspace:^",
         "@noble/curves": "1.9.1",
+        "fflate": "0.8.3",
       },
       "devDependencies": {
         "typescript": "catalog:",
@@ -86,7 +87,7 @@
     },
     "packages/evm-simulation": {
       "name": "@morpho-org/evm-simulation",
-      "version": "9.1.0",
+      "version": "9.2.2",
       "dependencies": {
         "@morpho-org/blue-sdk": "workspace:^",
         "@morpho-org/morpho-sdk": "workspace:^",
@@ -107,7 +108,7 @@
     },
     "packages/midnight-sdk": {
       "name": "@morpho-org/midnight-sdk",
-      "version": "2.7.0",
+      "version": "2.9.1",
       "devDependencies": {
         "@morpho-org/morpho-ts": "workspace:^",
         "@morpho-org/test": "workspace:^",
@@ -123,7 +124,7 @@
     },
     "packages/morpho-sdk": {
       "name": "@morpho-org/morpho-sdk",
-      "version": "10.0.2",
+      "version": "10.3.1",
       "dependencies": {
         "@morpho-org/blue-sdk": "workspace:^",
         "@morpho-org/blue-sdk-viem": "workspace:^",
@@ -167,7 +168,7 @@
     },
     "packages/morpho-ts": {
       "name": "@morpho-org/morpho-ts",
-      "version": "4.5.0",
+      "version": "4.5.1",
       "dependencies": {
         "@noble/hashes": "^2.4.0",
       },
@@ -179,7 +180,7 @@
     },
     "packages/test": {
       "name": "@morpho-org/test",
-      "version": "2.14.0",
+      "version": "2.15.0",
       "dependencies": {
         "lodash.kebabcase": "^4.1.1",
         "viem-deal": "^2.0.4",
@@ -204,7 +205,7 @@
     },
     "packages/wdk-protocol-lending-morpho-evm": {
       "name": "@morpho-org/wdk-protocol-lending-morpho-evm",
-      "version": "4.6.1",
+      "version": "4.7.0",
       "dependencies": {
         "@morpho-org/blue-sdk": "workspace:^",
         "@morpho-org/blue-sdk-viem": "workspace:^",
@@ -229,6 +230,9 @@
     "@biomejs/biome",
   ],
   "overrides": {
+    "conventional-commits-parser@7.1.1": {
+      ".": "7.1.4",
+    },
     "minimatch": "11.0.8",
     "tmp": "0.2.7",
     "ws@8.21.0": {
@@ -874,7 +878,7 @@
 
     "conventional-changelog-conventionalcommits": ["conventional-changelog-conventionalcommits@10.2.1", "", { "dependencies": { "@conventional-changelog/template": "1.2.1" } }, "sha512-n4Kr1HFMTf3iMbES0TMxKIcYtUUv4rKqyQQp2JwfOEfFCOfGT3Tq4mCyJ8S9/YPyWhydjfKrrvnyl+gCjA+mJQ=="],
 
-    "conventional-commits-parser": ["conventional-commits-parser@7.1.1", "", { "dependencies": { "@simple-libs/stream-utils": "2.0.0", "argue-cli": "3.1.0" }, "bin": { "conventional-commits-parser": "./dist/cli/index.js" } }, "sha512-B0f42jI++V5Vb7qK+DDw68r0dNxz5hk+RdKUkx2NOi39emc9hsHa3u2M3doF7QQhRFzCrAj7uM90teG+RBTaYQ=="],
+    "conventional-commits-parser": ["conventional-commits-parser@7.1.4", "", { "dependencies": { "@simple-libs/stream-utils": "^2.0.0", "argue-cli": "^3.1.0" }, "bin": { "conventional-commits-parser": "./dist/cli/index.js" } }, "sha512-TW3PZHi6hwF4cyu7KKc4kNqD1cgg8AkkK5ge9+zsEfpjaSXOeeIQyNWBr7kx5hR2wFuKVmr0be37RzcpmACQIA=="],
 
     "convert-source-map": ["convert-source-map@2.0.0", "", {}, "sha512-Kvp459HrV2FEJ1CAsi1Ku+MY3kasH19TFykTz2xWmMeq6bk2NU3XXvfJ+Q61m0xktWwt+1HSYf3JZsTms3aRJg=="],
 

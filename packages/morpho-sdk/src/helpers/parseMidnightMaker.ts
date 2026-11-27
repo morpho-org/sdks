@@ -2,6 +2,8 @@ import { Tree, type TreeCreateRequest } from "@morpho-org/midnight-sdk";
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, type Hex, isAddressEqual, zeroAddress } from "viem";
 import {
+  DuplicateMidnightGroupCancellationError,
+  InvalidBigIntInputError,
   MidnightOfferCallbackDataMismatchError,
   MidnightOfferCallbackMismatchError,
   MidnightOfferContinuousFeeCapError,
@@ -13,8 +15,12 @@ import {
   MidnightOfferRatifierMismatchError,
   MidnightOfferReduceOnlyError,
   MidnightOfferSellerReceiverMismatchError,
+  MidnightReplacementGroupCancelledError,
 } from "../types/index.js";
+import type { MidnightCancelAndMakeParams } from "../types/midnightCancelAndMake.js";
 import { wrapMidnightEncoding } from "./encodeMidnightCalldata.js";
+import { validateMidnightUint128Field } from "./validateMidnightBounds.js";
+import { validateMidnightCancellationGroups } from "./validateMidnightPublication.js";
 import { validateOfferSides } from "./validateOfferSides.js";
 
 /** Preserves maker and sell-receiver errors before the upstream tree constructor. @internal */
@@ -189,4 +195,51 @@ export const parseMidnightMakerFundingBinding = (params: {
     }
   });
   return { loanToken: params.loanToken };
+};
+
+/**
+ * Rejects malformed cancellations before any maker-state read, with the bundle parser's checks
+ * and order: group hex, then each ceiling's type, bounds and duplicate, then overlap with the new
+ * tree. Used by TransactionPlan maker constructors; entity flows run these checks in the bundle
+ * parser.
+ *
+ * @param params.cancellations - Groups to cancel with their consumption ceilings.
+ * @param params.tree - Parsed offer tree whose groups the bundle publishes.
+ * @throws {InvalidMidnightHexInputError} when a cancellation group is not 32-byte hex.
+ * @throws {InvalidBigIntInputError} when a `maxConsumed` ceiling is not a bigint.
+ * @throws {NegativeInputError} when a `maxConsumed` ceiling is negative.
+ * @throws {InputExceedsMaxError} when a `maxConsumed` ceiling exceeds uint128.
+ * @throws {DuplicateMidnightGroupCancellationError} when a group is cancelled more than once.
+ * @throws {MidnightReplacementGroupCancelledError} when a cancelled group is in the new tree.
+ * @internal
+ */
+export const validateMidnightMakerCancellations = (params: {
+  readonly cancellations: MidnightCancelAndMakeParams["cancellations"];
+  readonly tree: ReturnType<typeof parseMidnightMakerTree>;
+}): void => {
+  const { cancellations, tree } = params;
+  validateMidnightCancellationGroups(cancellations);
+  const cancelledGroups = new Set<string>();
+  for (const [index, { group, maxConsumed }] of cancellations.entries()) {
+    if (typeof maxConsumed !== "bigint") {
+      throw new InvalidBigIntInputError(
+        `cancellations[${index}].maxConsumed`,
+        maxConsumed,
+      );
+    }
+    validateMidnightUint128Field(
+      `cancellations[${index}].maxConsumed`,
+      maxConsumed,
+    );
+    const key = group.toLowerCase();
+    if (cancelledGroups.has(key)) {
+      throw new DuplicateMidnightGroupCancellationError({ index, group });
+    }
+    cancelledGroups.add(key);
+  }
+  for (const { group } of tree.offers) {
+    if (cancelledGroups.has(group.toLowerCase())) {
+      throw new MidnightReplacementGroupCancelledError({ group });
+    }
+  }
 };

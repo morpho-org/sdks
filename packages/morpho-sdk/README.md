@@ -380,16 +380,21 @@ including requests with existing signatures. It allows extra keys. Malformed JSO
 references throw `InvalidTransactionPlanError` with a JSON `path` and `reason`; unsupported versions
 and action types retain their dedicated errors. Serialization remains unchecked. Parsing verifies
 stored signatures against their expected signers offline and rejects signatures from the wrong
-signer. It uses no clock or RPC and does not check expiry, live state or action-layer business
-constraints. A successful parse does not prove intent or protect unsigned fields, so integrators
-must still protect stored plans.
+signer. Midnight maker publications, `midnightSupplyCollateralTakeBorrow` and
+`midnightTakeRepayWithdrawCollateral` also rerun their builders' static input checks on restore, so
+a stored recipe that fails those checks throws `InvalidTransactionPlanError` there. Building can
+still fail on a restored plan: deployment lookups such as the Midnight bundle address run only in
+`buildTransactions`. Parsing uses no clock or RPC and does not check expiry, live state or other
+action-layer business constraints. A successful parse does not prove intent or protect unsigned
+fields, so integrators must still protect stored plans.
 
 Supported action types are `erc20Approval`, `morphoAuthorization`, `blueSupply`,
 `blueSupplyCollateral`, `blueBorrow`, `blueSupplyCollateralBorrow`, `blueRepay`, `blueWithdraw`,
-`blueWithdrawCollateral`, `blueRepayWithdrawCollateral`, `blueRefinance`, `vaultV1Deposit`, `vaultV1Withdraw`,
+`blueWithdrawCollateral`, `blueWithdrawBuyCallback`, `blueRepayWithdrawCollateral`, `blueRefinance`, `vaultV1Deposit`, `vaultV1Withdraw`,
 `vaultV1Redeem`, `vaultV1InKindRedeem`, `vaultV1MigrateToV2`,
 `vaultV2Deposit`, `vaultV2Withdraw`, `vaultV2Redeem`,
-`vaultV2ForceWithdraw`, `vaultV2ForceRedeem` and `vaultV2InKindRedeem`. Builders return plain `Readonly<Transaction>` objects without step metadata.
+`vaultV2ForceWithdraw`, `vaultV2ForceRedeem`, `vaultV2InKindRedeem`, `midnightAuthorization`,
+`midnightTakeLend`, `midnightTakeBorrow`, `midnightSupplyCollateralTakeBorrow`, `midnightTakeWithdraw`, `midnightTakeRepayWithdrawCollateral`, `midnightSupplyCollateral`, `midnightSupplyCollateralWithNative`, `midnightSupplyCollateralBatch`, `midnightWithdrawCollateral`, `midnightWithdrawCollateralBatch`, `midnightRedeem`, `midnightCancelOffers`, `midnightRepayWithdrawCollateral`, `midnightMakeBorrow`, `midnightMakeLend`, `midnightMakeWithdraw`, `midnightMakeRepay`, `midnightSupplyCollateralMakeBorrow` and `midnightSupplyBlueMakeLend`. Builders return plain `Readonly<Transaction>` objects without step metadata.
 
 | Prepare function | Operation |
 | --- | --- |
@@ -400,8 +405,28 @@ Supported action types are `erc20Approval`, `morphoAuthorization`, `blueSupply`,
 | `prepareBlueRepay` | Repay Blue debt by assets or shares |
 | `prepareBlueWithdraw` | Withdraw supplied loan assets from a Blue market |
 | `prepareBlueWithdrawCollateral` | Withdraw collateral from a Blue market |
+| `prepareBlueWithdrawBuyCallback` | Withdraw a BlueBuyCallback's whole supply position to its owner |
 | `prepareBlueRepayWithdrawCollateral` | Repay, withdraw collateral, or perform both atomically on Blue |
 | `prepareBlueRefinance` | Move a Blue borrow position to another market |
+| `prepareMidnightTakeLend` | Lend at a fixed rate on Midnight by taking caller-quoted borrow offers |
+| `prepareMidnightSupplyCollateral` | Supply the selected collateral directly to a Midnight market |
+| `prepareMidnightSupplyCollateralBatch` | Supply several collaterals atomically to a Midnight market |
+| `prepareMidnightSupplyCollateralWithNative` | Supply wNative collateral to a Midnight market, funded partly or fully with native ETH |
+| `prepareMidnightRedeem` | Redeem credit from a caller-fetched Midnight position |
+| `prepareMidnightWithdrawCollateral` | Withdraw one collateral directly from a caller-fetched Midnight position |
+| `prepareMidnightWithdrawCollateralBatch` | Withdraw several collaterals atomically from a caller-fetched Midnight position |
+| `prepareMidnightTakeBorrow` | Borrow from lend-side Midnight offers against an existing position |
+| `prepareMidnightSupplyCollateralTakeBorrow` | Supply collateral and borrow from lend-side Midnight offers atomically |
+| `prepareMidnightMakeBorrow` | Publish resting Midnight borrow offers without supplying collateral |
+| `prepareMidnightSupplyCollateralMakeBorrow` | Supply collateral and publish resting Midnight borrow offers atomically |
+| `prepareMidnightMakeLend` | Publish resting Midnight lend offers funded by the maker when filled |
+| `prepareMidnightSupplyBlueMakeLend` | Supply loan assets to the maker's BlueBuyCallback and publish resting Midnight lend offers atomically |
+| `prepareMidnightMakeWithdraw` | Publish resting Midnight reduce-only sell offers against existing credit |
+| `prepareMidnightMakeRepay` | Publish resting Midnight reduce-only buy offers against existing debt |
+| `prepareMidnightTakeWithdraw` | Withdraw Midnight credit using lend-side offers without opening debt |
+| `prepareMidnightTakeRepayWithdrawCollateral` | Repay Midnight debt by taking borrow offers, optionally repaying the rest directly and withdrawing collateral |
+| `prepareMidnightCancelOffers` | Cancel Midnight offer groups in full with a direct Midnight call |
+| `prepareMidnightRepayWithdrawCollateral` | Repay Midnight debt directly or withdraw collateral without filling offers |
 | `prepareVaultV2Deposit` | Deposit assets into Vault V2 |
 | `prepareVaultV2Withdraw` | Withdraw assets from Vault V2 |
 | `prepareVaultV2Redeem` | Redeem an exact number of Vault V2 shares |
@@ -425,6 +450,145 @@ records the native funding as `nativeAssets`.
 With insufficient ERC-20 allowance, it requests an unlimited approval or an exact-amount ERC-2612
 permit for BlueBundlesV1. Native funding is available only for wNative collateral, needs neither
 approval nor permit, and stores `nativeAssets` equal to `collateralAssets`.
+
+`prepareMidnightSupplyCollateralBatch` supplies a nonempty ordered list of `collateralSupplies`, one
+per index, in one Midnight core multicall. For each token whose allowance is below that token's total,
+it adds the approval steps to Midnight core that the token requires (usually one unlimited approval,
+possibly a reset to zero first or a capped amount). It needs no authorization or signature request;
+`expiresAt` is not an on-chain deadline.
+
+`prepareMidnightSupplyCollateralWithNative` supplies `collateralAssets` of the wNative collateral at
+`collateralIndex` through MidnightBundlesV2. A positive `nativeAmount`, at most `collateralAssets`, is
+sent as transaction value and wrapped to the account; the bundle then pulls the full
+`collateralAssets` as wNative, so the wallet's own wNative balance covers only
+`collateralAssets - nativeAmount`. It adds an unlimited wNative approval to MidnightBundlesV2 when the
+allowance is below `collateralAssets`, and a Midnight authorization of the bundle when it is missing.
+Unlike the entity, it takes no `reservedCollateralAssets`, so the allowance check keeps no reserve
+for a later maker operation. Simulate the whole sequence before asking the wallet for either
+permission. It needs no signature requests, and `expiresAt` is the on-chain bundle deadline.
+
+`prepareBlueWithdrawBuyCallback` takes the callback's market and position snapshots and
+`callbackAddress`; `account` must be the callback's owner. It fixes every supply share in the
+snapshot on one `blueWithdrawBuyCallback` step, a direct Morpho Blue `withdraw` with no approval,
+authorization or signature request. Preparation rejects a callback the registered factory did not
+create, another owner, or a revoked Blue authorization. It takes no referral fee, `supportSignature`
+or `deployless`, and `expiresAt` is plan metadata only. Those checks run only at preparation:
+`parseTransactionPlan` and `buildTransactions` are offline, and the built `withdraw` pays
+`plan.account`. Restore only plans from a trusted source, send only from `plan.account` (reject a
+plan whose `account` is not the connected wallet), and simulate before sending. The step withdraws
+the snapshot's share count, not the position at send time: shares added later stay in the callback,
+and a smaller position makes the withdrawal revert.
+
+`prepareMidnightRedeem` takes a caller-fetched `positionData: AccrualPosition` bound to the
+plan account and market. It fixes explicit `units` or defaults to the accrued face value.
+`receiver` defaults to the account. This direct withdrawal needs no approvals or signature
+requests, and `expiresAt` is plan metadata, not an on-chain deadline.
+
+`prepareMidnightWithdrawCollateral` takes the sender's market and position snapshots from one
+block, plus `collateralPrices` when the position has debt. It applies the entity
+`withdrawCollateral` checks: `assets: maxUint256` withdraws the snapshot balance at
+`collateralIndex`, and the remaining collateral must cover the debt at LLTV minus
+`DEFAULT_LLTV_BUFFER`. `receiver` defaults to the account. The direct Midnight call needs no
+approvals, authorizations or signature requests, and `expiresAt` is not an on-chain deadline.
+`prepareMidnightWithdrawCollateralBatch` does the same for a nonempty ordered list of
+`collateralWithdrawals`, one per index, in one Midnight core multicall to a shared `receiver`.
+
+To withdraw credit into lend offers instead, fetch the owner-bound position at the reference
+block and request a quote on the bid side. Pass the offers from `quote.data.takeableOffers`;
+if the quote is empty, preparation throws `EmptyMidnightTakeableOffersError`.
+
+```ts
+import { buildTransactions, prepareMidnightTakeWithdraw, type TransactionPlan } from "@morpho-org/morpho-sdk";
+import { fetchMidnightAccrualPosition } from "@morpho-org/morpho-sdk/fetch";
+import { MidnightApi } from "@morpho-org/morpho-sdk/midnight-api";
+import { type Address, type Hash, createPublicClient, http } from "viem";
+import { base } from "viem/chains";
+
+async function prepareWithdrawal(account: Address, marketId: Hash) {
+  const client = createPublicClient({ chain: base, transport: http() });
+  const block = await client.getBlock();
+  const positionData = await fetchMidnightAccrualPosition(client, {
+    marketId,
+    user: account,
+    blockNumber: block.number,
+  });
+  const marketData = positionData.market;
+  const assets = 1_000_000n;
+  const maxUnits = 1_100_000n;
+  // Quote the unit ceiling: fees come out of the proceeds, so fills sized to the net
+  // assets could not deliver them.
+  const quote = await new MidnightApi().fetchBookQuote({
+    marketId,
+    side: "bids",
+    units: maxUnits,
+    taker: account,
+  });
+  const plan: TransactionPlan = await prepareMidnightTakeWithdraw(client, {
+    chainId: base.id,
+    account,
+    marketData,
+    positionData,
+    now: block.timestamp,
+    target: { type: "assets", assets, maxUnits },
+    takeableOffers: quote.data.takeableOffers,
+  });
+  // Simulate, then send in order from plan.account on plan.chainId.
+  return buildTransactions(plan);
+}
+```
+
+`prepareMidnightMakeBorrow` publishes caller-created PriceRatifierV1 or RateRatifierV1 sell offers
+without supplying collateral or borrowing immediately. It needs no token approval or root
+signature. See the [TransactionPlan guide](src/transactionPlan/README.md#midnight-maker-borrow-offers)
+for a tree example, offline restoration, and which authorizations persist.
+
+`prepareMidnightMakeLend` publishes caller-created buy offers without moving loan tokens.
+Midnight core pulls the maker's tokens when someone fills the offers, so the plan may add a
+core token approval for the offered and reserved budget. It never approves the bundle to spend
+tokens or uses native ETH. See the [TransactionPlan guide](src/transactionPlan/README.md#midnight-maker-lend-offers)
+for a tree example and the lifetime of the approval and grants.
+
+`prepareMidnightMakeWithdraw` publishes caller-created PriceRatifierV1 or RateRatifierV1
+reduce-only sell offers against existing maker credit. It does not withdraw funds or
+decrease credit on publication. See the [TransactionPlan guide](src/transactionPlan/README.md#midnight-maker-withdrawal-offers)
+for a tree example, offline restoration, and which authorizations persist.
+
+`prepareMidnightMakeRepay` publishes caller-created PriceRatifierV1 or RateRatifierV1
+reduce-only buy offers against existing maker debt. It may add a core token approval for
+later fills but does not repay debt or move tokens on publication. See the
+[TransactionPlan guide](src/transactionPlan/README.md#midnight-maker-repayment-offers)
+for a tree example, offline restoration, and which approvals and authorizations persist.
+
+`prepareMidnightSupplyCollateralMakeBorrow` supplies collateral and activates the maker's
+PriceRatifierV1 or RateRatifierV1 sell-offer root in one bundle. It does not fill an offer,
+create debt, or disburse loan assets. Collateral indexes are zero-based positions
+in ascending collateral token address order. See the [TransactionPlan guide](src/transactionPlan/README.md#midnight-collateral-backed-maker-borrow-offers)
+for a tree example, wrapped-native funding, and which approvals and authorizations persist.
+
+`prepareMidnightSupplyBlueMakeLend` parks loan assets on Blue for the maker's BlueBuyCallback
+and activates the maker's lend-offer root in the same bundle, without filling an offer. See
+the [TransactionPlan guide](src/transactionPlan/README.md#midnight-blue-backed-maker-lend-offers)
+for the callback-bound tree, offline restoration, and persistent approvals and authorizations.
+
+`prepareMidnightRepayWithdrawCollateral` takes the sender's market and position snapshots from
+the same block.
+Use `repay: { type: "assets", assets }` for an exact repayment (zero for a collateral-only
+withdrawal), or `repay: { type: "full", maxBuyerAssets }` to close the debt under a finite cap.
+Both amounts are in the loan token's smallest units. Withdrawals are optional and go to the
+sender unless you set `collateralReceiver`. There are no offer fills, referral fees, or signature
+requests. The bundle requires allowance for the full pull even if you provide `nativeAmount`
+in wei for a wrapped-native loan, plus a standalone authorization if not already granted.
+If allowance is insufficient, the plan requests an unlimited (`maxUint256`, subject to
+`MAX_TOKEN_APPROVALS`) ERC-20 approval to MidnightBundlesV2. Once granted, the approval does
+not expire with the plan.
+See the [TransactionPlan guide](src/transactionPlan/README.md#midnight-repayment-and-collateral-withdrawal)
+for a repayment example, collateral indexes, oracle prices, and expiry defaults.
+
+`prepareMidnightCancelOffers` takes `account` and a nonempty list of distinct 32-byte `groups`,
+fixed on one `midnightCancelOffers` step with no approvals, authorization or signature requests.
+One group builds a bare Midnight `setConsumed(group, maxUint128, account)`; two or more build one
+Midnight core `multicall`. It never targets MidnightBundlesV2, and `account` or a Midnight-authorized
+operator must send it. `expiresAt` is plan metadata only, not an onchain deadline.
 
 `prepareVaultV2ForceRedeem` takes `vaultAddress` and top-level `shares`, with no snapshot.
 Caller-supplied `deallocations[].assets` and `shares` are fixed on one `vaultV2ForceRedeem` step

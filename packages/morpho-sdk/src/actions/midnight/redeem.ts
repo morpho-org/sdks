@@ -1,6 +1,7 @@
-import type { MarketInput } from "@morpho-org/midnight-sdk";
+import { MathLib } from "@morpho-org/blue-sdk";
+import type { AccrualPosition, MarketInput } from "@morpho-org/midnight-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import type { Address } from "viem";
+import { type Address, isAddressEqual } from "viem";
 import {
   type MidnightMarket,
   parseMidnightAddress,
@@ -8,11 +9,17 @@ import {
   parseMidnightOwner,
   parseMidnightPositiveAmount,
 } from "../../helpers/parseMidnight.js";
+import { validateMidnightAddress } from "../../helpers/validateMidnightAccount.js";
 import { validateMidnightReceiver } from "../../helpers/validateMidnightReceiver.js";
-import type {
-  Metadata,
-  MidnightRedeemAction,
-  Transaction,
+import {
+  AccrualPositionUserMismatchError,
+  InsufficientMidnightWithdrawableLiquidityError,
+  type Metadata,
+  type MidnightRedeemAction,
+  MidnightRedeemExceedsCreditError,
+  MissingAccrualPositionError,
+  NoMidnightCreditToRedeemError,
+  type Transaction,
 } from "../../types/index.js";
 import { encodeMidnightRedeem } from "./encode.js";
 import { snapshotMidnightMetadata } from "./parse.js";
@@ -112,5 +119,78 @@ export const parseMidnightRedeem = (
     receiver,
     metadata: snapshotMidnightMetadata(params.metadata),
     [parsedRedeem]: true as const,
+  });
+};
+
+/** Owner-bound position snapshot and optional amounts for a redemption. @internal */
+export interface MidnightRedeemPreparationParams {
+  readonly chainId: number;
+  readonly accountAddress: Address;
+  readonly positionData: AccrualPosition;
+  readonly units?: bigint;
+  readonly receiver?: Address;
+  readonly now: bigint;
+  readonly metadata?: Metadata;
+}
+
+/**
+ * Owns redemption defaults and snapshot-dependent amount constraints in the same order as the
+ * entity `redeem`, then mints the complete redeem contract. Used by TransactionPlan preparation;
+ * the entity keeps its own copy of these checks.
+ * @internal
+ */
+export const parseMidnightRedeemPreparation = (
+  params: MidnightRedeemPreparationParams,
+): ParsedMidnightRedeem => {
+  const address = parseMidnightAddress("accountAddress", params.accountAddress);
+  if (!params.positionData) {
+    throw new MissingAccrualPositionError();
+  }
+  if (params.positionData.user != null) {
+    validateMidnightAddress("positionData.user", params.positionData.user);
+  }
+  if (
+    params.positionData.user == null ||
+    !isAddressEqual(params.positionData.user, address)
+  ) {
+    throw new AccrualPositionUserMismatchError(
+      params.positionData.user ?? "unbound",
+      address,
+    );
+  }
+  const marketData = params.positionData.market;
+  // Reject market/deployment errors before snapshot accrual and amount checks.
+  const market = parseMidnightMarket(marketData, params.chainId);
+  const accrued = params.positionData.accrueInterest(
+    MathLib.max(params.now, params.positionData.lastAccrual),
+  );
+  const units = params.units ?? accrued.faceValue;
+  if (params.units === undefined && units <= 0n) {
+    throw new NoMidnightCreditToRedeemError(marketData.id);
+  }
+  // Bound the resolved amount before checking credit and liquidity.
+  parseMidnightPositiveAmount("units", units);
+  if (accrued.credit < units) {
+    throw new MidnightRedeemExceedsCreditError({
+      market: marketData.id,
+      units,
+      credit: accrued.credit,
+    });
+  }
+  if (marketData.withdrawable < units) {
+    throw new InsufficientMidnightWithdrawableLiquidityError({
+      market: marketData.id,
+      units,
+      withdrawable: marketData.withdrawable,
+    });
+  }
+  // The owning action constructor mints the complete contract only after snapshot checks.
+  return parseMidnightRedeem({
+    chainId: params.chainId,
+    market: market.struct,
+    units,
+    onBehalf: address,
+    receiver: params.receiver ?? address,
+    metadata: params.metadata,
   });
 };

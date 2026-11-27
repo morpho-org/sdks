@@ -37,6 +37,10 @@ import {
   InvalidReallocationSourceTypeError,
   InvalidVaultV2BlueReallocationShapeError,
   MarketIdMismatchError,
+  type MidnightCollateralTransfer,
+  type MidnightRepay,
+  MidnightRepayExceedsDebtError,
+  MidnightTakeTargetUnreachableError,
   MissingClientPropertyError,
   MissingMarketPriceError,
   NativeAmountOnNonWNativeAssetError,
@@ -54,6 +58,7 @@ import {
   WithdrawMakesPositionUnhealthyError,
   WithdrawSharesExceedSupplyError,
 } from "../types/index.js";
+import { computeMidnightPostWithdrawalCollateral } from "./computeMidnightPostWithdrawalCollateral.js";
 import {
   DEFAULT_LLTV_BUFFER,
   MAX_SLIPPAGE_TOLERANCE,
@@ -418,6 +423,117 @@ export const getMidnightMaxSafeDebt = (params: {
   }
 
   return maxSafeDebt;
+};
+
+/**
+ * @internal Rejects a Midnight borrow whose post-borrow debt exceeds the collateral's capacity at
+ * LLTV minus `DEFAULT_LLTV_BUFFER`, with the same check and error as the entity borrow flows.
+ * Used by TransactionPlan preparers; the entity keeps its inline check.
+ */
+export const validateMidnightBorrowHealth = (params: {
+  readonly market: MidnightMarket;
+  readonly collateral: readonly bigint[];
+  readonly collateralPrices: readonly bigint[];
+  readonly debt: bigint;
+  readonly borrowUnits: bigint;
+}): void => {
+  const postDebt = params.debt + params.borrowUnits;
+  if (postDebt <= 0n) {
+    return;
+  }
+  const maxSafeDebt = getMidnightMaxSafeDebt(params);
+  if (postDebt > maxSafeDebt) {
+    throw new BorrowExceedsSafeLtvError(
+      params.borrowUnits,
+      MathLib.zeroFloorSub(maxSafeDebt, params.debt),
+    );
+  }
+};
+
+/**
+ * @internal Rejects a Midnight collateral withdrawal whose post-operation debt exceeds the remaining
+ * collateral's capacity at LLTV minus `DEFAULT_LLTV_BUFFER`, with the same check and error as the
+ * entity withdraw and repay-withdraw flows. Used by TransactionPlan preparers; the entity keeps its
+ * inline checks.
+ */
+export const validateMidnightWithdrawHealth = (params: {
+  readonly market: MidnightMarket;
+  readonly collateral: readonly bigint[];
+  readonly collateralPrices: readonly bigint[];
+  readonly debt: bigint;
+  readonly withdrawAmount: bigint;
+}): void => {
+  if (params.debt <= 0n) {
+    return;
+  }
+  const maxSafeDebt = getMidnightMaxSafeDebt(params);
+  if (params.debt > maxSafeDebt) {
+    throw new WithdrawMakesPositionUnhealthyError({
+      withdrawAmount: params.withdrawAmount,
+      borrowAssets: params.debt,
+      maxSafeBorrow: maxSafeDebt,
+    });
+  }
+};
+
+/**
+ * @internal Checks a direct Midnight repayment and collateral withdrawal against the position
+ * snapshot, in order: each withdrawal against the remaining collateral, an exact repayment against
+ * the debt, a full repayment cap against the debt, then the remaining debt against the remaining
+ * collateral's buffered capacity when collateral is withdrawn. Matches the entity
+ * `repayWithdrawCollateral` checks; used by TransactionPlan preparers, while the entity keeps its
+ * inline checks. Callers parse the withdrawals first.
+ * @throws {WithdrawExceedsCollateralError} If a withdrawal exceeds the remaining collateral.
+ * @throws {MidnightRepayExceedsDebtError} If an exact repayment exceeds the debt.
+ * @throws {MidnightTakeTargetUnreachableError} If a full repayment cap is below the debt.
+ * @throws {MissingMarketPriceError} If remaining collateral has no price for the health check.
+ * @throws {WithdrawMakesPositionUnhealthyError} If the remaining debt exceeds buffered capacity.
+ */
+export const validateMidnightRepayWithdrawCollateralPosition = (params: {
+  readonly marketData: MidnightMarket;
+  readonly positionData: {
+    readonly collateral: readonly bigint[];
+    readonly debt: bigint;
+  };
+  readonly collateralPrices: readonly bigint[];
+  readonly repay: MidnightRepay;
+  readonly collateralWithdrawals: readonly MidnightCollateralTransfer[];
+}): void => {
+  const { marketData, positionData, repay, collateralWithdrawals } = params;
+  const { debt } = positionData;
+  const { postCollateral, withdrawAmount } =
+    computeMidnightPostWithdrawalCollateral({
+      market: marketData.params,
+      marketId: marketData.id,
+      collateral: positionData.collateral,
+      withdrawals: collateralWithdrawals,
+    });
+  // The bundle must fill the whole assets target and the direct repay is capped at the debt, so a repay above it reverts `OutOfOffers()`.
+  if (repay.type === "assets" && repay.assets > debt) {
+    throw new MidnightRepayExceedsDebtError({
+      field: "repay.assets",
+      value: repay.assets,
+      debt,
+    });
+  }
+  if (repay.type === "full" && repay.maxBuyerAssets < debt) {
+    throw new MidnightTakeTargetUnreachableError({
+      field: "repay.maxBuyerAssets",
+      value: repay.maxBuyerAssets,
+      limit: debt,
+    });
+  }
+  if (collateralWithdrawals.length === 0) {
+    return;
+  }
+  validateMidnightWithdrawHealth({
+    market: marketData,
+    collateral: postCollateral,
+    collateralPrices: params.collateralPrices,
+    debt:
+      repay.type === "assets" && debt > repay.assets ? debt - repay.assets : 0n,
+    withdrawAmount,
+  });
 };
 
 /**

@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/calldata-verifier",
   "description": "Verify Morpho action calldata locally before signing.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": "Morpho Association <contact@morpho.org>",
   "repository": {
     "type": "git",
@@ -31,7 +31,8 @@
     "@morpho-org/midnight-sdk": "workspace:^",
     "@morpho-org/morpho-sdk": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
-    "@noble/curves": "1.9.1"
+    "@noble/curves": "1.9.1",
+    "fflate": "0.8.3"
   },
   "peerDependencies": {
     "viem": "^2.9.2"

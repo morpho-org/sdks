@@ -268,3 +268,44 @@ export class NonIntegerInputError extends Error {
     this.name = "NonIntegerInputError";
   }
 }
+
+/**
+ * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
+ * A reduce-only Midnight withdrawal needs more credit units than the position's accrued credit
+ * holds, so no quote or market liquidity can reach the target.
+ */
+export class MidnightTakeCreditInsufficientError extends Error {
+  /** Position credit accrued to the reference timestamp. */
+  public readonly credit: bigint;
+  /** Credit units the target needs. */
+  public readonly requiredUnits: bigint;
+
+  /**
+   * @param params - Accrued credit, the units the target needs and optional underlying error.
+   * @param params.credit - Position credit accrued to the reference timestamp.
+   * @param params.requiredUnits - Credit units the target needs.
+   * @param params.cause - Offer-shortfall error that the credit shortfall replaces.
+   * @example
+   * ```ts
+   * import { MidnightTakeCreditInsufficientError } from "@morpho-org/morpho-sdk";
+   * const error = new MidnightTakeCreditInsufficientError({ credit: 40n, requiredUnits: 50n });
+   * ```
+   */
+  public constructor({
+    credit,
+    requiredUnits,
+    cause,
+  }: {
+    readonly credit: bigint;
+    readonly requiredUnits: bigint;
+    readonly cause?: unknown;
+  }) {
+    super(
+      `Midnight position credit "${credit}" is below the "${requiredUnits}" units the target needs. Lower the target to at most the position's credit.`,
+      { cause },
+    );
+    this.credit = credit;
+    this.requiredUnits = requiredUnits;
+    this.name = "MidnightTakeCreditInsufficientError";
+  }
+}

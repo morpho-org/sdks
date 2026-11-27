@@ -312,11 +312,6 @@ export namespace Payload {
    * ```
    */
   export async function encode(items: readonly Item[]): Promise<Hex> {
-    if (CURRENT_VERSION > 0xff) {
-      throw new PayloadDecodeError(
-        `version overflow: ${CURRENT_VERSION} exceeds 255`,
-      );
-    }
     assertNonEmptyItemCount(items.length);
     const payloadItems = items.map((item) => {
       const offer = OfferUtils.toStruct({ offer: item.offer });
@@ -395,6 +390,69 @@ export namespace Payload {
     payload: Hex,
     options?: DecodeOptions,
   ): Promise<Item[]> {
+    const { compressed, maxItems } = parseWirePayload(payload, options);
+    return decodeItems(await decompressItemsPayload(compressed), maxItems);
+  }
+
+  /**
+   * Synchronous {@link decode} for callers that cannot await, such as offline
+   * calldata verifiers. Applies the same wire, size, item and canonical-ABI
+   * checks as `decode`, but delegates gzip decompression to `options.gunzip`
+   * because the platform's built-in `DecompressionStream` is asynchronous.
+   *
+   * @param payload - Hex payload bytes to decode.
+   * @param options - Synchronous gzip decompressor and optional decode bounds.
+   * @param options.gunzip - Decompresses one complete gzip stream. It receives
+   *   `MAX_DECOMPRESSED_ITEMS_BYTES` as `maxBytes` and should stop and throw once
+   *   output exceeds it, so a small payload cannot expand without bound.
+   * @param options.maxItems - Optional caller-provided item cap.
+   * @returns The decoded items in encoded order.
+   * @throws {PayloadDecodeError} when the payload is malformed, exceeds protocol
+   *   limits, or `gunzip` throws.
+   * @example
+   * ```ts
+   * import { Payload } from "@morpho-org/midnight-sdk";
+   * import { gunzipSync } from "node:zlib";
+   * import type { Hex } from "viem";
+   *
+   * function decodeMakerPayload(payload: Hex) {
+   *   return Payload.decodeSync(payload, {
+   *     gunzip: (compressed, maxBytes) =>
+   *       gunzipSync(compressed, { maxOutputLength: maxBytes }),
+   *   });
+   * }
+   * // decodeMakerPayload(payload) returns the payload's (offer, ratifierData) items.
+   * ```
+   */
+  export function decodeSync(
+    payload: Hex,
+    options: DecodeOptions & {
+      readonly gunzip: (compressed: Uint8Array, maxBytes: number) => Uint8Array;
+    },
+  ): Item[] {
+    const { compressed, maxItems } = parseWirePayload(payload, options);
+    assertCompressedItemsLength(compressed);
+    let decoded: Uint8Array;
+    try {
+      decoded = options.gunzip(compressed, MAX_DECOMPRESSED_ITEMS_BYTES);
+    } catch (error) {
+      if (error instanceof PayloadDecodeError) {
+        throw error;
+      }
+      throw new PayloadDecodeError(
+        "decompression failed",
+        error instanceof Error ? error : undefined,
+      );
+    }
+    if (decoded.length > MAX_DECOMPRESSED_ITEMS_BYTES) {
+      throw new PayloadDecodeError(
+        `decompressed items exceed ${MAX_DECOMPRESSED_ITEMS_BYTES} bytes`,
+      );
+    }
+    return decodeItems(decoded, maxItems);
+  }
+
+  function parseWirePayload(payload: Hex, options: DecodeOptions | undefined) {
     const maxItems = resolveMaxItems(options?.maxItems);
     if (payload.length > MAX_PAYLOAD_HEX_LENGTH) {
       throw new PayloadDecodeError(
@@ -428,9 +486,16 @@ export namespace Payload {
         `trailing suffix exceeds ${MAX_ATTRIBUTION_SUFFIX_BYTES} bytes: got ${suffixLength}`,
       );
     }
-    const compressed = bytes.subarray(HEADER_BYTES, compressedEnd);
-    const decoded = await decompressItemsPayload(compressed);
+    return {
+      compressed: bytes.subarray(HEADER_BYTES, compressedEnd),
+      maxItems,
+    };
+  }
 
+  function decodeItems(
+    decoded: Uint8Array,
+    maxItems: number | undefined,
+  ): Item[] {
     assertAbiItemCountWithinCallerLimit(decoded, maxItems);
 
     const items = decodeItemsBytes(decoded);
@@ -699,9 +764,7 @@ export namespace Payload {
     return compressed;
   }
 
-  async function decompressItemsPayload(
-    compressed: Uint8Array,
-  ): Promise<Uint8Array> {
+  function assertCompressedItemsLength(compressed: Uint8Array): void {
     if (compressed.length === 0) {
       throw new PayloadDecodeError("decompression failed");
     }
@@ -710,6 +773,12 @@ export namespace Payload {
         `compressed items exceed ${MAX_COMPRESSED_ITEMS_BYTES} bytes`,
       );
     }
+  }
+
+  async function decompressItemsPayload(
+    compressed: Uint8Array,
+  ): Promise<Uint8Array> {
+    assertCompressedItemsLength(compressed);
 
     const reader = singleChunkStream(compressed)
       .pipeThrough(new DecompressionStream("gzip"))

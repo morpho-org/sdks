@@ -2695,6 +2695,8 @@ export class MidnightCalldataEncodingError extends Error {
    * pulled with native funding, or the token checked by
    * `getMidnightApprovalRequirements`). `"blueMarket"` reports the Blue market encoding in
    * `supplyBlueMakeLend`: a malformed address or an out-of-range `lltv`.
+   * TransactionPlan take preparers report a malformed taken offer field by its path, such as
+   * `"takeableOffers[i].offer.maker"` or `"takeableOffers[i].units"`.
    * @param cause - viem encoding error.
    */
   public constructor(

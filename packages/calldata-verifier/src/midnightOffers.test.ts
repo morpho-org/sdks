@@ -1,20 +1,11 @@
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
-import {
-  MarketUtils,
-  midnightAbi,
-  midnightBundlesV2Abi,
-  Payload,
-  PriceRatifierV1,
-  Tree,
-} from "@morpho-org/midnight-sdk";
-import { midnightCancelAndMake } from "@morpho-org/morpho-sdk";
-import { getChainAddress, getChainAddresses } from "@morpho-org/morpho-ts";
+import { midnightAbi, midnightBundlesV2Abi } from "@morpho-org/midnight-sdk";
+import { getChainAddresses } from "@morpho-org/morpho-ts";
 import { marketParamsAbi } from "@morpho-org/morpho-ts/abis";
 import {
   decodeFunctionData,
   encodeAbiParameters,
   encodeFunctionData,
-  type Hex,
   keccak256,
   maxUint128,
   zeroAddress,
@@ -32,12 +23,6 @@ import {
   verifyCalldata,
 } from "./index.js";
 import { midnightOfferCases } from "./test/midnightOffers.fixtures.js";
-import {
-  deadline,
-  market as makerMarket,
-  takeable,
-} from "./test/midnightSdk.js";
-import { sdkCall } from "./test/sdkCall.js";
 
 const { chain_id, account } = midnightOfferCases.exactAssets.intent;
 const fundingAddress = "0x2000000000000000000000000000000000000002" as const;
@@ -496,73 +481,6 @@ describe("Midnight offers", () => {
           callId: call.id,
         }),
       );
-    },
-  );
-
-  it.each([
-    ["midnight.make_borrow", "assets"],
-    ["midnight.make_lend", "assets"],
-    ["midnight.make_repay", "units"],
-    ["midnight.make_withdraw", "units"],
-  ] as const)(
-    "rejects a publication for %s with a typed unsupported error",
-    async (action, unit) => {
-      const buy =
-        action === "midnight.make_lend" || action === "midnight.make_repay";
-      const ratifier = getChainAddress(chain_id, "priceRatifierV1");
-      const publicationMarket = { ...makerMarket, maturity: 54_000n };
-      const offer = {
-        ...takeable(buy).offer,
-        market: publicationMarket,
-        maker: account,
-        receiverIfMakerIsSeller: buy ? zeroAddress : account,
-        ratifier,
-        reduceOnly: unit === "units",
-        maxUnits: unit === "units" ? 1n : 0n,
-        maxAssets: unit === "assets" ? 1n : 0n,
-      };
-      const tree = Tree.create({ type: "priceV1", entries: [{ offer }] });
-      const tx = midnightCancelAndMake({
-        chainId: chain_id,
-        deadline,
-        cancellations: [],
-        publication: {
-          ratifier,
-          root: tree.root,
-          groups: [offer.group],
-          payload: await Payload.encode(PriceRatifierV1.ratify({ tree })),
-        },
-      });
-      const decoded = decodeFunctionData({
-        abi: midnightBundlesV2Abi,
-        data: tx.data,
-      });
-      if (decoded.functionName !== "midnightBundlesV2CancelAndMake") {
-        throw new Error("Expected a maker publication");
-      }
-      expect(decoded.args[6]).toBe(tree.root);
-      expect(decoded.args[6]).not.toBe(zeroHash);
-      const intent = {
-        action,
-        chain_id,
-        account,
-        max_fee_bps: 0,
-        amount: { unit, value: "1" },
-        offers: {
-          type: "price",
-          entries: [
-            {
-              market_id: MarketUtils.toId(publicationMarket) as Hex,
-              tick: offer.tick.toString(),
-              starts_at: Number(offer.start),
-              expires_at: Number(offer.expiry),
-            },
-          ],
-        },
-      } as const;
-      expect(() =>
-        verifyCalldata(intent as CalldataIntent, [sdkCall(tx)]),
-      ).toThrow(CalldataUnsupportedError);
     },
   );
 });

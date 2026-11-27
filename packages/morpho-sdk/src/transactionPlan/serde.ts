@@ -15,12 +15,27 @@ import { validateBlueSupplyPlanAction } from "./blue/supply.js";
 import { validateSupplyCollateralPlanAction } from "./blue/supplyCollateral.js";
 import { validateSupplyCollateralBorrowPlanAction } from "./blue/supplyCollateralBorrow.js";
 import { validateBlueWithdrawPlanAction } from "./blue/withdraw.js";
+import { validateBlueWithdrawBuyCallbackPlanAction } from "./blue/withdrawBuyCallback.js";
 import { validateBlueWithdrawCollateralPlanAction } from "./blue/withdrawCollateral.js";
 import { validateDepositPlanAction } from "./deposit.js";
 import {
   InvalidTransactionPlanError,
   TransactionPlanSignatureMismatchError,
 } from "./error.js";
+import { validateSignaturelessMidnightAction } from "./midnight/authorization.js";
+import { validateMidnightCancelOffersPlanAction } from "./midnight/cancelOffers.js";
+import { validateMidnightMakerPublicationPlanAction } from "./midnight/makerPublication.js";
+import { validateMidnightRedeemPlanAction } from "./midnight/redeem.js";
+import { validateMidnightRepayWithdrawCollateralPlanAction } from "./midnight/repayWithdrawCollateral.js";
+import { validateMidnightSupplyCollateralPlanAction } from "./midnight/supplyCollateral.js";
+import { validateMidnightSupplyCollateralBatchPlanAction } from "./midnight/supplyCollateralBatch.js";
+import { validateMidnightSupplyCollateralWithNativePlanAction } from "./midnight/supplyCollateralWithNative.js";
+import { validateMidnightSupplyCollateralTakeBorrowPlanAction } from "./midnight/takeBorrow.js";
+import { validateMidnightTakeLendPlanAction } from "./midnight/takeLend.js";
+import { validateMidnightTakeRepayWithdrawCollateralPlanAction } from "./midnight/takeRepayWithdrawCollateral.js";
+import { validateMidnightSellPlanAction } from "./midnight/validation.js";
+import { validateMidnightWithdrawCollateralPlanAction } from "./midnight/withdrawCollateral.js";
+import { validateMidnightWithdrawCollateralBatchPlanAction } from "./midnight/withdrawCollateralBatch.js";
 import { validatePermitPlanRequest } from "./permit.js";
 import { getPendingSignatureRequests, verifyPlanSignature } from "./plan.js";
 import { validateRedeemPlanAction } from "./redeem.js";
@@ -49,6 +64,7 @@ const actionValidators = {
   blueRepay: validateBlueRepayPlanAction,
   blueWithdraw: validateBlueWithdrawPlanAction,
   blueWithdrawCollateral: validateBlueWithdrawCollateralPlanAction,
+  blueWithdrawBuyCallback: validateBlueWithdrawBuyCallbackPlanAction,
   blueRepayWithdrawCollateral: validateRepayWithdrawCollateralPlanAction,
   blueRefinance: validateRefinancePlanAction,
   erc20Approval: validateApprovalPlanAction,
@@ -58,6 +74,33 @@ const actionValidators = {
   vaultV1Redeem: validateRedeemPlanAction,
   vaultV1MigrateToV2: validateMigrateToV2PlanAction,
   morphoAuthorization: validateMorphoAuthorizationPlanAction,
+  midnightAuthorization: validateSignaturelessMidnightAction,
+  midnightMakeBorrow: validateMidnightMakerPublicationPlanAction,
+  midnightMakeLend: validateMidnightMakerPublicationPlanAction,
+  midnightMakeRepay: validateMidnightMakerPublicationPlanAction,
+  midnightMakeWithdraw: validateMidnightMakerPublicationPlanAction,
+  midnightSupplyBlueMakeLend: validateMidnightMakerPublicationPlanAction,
+  midnightSupplyCollateralMakeBorrow:
+    validateMidnightMakerPublicationPlanAction,
+  midnightTakeBorrow: validateMidnightSellPlanAction,
+  midnightSupplyCollateralTakeBorrow:
+    validateMidnightSupplyCollateralTakeBorrowPlanAction,
+  midnightTakeLend: validateMidnightTakeLendPlanAction,
+  midnightSupplyCollateral: validateMidnightSupplyCollateralPlanAction,
+  midnightSupplyCollateralBatch:
+    validateMidnightSupplyCollateralBatchPlanAction,
+  midnightSupplyCollateralWithNative:
+    validateMidnightSupplyCollateralWithNativePlanAction,
+  midnightWithdrawCollateral: validateMidnightWithdrawCollateralPlanAction,
+  midnightWithdrawCollateralBatch:
+    validateMidnightWithdrawCollateralBatchPlanAction,
+  midnightRedeem: validateMidnightRedeemPlanAction,
+  midnightTakeRepayWithdrawCollateral:
+    validateMidnightTakeRepayWithdrawCollateralPlanAction,
+  midnightTakeWithdraw: validateMidnightSellPlanAction,
+  midnightRepayWithdrawCollateral:
+    validateMidnightRepayWithdrawCollateralPlanAction,
+  midnightCancelOffers: validateMidnightCancelOffersPlanAction,
   vaultV2Deposit: validateDepositPlanAction,
   vaultV2Withdraw: validateWithdrawPlanAction,
   vaultV2ForceRedeem: validateForceRedeemPlanAction,
@@ -94,8 +137,19 @@ export function serializeTransactionPlan(plan: TransactionPlan): string {
  * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
  * Restores bigint fields and validates version, action/request shapes, uint256 ranges, unique IDs,
  * references, per-action chain/account and signature-request consistency, including signed requests.
- * Extra keys are allowed. No clock or RPC is used: current expiry, live state and
- * action-layer business constraints are not checked. Stored signatures are recovered offline.
+ * Extra keys are allowed. Midnight maker publications, `midnightSupplyCollateralTakeBorrow`,
+ * `midnightTakeRepayWithdrawCollateral` and `midnightSupplyCollateralWithNative` also rerun their
+ * builders' static input checks, so a stored recipe that fails those checks throws here. Restore compares the stored market of
+ * `midnightSupplyCollateralMakeBorrow`, `midnightSupplyCollateralTakeBorrow` and
+ * `midnightTakeRepayWithdrawCollateral` with the registered Midnight deployment, and each maker
+ * publication's ratifier with the registry. It does not decode maker offer payloads, so their offer
+ * markets are not checked, and other Midnight actions check only the stored market's shape and
+ * chain. Restoring `midnightSupplyCollateralWithNative` also looks up the chain's Midnight core,
+ * wNative and MidnightBundlesV2 registry entries, so register custom deployments before parsing.
+ * Building can still fail: other deployment lookups, such as the Midnight bundle address of other
+ * actions, run only in `buildTransactions`. No clock or RPC is used:
+ * current expiry, live state and other action-layer business constraints are not checked. Stored
+ * signatures are recovered offline.
  * Permits bind owner, token, spender, value, nonce, deadline and chain; Morpho authorizations bind
  * owner, authorized address, nonce, deadline and chain, not operation amounts, markets or referral fees/recipients.
  * Parsing does not prove authenticity or intent for unsigned fields;

@@ -210,3 +210,22 @@ const validateHexInput = (
     });
   }
 };
+
+/**
+ * @internal
+ * Validates every cancelled group as 32-byte hex, in input order, with the same checks and error
+ * labels as {@link validateMidnightPublication}. Used by TransactionPlan maker constructors before
+ * any state read; entity flows keep the check inside the bundle parser.
+ *
+ * @param cancellations - Groups to cancel with their consumption ceilings.
+ * @throws {InvalidMidnightHexInputError} when a cancellation group is not 32-byte hex.
+ */
+export const validateMidnightCancellationGroups = (
+  cancellations: MidnightCancelAndMakeParams["cancellations"],
+): void => {
+  for (const [index, { group }] of cancellations.entries()) {
+    validateHexInput(group, `cancellations[${index}].group`, {
+      exactBytes: 32,
+    });
+  }
+};
